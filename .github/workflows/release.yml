@@ -9,6 +9,10 @@ on:
         description: "UPX-compress the release binary (smaller, may trip antivirus)"
         type: boolean
         default: false
+      version:
+        description: "Release version, e.g. 0.1.0 (used when dispatching manually)"
+        type: string
+        default: "0.1.0"
 
 env:
   CARGO_TERM_COLOR: always
@@ -23,15 +27,21 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: pinsight.exe
+            platform: windows-x64
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact: pinsight
+            platform: x86_64-apple-darwin
           # 24.04 ships a pipewire new enough for the `libspa` crates that
           # `xcap` pulls in (22.04's 0.3.48 lacks spa_meta_first and friends).
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             artifact: pinsight
-          # ARM builds: Windows on ARM builds natively on the Windows runner.
+            platform: linux-x86_64
+          # ARM builds:
+          # - Windows on ARM builds natively on the Windows runner.
+          # - macOS on Apple Silicon (macos-latest is arm64) builds
+          #   aarch64-apple-darwin natively — no cross toolchain needed.
           # Linux ARM is NOT in the matrix: cross-compiling it needs a full
           # arm64 sysroot (wayland / pipewire / gtk under
           # /usr/lib/aarch64-linux-gnu plus a cross linker), which pkg-config
@@ -41,6 +51,11 @@ jobs:
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             artifact: pinsight.exe
+            platform: windows-arm64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: pinsight
+            platform: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -95,17 +110,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          stage="dist/pinsight-${{ matrix.target }}"
+          version="${{ github.event.inputs.version || github.ref_name }}"
+          version="${version#v}"
+          stage="dist/pinsight-${{ matrix.platform }}"
           mkdir -p "$stage"
           cp "target/${{ matrix.target }}/release/${{ matrix.artifact }}" "$stage/"
           cp README.md LICENSE config.example.json "$stage/"
           cp -r assets "$stage/"
           echo "$version" > "$stage/VERSION"
           if [ "${{ runner.os }}" = "Windows" ]; then
-            (cd dist && powershell -NoProfile -Command "Compress-Archive -Path 'pinsight-${{ matrix.target }}' -DestinationPath 'PinSight-$version-windows-x64.zip' -Force")
+            (cd dist && powershell -NoProfile -Command "Compress-Archive -Path 'pinsight-${{ matrix.platform }}' -DestinationPath 'PinSight-$version-${{ matrix.platform }}.zip' -Force")
           else
-            (cd dist && tar -czf "PinSight-$version-${{ matrix.target }}.tar.gz" "pinsight-${{ matrix.target }}")
+            (cd dist && tar -czf "PinSight-$version-${{ matrix.platform }}.tar.gz" "pinsight-${{ matrix.platform }}")
           fi
 
       # Windows produces a zip, macOS/Linux a tar.gz — accept either so the
