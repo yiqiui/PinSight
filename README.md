@@ -20,7 +20,7 @@
   </p>
 </div>
 
-![PinSight capture overlay](docs/images/demo.png)
+![PinSight 序号标注演示](docs/images/demo.jpg)
 
 > **状态：v0.1.0 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
 > 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪 / 裁切 / 加文字 / 转 MP4）、图片上传、
@@ -85,10 +85,9 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 主窗口由左侧图标导航 + 内容区 + 状态栏组成，所有控件（磁贴、分段控件、色板、开关、图标）
 都用 `egui::Painter` 手绘，不依赖图片素材，因此能随 DPI、主题和字号无损缩放。
 
-| 主界面 | 设置 |
-| --- | --- |
-| ![capture](docs/images/main.png) | ![settings](docs/images/settings.png) |
-| ![pins](docs/images/pins.png) | ![annotate](docs/images/demo.png) |
+| 主界面 | 设置 | 贴图 | 标注 |
+| --- | --- | --- | --- |
+| ![capture](docs/images/main.png) | ![settings](docs/images/settings.png) | ![pins](docs/images/pins.jpg) | ![annotate](docs/images/demo.jpg) |
 
 ### 主题
 
