@@ -36,6 +36,7 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 Copy-Item "target\release\pinsight.exe" $stage
 Copy-Item "README.md" $stage
 Copy-Item "LICENSE" $stage
+Copy-Item "NOTICE" $stage
 Copy-Item "config.example.json" $stage
 Copy-Item "assets" $stage -Recurse
 

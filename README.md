@@ -7,7 +7,7 @@
     <img alt="Rust" src="https://img.shields.io/badge/Rust-1.85%2B-000?logo=rust" />
     <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0078D6" />
     <img alt="MCP" src="https://img.shields.io/badge/MCP-stdio-6B5BFF" />
-    <img alt="License" src="https://img.shields.io/badge/license-MIT-2EA043" />
+    <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-2EA043" />
   </p>
 
   <p>
@@ -645,7 +645,7 @@ MCP 模式日志固定写 stderr：
 
 ## License
 
-[MIT](LICENSE) © 2026 PinSight contributors
+[Apache-2.0](LICENSE) © 2026 PinSight contributors
 
 ## 致谢
 

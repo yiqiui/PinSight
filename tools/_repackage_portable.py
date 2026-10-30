@@ -49,7 +49,7 @@ def stage_and_zip(exe_path, zip_name, stage_subdir):
     os.makedirs(stage, exist_ok=True)
 
     shutil.copy2(exe_path, os.path.join(stage, "pinsight.exe"))
-    for f in ("README.md", "LICENSE", "config.example.json"):
+    for f in ("README.md", "LICENSE", "NOTICE", "config.example.json"):
         src = os.path.join(ROOT, f)
         if os.path.isfile(src):
             shutil.copy2(src, stage)

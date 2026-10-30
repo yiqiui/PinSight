@@ -61,6 +61,7 @@ Name: "startup"; Description: "{cm:AutoStartProgram,{#AppName}}"; GroupDescripti
 Source: "{#PinsightExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\NOTICE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\config.example.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\assets\icon.png"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "..\..\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion

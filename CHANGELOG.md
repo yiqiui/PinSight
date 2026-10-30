@@ -8,6 +8,8 @@ All notable changes to PinSight are documented here. The format follows
 
 ### Changed
 
+- License changed from MIT to **Apache-2.0** (adds an explicit patent grant and
+  trademark/attribution terms). A `NOTICE` file records the copyright.
 - Settings got a visual overhaul. Controls are right-aligned in every row
   instead of trailing a fixed-width label (which left a dead 300 px gap), the
   eight tabs are an underline strip rather than a plate of pills, cards are
