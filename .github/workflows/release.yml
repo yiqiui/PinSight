@@ -73,7 +73,8 @@ jobs:
             libxcursor-dev \
             libxdo-dev \
             libpipewire-0.3-dev \
-            libtesseract-dev
+            libtesseract-dev \
+            libgbm-dev
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
