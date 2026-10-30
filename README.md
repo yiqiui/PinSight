@@ -20,7 +20,7 @@
   </p>
 </div>
 
-![PinSight 序号标注演示](docs/images/demo.jpg)
+![PinSight 主界面](docs/images/main.png)
 
 > **状态：v0.1.0 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
 > 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪 / 裁切 / 加文字 / 转 MP4）、图片上传、
