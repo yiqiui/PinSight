@@ -44,7 +44,7 @@ PinSight 想做的是一个**可读、可改、可自动化**的开源实现：
 - **工程透明**：模块边界、线程模型、坐标空间和失败模式都写在 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、粘性元素、动画）与 Snipaste
-可能仍有差距，macOS / Linux 上的贴图与 OCR 后端也仍在打磨中。核心能力（截图、标注、
+可能仍有差距，macOS / Linux 上的贴图后端也仍在打磨中。核心能力（截图、标注、
 贴图、长截图、录屏、OCR、GIF 编辑、上传、MCP）已可在 Windows 上日常使用。
 
 ---
@@ -60,7 +60,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | 剪贴板贴图 | ✅ | 一键把剪贴板图片钉在屏幕上 |
 | 长截图 | 🧪 | 选区后自动滚轮+逐帧捕获+重叠区拼接；适合静态、无固定表头的内容 |
 | 录屏 | ✅ | 选区逐帧捕获；安装 `ffmpeg` 时输出 MP4，否则输出 GIF |
-| 离线 OCR | ✅ | 内置 Windows.Media.Ocr，工具栏一键选取区域识别；CLI `pinsight shot --ocr` 整屏识别 |
+| 离线 OCR | ✅ | 离线识别：Windows 用内置 `Windows.Media.Ocr`，macOS 用 Vision，Linux 用 Tesseract；工具栏一键选取区域识别；CLI `pinsight shot --ocr` 整屏识别 |
 | 图片上传 | ✅ | 编辑器上传按钮 + CLI `--upload`；默认本地后端落盘到 `<截图目录>/uploaded/`，可切 HTTP（POST/PUT、表单或 JSON 响应） |
 | 语音便签 | 🧪 | 可录制带音轨的录屏便签；点击播放尚未闭环（待接入音频播放库） |
 | 全局热键 | ✅ | 6 个动作均可在设置页内「录制」自定义（点 Record 后按组合键，Esc 取消），即时生效；注册失败会标红并说明原因 |
@@ -138,7 +138,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 
 ### 环境要求
 
-- Windows 10 / 11（x64）功能最全；macOS 与 Linux 可构建运行（贴图切换为 egui 视口，
+- Windows 10 / 11（x64 / ARM64）功能最全；macOS 与 Linux 可构建运行（贴图切换为 egui 视口，
   托盘、长截图滚轮模拟等为平台能力裁剪后的行为）
 - Rust **1.85+**（edition 2024）
 - 可选：`ffmpeg` 在 `PATH` 中，用于 MP4 录屏；否则自动回退到 GIF
