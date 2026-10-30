@@ -49,14 +49,13 @@ mod imp {
         HWND_NOTOPMOST, HWND_TOPMOST, IDC_ARROW, LWA_ALPHA, LoadCursorW, MENU_ITEM_FLAGS,
         MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, PostMessageW,
         PostQuitMessage, RegisterClassW, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOMOVE,
-        SWP_NOZORDER,
-        SendMessageW, SetForegroundWindow, SetLayeredWindowAttributes, SetWindowLongPtrW,
-        SetWindowPos, ShowWindow, TPM_LEFTALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
-        TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_APP, WM_CLOSE, WM_COMMAND, WM_DESTROY,
-        WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_MBUTTONDBLCLK,
-        WM_MBUTTONDOWN, WM_MOUSEWHEEL, WM_NCCREATE, WM_RBUTTONDBLCLK,
-        WM_NCLBUTTONDOWN, WM_PAINT, WM_RBUTTONUP, WNDCLASSW, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
-        WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP, WS_VISIBLE,
+        SWP_NOZORDER, SendMessageW, SetForegroundWindow, SetLayeredWindowAttributes,
+        SetWindowLongPtrW, SetWindowPos, ShowWindow, TPM_LEFTALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON,
+        TrackPopupMenu, TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_APP, WM_CLOSE,
+        WM_COMMAND, WM_DESTROY, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN,
+        WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MOUSEWHEEL, WM_NCCREATE, WM_NCLBUTTONDOWN, WM_PAINT,
+        WM_RBUTTONDBLCLK, WM_RBUTTONUP, WNDCLASSW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+        WS_EX_TRANSPARENT, WS_POPUP, WS_VISIBLE,
     };
     use windows::core::{HSTRING, PCWSTR};
 
@@ -470,15 +469,7 @@ mod imp {
         let h = (ctx.height as f32 * new).round().max(24.0) as i32 + margin * 2;
         let x = pt.x - margin - (img_x * new).round() as i32;
         let y = pt.y - margin - (img_y * new).round() as i32;
-        let _ = SetWindowPos(
-            hwnd,
-            None,
-            x,
-            y,
-            w,
-            h,
-            SWP_NOZORDER | SWP_NOACTIVATE,
-        );
+        let _ = SetWindowPos(hwnd, None, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
     /// Rotate the image 90° in place, swapping the stored dimensions.
@@ -706,105 +697,101 @@ mod imp {
         wparam: WPARAM,
         lparam: LPARAM,
     ) -> LRESULT {
-/// What a configured mouse gesture does to a pin.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PinAction {
-    Zoom,
-    Opacity,
-    Close,
-    Reset,
-    Thumbnail,
-    CopyText,
-}
+        /// What a configured mouse gesture does to a pin.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum PinAction {
+            Zoom,
+            Opacity,
+            Close,
+            Reset,
+            Thumbnail,
+            CopyText,
+        }
 
-/// Match a mouse event against the configured bindings.
-///
-/// `button` is 0 = wheel, 1 = left, 2 = middle, 3 = right. `double_click`
-/// selects the double-click variant. Returns `None` when nothing matches, so
-/// the caller can fall back to its legacy behaviour.
-fn pin_gesture_action(
-    ctx: &PinCtx,
-    modifier: u32,
-    button: u32,
-    double_click: bool,
-) -> Option<PinAction> {
-    const ACTIONS: [PinAction; 6] = [
-        PinAction::Zoom,
-        PinAction::Opacity,
-        PinAction::Close,
-        PinAction::Reset,
-        PinAction::Thumbnail,
-        PinAction::CopyText,
-    ];
-    let keys = [
-        (VK_CONTROL.0 as i32, 1u32),
-        (0x10, 2),
-        (0x12, 3),
-    ];
-    let held = |mask: u32| -> bool {
-        if mask == 0 {
-            return true;
+        /// Match a mouse event against the configured bindings.
+        ///
+        /// `button` is 0 = wheel, 1 = left, 2 = middle, 3 = right. `double_click`
+        /// selects the double-click variant. Returns `None` when nothing matches, so
+        /// the caller can fall back to its legacy behaviour.
+        fn pin_gesture_action(
+            ctx: &PinCtx,
+            modifier: u32,
+            button: u32,
+            double_click: bool,
+        ) -> Option<PinAction> {
+            const ACTIONS: [PinAction; 6] = [
+                PinAction::Zoom,
+                PinAction::Opacity,
+                PinAction::Close,
+                PinAction::Reset,
+                PinAction::Thumbnail,
+                PinAction::CopyText,
+            ];
+            let keys = [(VK_CONTROL.0 as i32, 1u32), (0x10, 2), (0x12, 3)];
+            let held = |mask: u32| -> bool {
+                if mask == 0 {
+                    return true;
+                }
+                keys.iter()
+                    .filter(|(_, m)| *m == mask)
+                    .all(|(vk, _)| unsafe { GetKeyState(*vk) } < 0)
+            };
+            for (index, encoded) in ctx.gestures.iter().enumerate() {
+                let gesture = crate::config::Gesture::decode(*encoded);
+                let want_mod = match gesture.modifier {
+                    crate::config::GestureMod::None => 0,
+                    crate::config::GestureMod::Ctrl => 1,
+                    crate::config::GestureMod::Shift => 2,
+                    crate::config::GestureMod::Alt => 3,
+                };
+                let want_button = match gesture.button {
+                    crate::config::GestureButton::Wheel => 0,
+                    crate::config::GestureButton::Left => 1,
+                    crate::config::GestureButton::Middle => 2,
+                    crate::config::GestureButton::Right => 3,
+                };
+                if want_button != button || gesture.double_click != double_click {
+                    continue;
+                }
+                if want_mod != 0 && !held(want_mod) {
+                    continue;
+                }
+                // "No modifier" must really mean *no* modifier: Ctrl+middle would
+                // otherwise also trigger the plain middle binding.
+                if want_mod == 0 && modifier != 0 {
+                    continue;
+                }
+                return Some(ACTIONS[index]);
+            }
+            None
         }
-        keys.iter()
-            .filter(|(_, m)| *m == mask)
-            .all(|(vk, _)| unsafe { GetKeyState(*vk) } < 0)
-    };
-    for (index, encoded) in ctx.gestures.iter().enumerate() {
-        let gesture = crate::config::Gesture::decode(*encoded);
-        let want_mod = match gesture.modifier {
-            crate::config::GestureMod::None => 0,
-            crate::config::GestureMod::Ctrl => 1,
-            crate::config::GestureMod::Shift => 2,
-            crate::config::GestureMod::Alt => 3,
-        };
-        let want_button = match gesture.button {
-            crate::config::GestureButton::Wheel => 0,
-            crate::config::GestureButton::Left => 1,
-            crate::config::GestureButton::Middle => 2,
-            crate::config::GestureButton::Right => 3,
-        };
-        if want_button != button || gesture.double_click != double_click {
-            continue;
-        }
-        if want_mod != 0 && !held(want_mod) {
-            continue;
-        }
-        // "No modifier" must really mean *no* modifier: Ctrl+middle would
-        // otherwise also trigger the plain middle binding.
-        if want_mod == 0 && modifier != 0 {
-            continue;
-        }
-        return Some(ACTIONS[index]);
-    }
-    None
-}
 
-/// Run one pin action. Kept out of the window procedure so the match arms stay
-/// readable.
-unsafe fn run_pin_action(hwnd: HWND, ctx: &mut PinCtx, action: PinAction) {
-    match action {
-        PinAction::Close => {
-            let _ = DestroyWindow(hwnd);
+        /// Run one pin action. Kept out of the window procedure so the match arms stay
+        /// readable.
+        unsafe fn run_pin_action(hwnd: HWND, ctx: &mut PinCtx, action: PinAction) {
+            match action {
+                PinAction::Close => {
+                    let _ = DestroyWindow(hwnd);
+                }
+                PinAction::Reset => {
+                    ctx.zoom = 1.0;
+                    ctx.opacity = 1.0;
+                    resize_for_zoom(hwnd, ctx);
+                }
+                PinAction::Thumbnail => {
+                    // Shrink to a quarter of the current size, and back.
+                    let small = ctx.zoom <= 0.35;
+                    ctx.zoom = if small { 1.0 } else { 0.25 };
+                    resize_for_zoom(hwnd, ctx);
+                }
+                PinAction::CopyText => {
+                    let _ = ctx.tx.send(PinEvent::CopyText(ctx.id));
+                }
+                PinAction::Zoom | PinAction::Opacity => {}
+            }
         }
-        PinAction::Reset => {
-            ctx.zoom = 1.0;
-            ctx.opacity = 1.0;
-            resize_for_zoom(hwnd, ctx);
-        }
-        PinAction::Thumbnail => {
-            // Shrink to a quarter of the current size, and back.
-            let small = ctx.zoom <= 0.35;
-            ctx.zoom = if small { 1.0 } else { 0.25 };
-            resize_for_zoom(hwnd, ctx);
-        }
-        PinAction::CopyText => {
-            let _ = ctx.tx.send(PinEvent::CopyText(ctx.id));
-        }
-        PinAction::Zoom | PinAction::Opacity => {}
-    }
-}
 
-match msg {
+        match msg {
             WM_NCCREATE => {
                 let cs = lparam.0 as *const CREATESTRUCTW;
                 if let Some(cs) = cs.as_ref() {
@@ -902,10 +889,9 @@ match msg {
                         }
                         0x35 => {
                             for px in ctx.bgra.chunks_exact_mut(4) {
-                                let l = (px[0] as u32 * 29
-                                    + px[1] as u32 * 150
-                                    + px[2] as u32 * 77)
-                                    / 256;
+                                let l =
+                                    (px[0] as u32 * 29 + px[1] as u32 * 150 + px[2] as u32 * 77)
+                                        / 256;
                                 px[0] = l as u8;
                                 px[1] = l as u8;
                                 px[2] = l as u8;

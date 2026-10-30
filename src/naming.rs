@@ -22,14 +22,19 @@ use chrono::{Datelike, Local, Timelike};
 /// dialog documents. Descriptions live in the translation table so the panel
 /// never shows English in a Chinese UI.
 pub const DATE_CODES: &[&str] = &[
-    "yyyy", "yy", "MMMM", "MMM", "MM", "M", "dddd", "ddd", "dd", "d", "HH", "H", "hh", "h",
-    "mm", "m", "ss", "s", "SSS", "A",
+    "yyyy", "yy", "MMMM", "MMM", "MM", "M", "dddd", "ddd", "dd", "d", "HH", "H", "hh", "h", "mm",
+    "m", "ss", "s", "SSS", "A",
 ];
 
 /// `%name%` variables that are not in the environment but are still worth
 /// naming, plus the environment lookup itself.
 pub const VAR_NAMES: &[&str] = &[
-    "os", "computername", "username", "userprofile", "title", "title:50",
+    "os",
+    "computername",
+    "username",
+    "userprofile",
+    "title",
+    "title:50",
 ];
 
 /// The default template: `PinSight_2026-10-24_10-30-00`.

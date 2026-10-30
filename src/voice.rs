@@ -38,9 +38,7 @@ pub fn record(out: &Path, seconds: Option<u32>) -> Result<()> {
     }
     // Mono 44.1 kHz WAV: small, universal, and plenty for voice memos.
     cmd.args(["-ac", "1", "-ar", "44100"]).arg(out);
-    let status = cmd
-        .status()
-        .context("running ffmpeg to record audio")?;
+    let status = cmd.status().context("running ffmpeg to record audio")?;
     if status.success() {
         Ok(())
     } else {

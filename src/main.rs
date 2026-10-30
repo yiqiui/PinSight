@@ -25,10 +25,10 @@ mod app;
 mod app_keys;
 mod background;
 mod capture;
-mod decorate;
 mod cli;
 mod clipboard;
 mod config;
+mod decorate;
 mod fonts;
 mod gifedit;
 mod hdr;
@@ -42,9 +42,8 @@ mod naming;
 mod ocr;
 mod overlay;
 mod pdf;
-mod upload;
-mod pin;
 mod picker;
+mod pin;
 #[cfg(not(windows))]
 mod pin_viewport;
 mod record;
@@ -55,6 +54,7 @@ mod theme;
 #[cfg(windows)]
 mod tray;
 mod ui;
+mod upload;
 mod util;
 mod voice;
 

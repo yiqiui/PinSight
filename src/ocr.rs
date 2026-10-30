@@ -53,7 +53,9 @@ pub fn recognize(image: RgbaImage) -> Result<Vec<OcrWord>> {
     // they must not execute there.
     std::thread::scope(|s| {
         let handle = s.spawn(|| recognize_inner(image));
-        handle.join().unwrap_or_else(|_| Err(anyhow::anyhow!("OCR thread panicked")))
+        handle
+            .join()
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("OCR thread panicked")))
     })
 }
 
@@ -62,7 +64,7 @@ fn recognize_inner(image: RgbaImage) -> Result<Vec<OcrWord>> {
     use windows::Graphics::Imaging::{BitmapDecoder, BitmapPixelFormat, SoftwareBitmap};
     use windows::Media::Ocr::OcrEngine;
     use windows::Storage::Streams::{DataWriter, InMemoryRandomAccessStream};
-    use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
+    use windows::Win32::System::WinRT::{RO_INIT_MULTITHREADED, RoInitialize};
 
     // Initialise an MTA apartment on this fresh worker thread. If it is already
     // initialised (it should not be on a thread we just spawned) we ignore the
@@ -144,11 +146,7 @@ pub fn recognize(image: RgbaImage) -> Result<Vec<OcrWord>> {
     recognize_tesseract(image)
 }
 
-#[cfg(not(any(
-    target_os = "windows",
-    target_os = "macos",
-    target_os = "linux"
-)))]
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 pub fn recognize(_image: RgbaImage) -> Result<Vec<OcrWord>> {
     anyhow::bail!("OCR is not available on this platform")
 }
@@ -159,8 +157,8 @@ pub fn recognize(_image: RgbaImage) -> Result<Vec<OcrWord>> {
 /// uses the user's installed language packs).
 #[cfg(target_os = "macos")]
 fn recognize_apple(image: RgbaImage) -> Result<Vec<OcrWord>> {
-    use objc2::runtime::AnyObject;
     use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
     use objc2_foundation::{NSArray, NSData, NSDictionary};
     use objc2_vision::{
         VNImageRequestHandler, VNRecognizeTextRequest, VNRecognizedTextObservation, VNRequest,
@@ -180,7 +178,8 @@ fn recognize_apple(image: RgbaImage) -> Result<Vec<OcrWord>> {
     let handler = VNImageRequestHandler::alloc().initWithData_options(&data, &options);
 
     let request = unsafe { VNRecognizeTextRequest::alloc().init() };
-    request.setRecognitionLevel(VNRequestTextRecognitionLevel::VNRequestTextRecognitionLevelAccurate);
+    request
+        .setRecognitionLevel(VNRequestTextRecognitionLevel::VNRequestTextRecognitionLevelAccurate);
     request.setUsesLanguageCorrection(true);
 
     let requests = NSArray::from_slice(&[&request as &VNRequest]);
@@ -237,9 +236,7 @@ fn recognize_tesseract(image: RgbaImage) -> Result<Vec<OcrWord>> {
     lt.set_image_from_mem(&png)
         .context("loading the image into Tesseract")?;
 
-    let text = lt
-        .get_utf8_text()
-        .context("Tesseract recognition failed")?;
+    let text = lt.get_utf8_text().context("Tesseract recognition failed")?;
 
     // Tesseract returns text with newlines between lines. We split on them and
     // spread each line on a synthetic baseline so `words_to_text` preserves the

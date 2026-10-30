@@ -212,14 +212,12 @@ fn build_pdf(images: &[RgbaImage], plans: &[PagePlan]) -> Result<Vec<u8>> {
     let size = total + 1;
     let mut xref = format!("xref\n0 {size}\n");
     xref.push_str("0000000000 65535 f \n");
-    for id in 1..=total {
-        xref.push_str(&format!("{:010} 00000 n \n", offsets[id]));
+    for off in &offsets[1..=total] {
+        xref.push_str(&format!("{:010} 00000 n \n", off));
     }
     out.extend_from_slice(xref.as_bytes());
 
-    let trailer = format!(
-        "trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n"
-    );
+    let trailer = format!("trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n");
     out.extend_from_slice(trailer.as_bytes());
     Ok(out)
 }

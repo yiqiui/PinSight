@@ -165,7 +165,12 @@ impl ColorPicker {
         self.hex_draft = format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]);
     }
 
-    pub fn show(&mut self, ctx: &egui::Context, p: &Palette, t: &crate::i18n::Strings) -> Option<PickerAction> {
+    pub fn show(
+        &mut self,
+        ctx: &egui::Context,
+        p: &Palette,
+        t: &crate::i18n::Strings,
+    ) -> Option<PickerAction> {
         let mut action = None;
         let mut open = true;
         let mut pos = if self.first {
@@ -224,7 +229,8 @@ impl ColorPicker {
                     .color(p.text),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui::icon_button_enabled(ui, p, Icon::Close, false, t.key_cancel, true).clicked() {
+                if ui::icon_button_enabled(ui, p, Icon::Close, false, t.key_cancel, true).clicked()
+                {
                     *open = false;
                 }
             });
@@ -236,13 +242,21 @@ impl ColorPicker {
         ui.horizontal_top(|ui| {
             // ---- left: basic + custom swatches ---------------------------
             ui.vertical(|ui| {
-                ui.label(egui::RichText::new(t.color_basic).size(11.5).color(p.text_weak));
+                ui.label(
+                    egui::RichText::new(t.color_basic)
+                        .size(11.5)
+                        .color(p.text_weak),
+                );
                 ui.add_space(4.0);
                 if let Some(rgb) = self.swatch_grid(ui, p, &BASIC, 8) {
                     self.set_rgb(rgb);
                 }
                 ui.add_space(10.0);
-                ui.label(egui::RichText::new(t.color_custom).size(11.5).color(p.text_weak));
+                ui.label(
+                    egui::RichText::new(t.color_custom)
+                        .size(11.5)
+                        .color(p.text_weak),
+                );
                 ui.add_space(4.0);
                 // Two rows of eight, empty slots drawn as white wells — that
                 // is what makes the dialog read as "custom colours" instead of
@@ -279,30 +293,40 @@ impl ColorPicker {
                     .spacing([10.0, 6.0])
                     .show(ui, |ui| {
                         let mut hue = self.h;
-                        if self.num_row(ui, p, t.color_hue, &mut hue, 0.0, 360.0).changed() {
+                        if self
+                            .num_row(ui, p, t.color_hue, &mut hue, 0.0, 360.0)
+                            .changed()
+                        {
                             self.h = hue.clamp(0.0, 359.9);
                         }
                         ui.end_row();
                         let mut sat = self.s * 100.0;
-                        if self.num_row(ui, p, t.color_sat, &mut sat, 0.0, 100.0).changed() {
+                        if self
+                            .num_row(ui, p, t.color_sat, &mut sat, 0.0, 100.0)
+                            .changed()
+                        {
                             self.s = (sat / 100.0).clamp(0.0, 1.0);
                         }
                         ui.end_row();
                         let mut val = self.v * 100.0;
-                        if self.num_row(ui, p, t.color_val, &mut val, 0.0, 100.0).changed() {
+                        if self
+                            .num_row(ui, p, t.color_val, &mut val, 0.0, 100.0)
+                            .changed()
+                        {
                             self.v = (val / 100.0).clamp(0.0, 1.0);
                         }
                         ui.end_row();
 
                         let mut rgb = self.rgb();
                         let mut touched = false;
-                        for (index, name) in [
-                            (0, t.color_red),
-                            (1, t.color_green),
-                            (2, t.color_blue),
-                        ] {
+                        for (index, name) in
+                            [(0, t.color_red), (1, t.color_green), (2, t.color_blue)]
+                        {
                             let mut channel = rgb[index] as f32;
-                            if self.num_row(ui, p, name, &mut channel, 0.0, 255.0).changed() {
+                            if self
+                                .num_row(ui, p, name, &mut channel, 0.0, 255.0)
+                                .changed()
+                            {
                                 rgb[index] = channel.round().clamp(0.0, 255.0) as u8;
                                 touched = true;
                             }
@@ -313,13 +337,20 @@ impl ColorPicker {
                         }
 
                         let mut alpha = self.alpha as f32;
-                        if self.num_row(ui, p, t.color_alpha, &mut alpha, 0.0, 255.0).changed() {
+                        if self
+                            .num_row(ui, p, t.color_alpha, &mut alpha, 0.0, 255.0)
+                            .changed()
+                        {
                             self.alpha = alpha.round().clamp(0.0, 255.0) as u8;
                         }
                         ui.end_row();
 
                         // HTML field
-                        ui.label(egui::RichText::new(t.color_html).size(11.5).color(p.text_weak));
+                        ui.label(
+                            egui::RichText::new(t.color_html)
+                                .size(11.5)
+                                .color(p.text_weak),
+                        );
                         let response = ui.add(
                             egui::TextEdit::singleline(&mut self.hex_draft)
                                 .desired_width(96.0)
@@ -401,7 +432,11 @@ impl ColorPicker {
             let (row, column) = (index / columns, index % columns);
             let at = rect.min + Vec2::new(column as f32 * (cell + gap), row as f32 * (cell + gap));
             let well = Rect::from_min_size(at, Vec2::splat(cell));
-            let response = ui.interact(well, egui::Id::new(("color-well", index, active)), Sense::click());
+            let response = ui.interact(
+                well,
+                egui::Id::new(("color-well", index, active)),
+                Sense::click(),
+            );
             let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
             let fill = Color32::from_rgb(color[0], color[1], color[2]);
             ui.painter().rect_filled(well, 3.0, fill);
@@ -436,7 +471,9 @@ impl ColorPicker {
         if response.dragged() || response.clicked() {
             self.dragging = Some(Drag::Field);
         }
-        if response.drag_stopped() || (self.dragging == Some(Drag::Field) && !response.is_pointer_button_down_on()) {
+        if response.drag_stopped()
+            || (self.dragging == Some(Drag::Field) && !response.is_pointer_button_down_on())
+        {
             self.dragging = None;
         }
         if self.dragging == Some(Drag::Field) {
@@ -476,8 +513,12 @@ impl ColorPicker {
             }
         }
         ui.painter().add(egui::Shape::mesh(mesh));
-        ui.painter()
-            .rect_stroke(rect, 2.0, Stroke::new(1.0, p.stroke_strong), StrokeKind::Inside);
+        ui.painter().rect_stroke(
+            rect,
+            2.0,
+            Stroke::new(1.0, p.stroke_strong),
+            StrokeKind::Inside,
+        );
 
         let knob = Pos2::new(
             rect.left() + self.s * rect.width(),
@@ -490,17 +531,21 @@ impl ColorPicker {
     }
 
     fn hue_strip(&mut self, ui: &mut egui::Ui, p: &Palette) {
-        let (rect, response) = ui.allocate_exact_size(Vec2::new(190.0, 16.0), Sense::click_and_drag());
+        let (rect, response) =
+            ui.allocate_exact_size(Vec2::new(190.0, 16.0), Sense::click_and_drag());
         let response = response.on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
         if response.dragged() || response.clicked() {
             self.dragging = Some(Drag::Hue);
         }
-        if response.drag_stopped() || (self.dragging == Some(Drag::Hue) && !response.is_pointer_button_down_on()) {
+        if response.drag_stopped()
+            || (self.dragging == Some(Drag::Hue) && !response.is_pointer_button_down_on())
+        {
             self.dragging = None;
         }
         if self.dragging == Some(Drag::Hue) {
             if let Some(pos) = ui.ctx().pointer_interact_pos() {
-                self.h = (((pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0) * 360.0).min(359.9);
+                self.h =
+                    (((pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0) * 360.0).min(359.9);
             }
         }
 
@@ -514,26 +559,50 @@ impl ColorPicker {
             let c0 = hsv_to_rgb(h0, 1.0, 1.0);
             let c1 = hsv_to_rgb(h1.min(359.9), 1.0, 1.0);
             let base = mesh.vertices.len() as u32;
-            mesh.colored_vertex(Pos2::new(x0, rect.top()), Color32::from_rgb(c0[0], c0[1], c0[2]));
-            mesh.colored_vertex(Pos2::new(x1, rect.top()), Color32::from_rgb(c1[0], c1[1], c1[2]));
-            mesh.colored_vertex(Pos2::new(x1, rect.bottom()), Color32::from_rgb(c1[0], c1[1], c1[2]));
-            mesh.colored_vertex(Pos2::new(x0, rect.bottom()), Color32::from_rgb(c0[0], c0[1], c0[2]));
+            mesh.colored_vertex(
+                Pos2::new(x0, rect.top()),
+                Color32::from_rgb(c0[0], c0[1], c0[2]),
+            );
+            mesh.colored_vertex(
+                Pos2::new(x1, rect.top()),
+                Color32::from_rgb(c1[0], c1[1], c1[2]),
+            );
+            mesh.colored_vertex(
+                Pos2::new(x1, rect.bottom()),
+                Color32::from_rgb(c1[0], c1[1], c1[2]),
+            );
+            mesh.colored_vertex(
+                Pos2::new(x0, rect.bottom()),
+                Color32::from_rgb(c0[0], c0[1], c0[2]),
+            );
             mesh.add_triangle(base, base + 1, base + 2);
             mesh.add_triangle(base, base + 2, base + 3);
         }
         ui.painter().add(egui::Shape::mesh(mesh));
-        ui.painter()
-            .rect_stroke(rect, 2.0, Stroke::new(1.0, p.stroke_strong), StrokeKind::Inside);
+        ui.painter().rect_stroke(
+            rect,
+            2.0,
+            Stroke::new(1.0, p.stroke_strong),
+            StrokeKind::Inside,
+        );
 
         let x = rect.left() + (self.h / 360.0) * rect.width();
         let marker = Rect::from_center_size(
             Pos2::new(x, rect.center().y),
             Vec2::new(4.0, rect.height() + 4.0),
         );
-        ui.painter()
-            .rect_stroke(marker, 1.0, Stroke::new(1.5, Color32::WHITE), StrokeKind::Outside);
-        ui.painter()
-            .rect_stroke(marker, 1.0, Stroke::new(1.0, Color32::from_black_alpha(140)), StrokeKind::Inside);
+        ui.painter().rect_stroke(
+            marker,
+            1.0,
+            Stroke::new(1.5, Color32::WHITE),
+            StrokeKind::Outside,
+        );
+        ui.painter().rect_stroke(
+            marker,
+            1.0,
+            Stroke::new(1.0, Color32::from_black_alpha(140)),
+            StrokeKind::Inside,
+        );
     }
 
     fn num_row(
@@ -546,13 +615,12 @@ impl ColorPicker {
         max: f32,
     ) -> egui::Response {
         ui.label(egui::RichText::new(label).size(11.5).color(p.text_weak));
-        let response = ui.add(
+        ui.add(
             egui::DragValue::new(value)
                 .range(min..=max)
                 .speed(1.0)
                 .fixed_decimals(0),
-        );
-        response
+        )
     }
 }
 

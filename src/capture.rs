@@ -147,7 +147,7 @@ pub fn list_windows() -> Vec<WindowInfo> {
             })
         })
         .collect();
-    out.sort_by(|a, b| (b.rect.w * b.rect.h).cmp(&(a.rect.w * a.rect.h)));
+    out.sort_by_key(|a| std::cmp::Reverse(a.rect.w * a.rect.h));
     out
 }
 
@@ -175,8 +175,8 @@ pub fn grab_window(id: u32) -> Result<RgbaImage> {
 pub fn set_capture_exclusion(title: &str) -> bool {
     use windows::Win32::Foundation::{HWND, LPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, FindWindowW, GetWindowTextLengthW, GetWindowTextW,
-        SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE,
+        EnumWindows, FindWindowW, GetWindowTextLengthW, GetWindowTextW, SetWindowDisplayAffinity,
+        WDA_EXCLUDEFROMCAPTURE,
     };
 
     let wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
@@ -255,10 +255,9 @@ pub fn grab_monitor(info: &MonitorInfo) -> Result<RgbaImage> {
         .find(|m| m.id().map(|id| id == info.id).unwrap_or(false))
         .ok_or_else(|| anyhow!("monitor {} disappeared", info.id))?;
     let image = monitor.capture_image().context("capturing monitor")?;
-    Ok(with_black_frame_fallback(
-        image,
-        || with_hidden_hud_pills(|| grab_monitor_gdi(info)),
-    ))
+    Ok(with_black_frame_fallback(image, || {
+        with_hidden_hud_pills(|| grab_monitor_gdi(info))
+    }))
 }
 
 /// Paint the current mouse cursor onto a capture.
@@ -295,7 +294,7 @@ pub fn composite_cursor(img: &mut RgbaImage, origin: (i32, i32)) {
 
         // Draw once with a black backdrop and once with white.
         let render = |fill: u32| -> Option<Vec<u8>> {
-            let mut bmi = BITMAPINFO {
+            let bmi = BITMAPINFO {
                 bmiHeader: BITMAPINFOHEADER {
                     biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
                     biWidth: cw,
@@ -309,8 +308,7 @@ pub fn composite_cursor(img: &mut RgbaImage, origin: (i32, i32)) {
             };
             let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
             let dc = CreateCompatibleDC(None);
-            let bmp = CreateDIBSection(Some(dc), &mut bmi, DIB_RGB_COLORS, &mut bits, None, 0)
-                .ok()?;
+            let bmp = CreateDIBSection(Some(dc), &bmi, DIB_RGB_COLORS, &mut bits, None, 0).ok()?;
             if bits.is_null() {
                 let _ = DeleteObject(HGDIOBJ(bmp.0));
                 let _ = DeleteDC(dc);
@@ -414,8 +412,7 @@ fn enum_hud_pill_hwnds() -> Vec<windows::Win32::Foundation::HWND> {
         hwnd: windows::Win32::Foundation::HWND,
         lparam: LPARAM,
     ) -> windows::core::BOOL {
-        let found =
-            unsafe { &mut *(lparam.0 as *mut Vec<windows::Win32::Foundation::HWND>) };
+        let found = unsafe { &mut *(lparam.0 as *mut Vec<windows::Win32::Foundation::HWND>) };
         if !unsafe { IsWindowVisible(hwnd) }.as_bool() {
             return true.into();
         }
@@ -450,7 +447,7 @@ fn enum_hud_pill_hwnds() -> Vec<windows::Win32::Foundation::HWND> {
 /// WDA already handles it).
 #[cfg(windows)]
 fn with_hidden_hud_pills<R>(f: impl FnOnce() -> R) -> R {
-    use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE, SW_SHOWNA};
+    use windows::Win32::UI::WindowsAndMessaging::{SW_HIDE, SW_SHOWNA, ShowWindow};
     let hwnds = enum_hud_pill_hwnds();
     if hwnds.is_empty() {
         return f();
@@ -745,8 +742,7 @@ pub fn grab_physical_rect(rect: PhysRect) -> Result<RgbaImage> {
             (iy0 - rect.y) as i64,
         );
     }
-    Ok(with_black_frame_fallback(
-        out,
-        || with_hidden_hud_pills(|| grab_rect_gdi(rect)),
-    ))
+    Ok(with_black_frame_fallback(out, || {
+        with_hidden_hud_pills(|| grab_rect_gdi(rect))
+    }))
 }

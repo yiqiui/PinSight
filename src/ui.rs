@@ -420,7 +420,10 @@ pub fn paint_icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color3
             let left = pt(2.5, 12.0);
             let right = pt(21.5, 12.0);
             path(&[(4.2, 6.4), (8.0, 4.4), (16.0, 4.4), (19.8, 6.4)], false);
-            path(&[(4.2, 17.6), (8.0, 19.6), (16.0, 19.6), (19.8, 17.6)], false);
+            path(
+                &[(4.2, 17.6), (8.0, 19.6), (16.0, 19.6), (19.8, 17.6)],
+                false,
+            );
             painter.circle_stroke(pt(12.0, 12.0), 3.2 * k, stroke);
             let _ = (left, right);
             if matches!(icon, Icon::EyeOff) {
@@ -902,7 +905,10 @@ pub fn tabs<T: PartialEq + Copy>(
 
     let galleys: Vec<_> = options
         .iter()
-        .map(|(_, label)| ui.painter().layout_no_wrap((*label).to_owned(), font.clone(), palette.text))
+        .map(|(_, label)| {
+            ui.painter()
+                .layout_no_wrap((*label).to_owned(), font.clone(), palette.text)
+        })
         .collect();
     let widths: Vec<f32> = galleys.iter().map(|g| g.size().x + 26.0).collect();
 
@@ -992,7 +998,11 @@ pub fn swatch_row(
             rect.center().y,
         );
         let hit = Rect::from_center_size(center, Vec2::splat(SIZE));
-        let response = ui.interact(hit, ui.scope_id().with(("swatch-row", index)), Sense::click());
+        let response = ui.interact(
+            hit,
+            ui.scope_id().with(("swatch-row", index)),
+            Sense::click(),
+        );
         let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
         let response = if label.is_empty() {
             response
@@ -1003,14 +1013,10 @@ pub fn swatch_row(
         if *selected {
             ui.painter()
                 .circle_stroke(center, 14.0, Stroke::new(1.5, *color));
-            ui.painter()
-                .circle_filled(center, 4.0, Color32::WHITE);
+            ui.painter().circle_filled(center, 4.0, Color32::WHITE);
         } else if response.hovered() {
-            ui.painter().circle_stroke(
-                center,
-                15.0,
-                Stroke::new(1.0, with_alpha(*color, 120)),
-            );
+            ui.painter()
+                .circle_stroke(center, 15.0, Stroke::new(1.0, with_alpha(*color, 120)));
         }
         if response.clicked() {
             picked = Some(index);
@@ -1048,9 +1054,9 @@ pub fn primary_button(ui: &mut Ui, palette: &Palette, text: &str) -> Response {
 /// A secondary (outline) button for less prominent actions.
 pub fn button(ui: &mut Ui, palette: &Palette, text: &str) -> Response {
     let font = egui::FontId::proportional(body_size(ui) * 0.95);
-    let galley =
-        ui.painter()
-            .layout_no_wrap(text.to_owned(), font, palette.text);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), font, palette.text);
     let size = Vec2::new(galley.size().x + 24.0, 28.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -1059,8 +1065,12 @@ pub fn button(ui: &mut Ui, palette: &Palette, text: &str) -> Response {
     } else {
         palette.stroke
     };
-    ui.painter()
-        .rect_stroke(rect, 8.0, egui::Stroke::new(1.0, stroke), egui::StrokeKind::Inside);
+    ui.painter().rect_stroke(
+        rect,
+        8.0,
+        egui::Stroke::new(1.0, stroke),
+        egui::StrokeKind::Inside,
+    );
     ui.painter().galley(
         Pos2::new(
             rect.center().x - galley.size().x * 0.5,
@@ -1116,10 +1126,7 @@ pub fn color_field(ui: &mut Ui, palette: &Palette, rgb: [u8; 3]) -> Response {
         palette.text_weak,
     );
     painter.galley(
-        Pos2::new(
-            chip.right() + 8.0,
-            rect.center().y - galley.size().y * 0.5,
-        ),
+        Pos2::new(chip.right() + 8.0, rect.center().y - galley.size().y * 0.5),
         galley,
         palette.text_weak,
     );
@@ -1216,7 +1223,15 @@ pub fn toggle(ui: &mut Ui, palette: &Palette, on: &mut bool) -> Response {
         changed = true;
     }
     let hovered = response.hovered();
-    paint_switch(ui, palette, rect, response.id, *on, hovered, response.has_focus());
+    paint_switch(
+        ui,
+        palette,
+        rect,
+        response.id,
+        *on,
+        hovered,
+        response.has_focus(),
+    );
     let mut response = response;
     if changed {
         response.mark_changed();
@@ -1344,11 +1359,15 @@ pub fn slider(
         Stroke::new(2.0, palette.accent),
     );
 
-    painter.rect_filled(badge, 7.0, if palette.dark {
-        palette.card_hover
-    } else {
-        egui::Color32::from_rgb(0xF1, 0xF4, 0xF9)
-    });
+    painter.rect_filled(
+        badge,
+        7.0,
+        if palette.dark {
+            palette.card_hover
+        } else {
+            egui::Color32::from_rgb(0xF1, 0xF4, 0xF9)
+        },
+    );
     painter.rect_stroke(
         badge,
         7.0,
@@ -1370,7 +1389,6 @@ pub fn slider(
     );
     response
 }
-
 
 /// Frameless text button with an accent tint, used for inline actions.
 pub fn link_button(ui: &mut Ui, palette: &Palette, icon: Icon, text: &str) -> Response {

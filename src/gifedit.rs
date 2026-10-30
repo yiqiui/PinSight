@@ -23,8 +23,7 @@ pub struct GifFrame {
 
 /// Decode every frame of a GIF into RGBA buffers.
 pub fn load_gif(path: &Path) -> Result<Vec<GifFrame>> {
-    let file = std::fs::File::open(path)
-        .with_context(|| format!("opening {}", path.display()))?;
+    let file = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let decoder = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(file))
         .context("creating GIF decoder")?;
     let frames = decoder
@@ -98,15 +97,7 @@ pub fn trim(
 }
 
 /// Crop every frame to the given rectangle (clamped to the frame bounds).
-pub fn crop(
-    input: &Path,
-    output: &Path,
-    x: u32,
-    y: u32,
-    w: u32,
-    h: u32,
-    speed: i32,
-) -> Result<()> {
+pub fn crop(input: &Path, output: &Path, x: u32, y: u32, w: u32, h: u32, speed: i32) -> Result<()> {
     let frames = load_gif(input)?;
     if frames.is_empty() {
         anyhow::bail!("the GIF has no frames");
@@ -146,12 +137,7 @@ pub struct TextOptions {
 }
 
 /// Burn text onto every frame (CJK-friendly, via the shared rasteriser).
-pub fn add_text(
-    input: &Path,
-    output: &Path,
-    opts: &TextOptions,
-    speed: i32,
-) -> Result<()> {
+pub fn add_text(input: &Path, output: &Path, opts: &TextOptions, speed: i32) -> Result<()> {
     let frames = load_gif(input)?;
     if frames.is_empty() {
         anyhow::bail!("the GIF has no frames");
@@ -168,7 +154,10 @@ pub fn add_text(
         TextPos::TopLeft => (margin, margin),
         TextPos::TopRight => (fw.saturating_sub(ow + margin), margin),
         TextPos::BottomLeft => (margin, fh.saturating_sub(oh + margin)),
-        TextPos::BottomRight => (fw.saturating_sub(ow + margin), fh.saturating_sub(oh + margin)),
+        TextPos::BottomRight => (
+            fw.saturating_sub(ow + margin),
+            fh.saturating_sub(oh + margin),
+        ),
         TextPos::Center => ((fw.saturating_sub(ow)) / 2, (fh.saturating_sub(oh)) / 2),
     };
     let mut out = Vec::with_capacity(frames.len());
@@ -217,11 +206,7 @@ mod tests {
         let mut out = Vec::new();
         for i in 0..frames {
             out.push(GifFrame {
-                image: image::RgbaImage::from_pixel(
-                    24,
-                    24,
-                    Rgba([(i * 40) as u8, 0, 0, 255]),
-                ),
+                image: image::RgbaImage::from_pixel(24, 24, Rgba([(i * 40) as u8, 0, 0, 255])),
                 delay_cs: 10,
             });
         }
@@ -239,7 +224,10 @@ mod tests {
         make_gif(&src, 3);
         let frames = load_gif(&src).unwrap();
         assert_eq!(frames.len(), 3);
-        assert_eq!((frames[0].image.width(), frames[0].image.height()), (24, 24));
+        assert_eq!(
+            (frames[0].image.width(), frames[0].image.height()),
+            (24, 24)
+        );
         assert_eq!(frames[0].delay_cs, 10);
         let _ = std::fs::remove_file(&src);
     }
@@ -267,7 +255,10 @@ mod tests {
         crop(&src, &out, 4, 4, 12, 12, 10).unwrap();
         let frames = load_gif(&out).unwrap();
         assert_eq!(frames.len(), 2);
-        assert_eq!((frames[0].image.width(), frames[0].image.height()), (12, 12));
+        assert_eq!(
+            (frames[0].image.width(), frames[0].image.height()),
+            (12, 12)
+        );
         let _ = std::fs::remove_file(&src);
         let _ = std::fs::remove_file(&out);
     }
@@ -293,7 +284,10 @@ mod tests {
         .unwrap();
         let frames = load_gif(&out).unwrap();
         assert_eq!(frames.len(), 2);
-        assert_eq!((frames[0].image.width(), frames[0].image.height()), (24, 24));
+        assert_eq!(
+            (frames[0].image.width(), frames[0].image.height()),
+            (24, 24)
+        );
         let _ = std::fs::remove_file(&src);
         let _ = std::fs::remove_file(&out);
     }

@@ -113,9 +113,7 @@ fn run(args: &[String]) -> Result<()> {
             "--list-monitors" => list = true,
             "--window" | "-w" => {
                 i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| anyhow!("--window needs an id"))?;
+                let value = args.get(i).ok_or_else(|| anyhow!("--window needs an id"))?;
                 window_id = Some(value.parse().context("--window expects a number")?);
             }
             "--list-windows" => list_windows = true,
@@ -192,8 +190,7 @@ fn run(args: &[String]) -> Result<()> {
         {
             upload_cfg.local.folder = config.save_dir.join("uploaded");
         }
-        let url = crate::upload::upload_image(&image, &upload_cfg)
-            .context("upload failed")?;
+        let url = crate::upload::upload_image(&image, &upload_cfg).context("upload failed")?;
         // stdout stays machine-readable: the shareable link, nothing else.
         println!("{url}");
         return Ok(());
@@ -263,9 +260,7 @@ OPTIONS:
         match args[i].as_str() {
             "--out" | "-o" => {
                 i += 1;
-                let value = args
-                    .get(i)
-                    .ok_or_else(|| anyhow!("--out needs a path"))?;
+                let value = args.get(i).ok_or_else(|| anyhow!("--out needs a path"))?;
                 out = Some(PathBuf::from(value));
             }
             "-h" | "--help" => {
@@ -357,34 +352,50 @@ EXAMPLES:
                 out = Some(PathBuf::from(take(rest, &mut i)?));
             }
             "--start" => {
-                start = take(rest, &mut i)?.parse().context("--start expects a number")?;
+                start = take(rest, &mut i)?
+                    .parse()
+                    .context("--start expects a number")?;
             }
             "--end" => {
-                end = take(rest, &mut i)?.parse().context("--end expects a number")?;
+                end = take(rest, &mut i)?
+                    .parse()
+                    .context("--end expects a number")?;
             }
             "--x" => {
-                x = take(rest, &mut i)?.parse().context("--x expects a number")?;
+                x = take(rest, &mut i)?
+                    .parse()
+                    .context("--x expects a number")?;
             }
             "--y" => {
-                y = take(rest, &mut i)?.parse().context("--y expects a number")?;
+                y = take(rest, &mut i)?
+                    .parse()
+                    .context("--y expects a number")?;
             }
             "--w" => {
-                w = take(rest, &mut i)?.parse().context("--w expects a number")?;
+                w = take(rest, &mut i)?
+                    .parse()
+                    .context("--w expects a number")?;
             }
             "--h" => {
-                h = take(rest, &mut i)?.parse().context("--h expects a number")?;
+                h = take(rest, &mut i)?
+                    .parse()
+                    .context("--h expects a number")?;
             }
             "--text" => {
                 text = take(rest, &mut i)?.clone();
             }
             "--font" => {
-                font = take(rest, &mut i)?.parse().context("--font expects a number")?;
+                font = take(rest, &mut i)?
+                    .parse()
+                    .context("--font expects a number")?;
             }
             "--pos" => {
                 pos = take(rest, &mut i)?.parse().context("--pos expects 0..4")?;
             }
             "--speed" => {
-                speed = take(rest, &mut i)?.parse().context("--speed expects a number")?;
+                speed = take(rest, &mut i)?
+                    .parse()
+                    .context("--speed expects a number")?;
             }
             other => {
                 if other.starts_with('-') {
@@ -403,8 +414,7 @@ EXAMPLES:
         }
         i += 1;
     }
-    let input = input
-        .ok_or_else(|| anyhow!("missing input GIF (try `pinsight gif --help`)"))?;
+    let input = input.ok_or_else(|| anyhow!("missing input GIF (try `pinsight gif --help`)"))?;
     if !input.exists() {
         return Err(anyhow!("input not found: {}", input.display()));
     }
@@ -482,9 +492,7 @@ OPTIONS:
         match args[i].as_str() {
             "--out" | "-o" => {
                 i += 1;
-                let v = args
-                    .get(i)
-                    .ok_or_else(|| anyhow!("--out needs a path"))?;
+                let v = args.get(i).ok_or_else(|| anyhow!("--out needs a path"))?;
                 out = Some(PathBuf::from(v));
             }
             "--seconds" | "-s" => {
@@ -507,8 +515,7 @@ OPTIONS:
         i += 1;
     }
     let out = out.unwrap_or_else(|| PathBuf::from("voice-note.wav"));
-    crate::voice::record(&out, seconds)
-        .context("voice recording failed")?;
+    crate::voice::record(&out, seconds).context("voice recording failed")?;
     // Machine-readable: the produced file path on stdout.
     println!("{}", out.display());
     Ok(())

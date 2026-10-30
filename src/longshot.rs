@@ -711,6 +711,7 @@ fn row_ink(img: &RgbaImage, y: u32, x_step: u32) -> u32 {
 /// coverage)`. `coverage` is the longest run of consecutive matching rows
 /// divided by the total number of informative rows — see `MIN_COVERAGE` for
 /// why that is the decisive number.
+#[allow(clippy::too_many_arguments)]
 fn compare_band(
     prev: &RgbaImage,
     next: &RgbaImage,
@@ -828,8 +829,9 @@ fn find_overlap_scored(prev: &RgbaImage, next: &RgbaImage) -> Option<(u32, f32, 
     let mut coarse: Vec<(f32, u32, f32, f32, u32)> = Vec::new();
     let mut k = max_overlap;
     while k >= MIN_OVERLAP {
-        let (votes, total, diff_sum, coverage) =
-            compare_band(prev, next, prev_h, k, x_step, row_step, &prev_ink, &next_ink);
+        let (votes, total, diff_sum, coverage) = compare_band(
+            prev, next, prev_h, k, x_step, row_step, &prev_ink, &next_ink,
+        );
         if total >= MIN_VOTES {
             let frac = votes as f32 / total as f32;
             let mean_diff = diff_sum as f32 / (total as f32 * cols);
@@ -855,8 +857,9 @@ fn find_overlap_scored(prev: &RgbaImage, next: &RgbaImage) -> Option<(u32, f32, 
         loop {
             if !seen.contains(&k) {
                 seen.push(k);
-                let (votes, total, diff_sum, coverage) =
-                    compare_band(prev, next, prev_h, k, x_step, row_step, &prev_ink, &next_ink);
+                let (votes, total, diff_sum, coverage) = compare_band(
+                    prev, next, prev_h, k, x_step, row_step, &prev_ink, &next_ink,
+                );
                 if total >= MIN_VOTES {
                     let frac = votes as f32 / total as f32;
                     let mean_diff = diff_sum as f32 / (total as f32 * cols);
@@ -874,8 +877,9 @@ fn find_overlap_scored(prev: &RgbaImage, next: &RgbaImage) -> Option<(u32, f32, 
     if coarse.is_empty() {
         let mut k = max_overlap;
         while k >= MIN_OVERLAP {
-            let (votes, total, diff_sum, coverage) =
-                compare_band(prev, next, prev_h, k, x_step, row_step, &prev_ink, &next_ink);
+            let (votes, total, diff_sum, coverage) = compare_band(
+                prev, next, prev_h, k, x_step, row_step, &prev_ink, &next_ink,
+            );
             if total >= MIN_VOTES {
                 let frac = votes as f32 / total as f32;
                 let mean_diff = diff_sum as f32 / (total as f32 * cols);
@@ -1053,13 +1057,8 @@ fn scrollbar_at_bottom(frame: &RgbaImage) -> bool {
     for y in 0..h {
         let a = frame.get_pixel(w - 1, y);
         let b = frame.get_pixel(w - 2, y);
-        let lum = (a[0] as u32
-            + a[1] as u32
-            + a[2] as u32
-            + b[0] as u32
-            + b[1] as u32
-            + b[2] as u32)
-            / 6;
+        let lum =
+            (a[0] as u32 + a[1] as u32 + a[2] as u32 + b[0] as u32 + b[1] as u32 + b[2] as u32) / 6;
         edge.push(lum as u8);
     }
     // The gutter must be dominated by one colour, otherwise it is content, not

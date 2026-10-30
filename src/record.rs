@@ -58,8 +58,8 @@ fn spawn_stop_watcher(stop: Arc<AtomicBool>, done: Arc<AtomicBool>) {
         .name("pinsight-record-esc".into())
         .spawn(move || {
             unsafe {
-                let hook: HHOOK = SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), None, 0)
-                    .unwrap_or_default();
+                let hook: HHOOK =
+                    SetWindowsHookExW(WH_KEYBOARD_LL, Some(key_hook), None, 0).unwrap_or_default();
                 let mut msg = MSG::default();
                 loop {
                     while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {}

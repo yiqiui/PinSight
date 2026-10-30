@@ -143,7 +143,11 @@ fn rgb_to_hsl(rgb: [u8; 3]) -> (f32, f32, f32) {
         return (0.0, 0.0, l * 100.0);
     }
     let d = max - min;
-    let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+    let s = if l > 0.5 {
+        d / (2.0 - max - min)
+    } else {
+        d / (max + min)
+    };
     let h = if max == r {
         ((g - b) / d + if g < b { 6.0 } else { 0.0 }) * 60.0
     } else if max == g {
@@ -168,7 +172,6 @@ pub enum TrayIconStyle {
     /// A PNG picked by the user.
     Custom,
 }
-
 
 /// Verbosity of the log file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -489,7 +492,6 @@ impl Gesture {
         }
     }
 }
-
 
 /// A named group of pins.
 ///

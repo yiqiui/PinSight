@@ -270,6 +270,7 @@ pub struct PinSightApp {
     /// Everything the tray rows are derived from, so a stale copy is never
     /// shown: pin count, global hide, hotkeys, enhanced menu, and the group
     /// table (ids, names, hidden flags).
+    #[allow(clippy::type_complexity)]
     tray_sig: (usize, bool, bool, bool, Vec<(u32, String, bool)>),
 }
 
@@ -488,7 +489,12 @@ impl PinSightApp {
         ));
     }
 
-    fn apply_picked_color(&mut self, target: crate::picker::ColorTarget, color: egui::Color32, ctx: &egui::Context) {
+    fn apply_picked_color(
+        &mut self,
+        target: crate::picker::ColorTarget,
+        color: egui::Color32,
+        ctx: &egui::Context,
+    ) {
         use crate::picker::ColorTarget;
         let rgb = [color.r(), color.g(), color.b()];
         match target {
@@ -573,9 +579,7 @@ impl PinSightApp {
                             self.toast(self.tr.tr.copied, false);
                         }
                     }
-                    Err(err) => {
-                        self.toast(format!("{}: {err}", self.tr.tr.clipboard_error), true)
-                    }
+                    Err(err) => self.toast(format!("{}: {err}", self.tr.tr.clipboard_error), true),
                 }
                 self.last_capture_at = Some(Instant::now());
                 self.last_image = Some(image);
@@ -784,15 +788,21 @@ impl PinSightApp {
                                 // its own viewport and would otherwise stay
                                 // dark while the app runs in light mode.
                                 match self.config.theme {
-                                    ThemeMode::Light => {
-                                        Palette::for_theme(egui::Theme::Light, self.config.accent, self.config.accent_custom)
-                                    }
-                                    ThemeMode::Dark => {
-                                        Palette::for_theme(egui::Theme::Dark, self.config.accent, self.config.accent_custom)
-                                    }
-                                    ThemeMode::System => {
-                                        Palette::for_theme(ctx.theme(), self.config.accent, self.config.accent_custom)
-                                    }
+                                    ThemeMode::Light => Palette::for_theme(
+                                        egui::Theme::Light,
+                                        self.config.accent,
+                                        self.config.accent_custom,
+                                    ),
+                                    ThemeMode::Dark => Palette::for_theme(
+                                        egui::Theme::Dark,
+                                        self.config.accent,
+                                        self.config.accent_custom,
+                                    ),
+                                    ThemeMode::System => Palette::for_theme(
+                                        ctx.theme(),
+                                        self.config.accent,
+                                        self.config.accent_custom,
+                                    ),
                                 },
                             );
                             // Apply the settings-page preferences to this run.
@@ -834,7 +844,8 @@ impl PinSightApp {
                             let image = Arc::new(image);
                             match copy_to_clipboard(&self.config, &image) {
                                 Ok(()) => {
-                                    if self.config.clipboard_mode != config::ClipboardMode::Disabled {
+                                    if self.config.clipboard_mode != config::ClipboardMode::Disabled
+                                    {
                                         self.toast(self.tr.tr.copied, false);
                                     }
                                 }
@@ -1282,7 +1293,12 @@ impl PinSightApp {
         // The stored image is the original full resolution but `w`/`h` are the
         // on-screen size, so resize to match before recreating (same corruption
         // guard as `add_pin`).
-        let image = image::imageops::resize(&*closed.image, pin_w, pin_h, image::imageops::FilterType::Triangle);
+        let image = image::imageops::resize(
+            &*closed.image,
+            pin_w,
+            pin_h,
+            image::imageops::FilterType::Triangle,
+        );
         match Pin::create(
             id,
             Arc::new(image),
@@ -1347,13 +1363,14 @@ impl PinSightApp {
         };
         match rx.try_recv() {
             Ok(Ok(path)) => {
-                self.gif_editor.status =
-                    Some((format!("{}: {}", self.tr.tr.gif_done, path.display()), false));
+                self.gif_editor.status = Some((
+                    format!("{}: {}", self.tr.tr.gif_done, path.display()),
+                    false,
+                ));
                 self.gif_rx = None;
             }
             Ok(Err(err)) => {
-                self.gif_editor.status =
-                    Some((format!("{}: {err}", self.tr.tr.gif_failed), true));
+                self.gif_editor.status = Some((format!("{}: {err}", self.tr.tr.gif_failed), true));
                 self.gif_rx = None;
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {}
@@ -1491,8 +1508,13 @@ impl PinSightApp {
                 });
                 ui.horizontal_wrapped(|ui| {
                     ui.label(t.gif_text_pos);
-                    let poses =
-                        [t.gif_pos_tl, t.gif_pos_tr, t.gif_pos_bl, t.gif_pos_br, t.gif_pos_c];
+                    let poses = [
+                        t.gif_pos_tl,
+                        t.gif_pos_tr,
+                        t.gif_pos_bl,
+                        t.gif_pos_br,
+                        t.gif_pos_c,
+                    ];
                     for (i, label) in poses.iter().enumerate() {
                         if ui.selectable_label(ed.pos as usize == i, *label).clicked() {
                             ed.pos = i as u8;
@@ -1551,7 +1573,11 @@ impl PinSightApp {
                 }
                 let op = ed.op;
                 let start = ed.start as usize;
-                let end = if ed.end == 0 { None } else { Some(ed.end as usize) };
+                let end = if ed.end == 0 {
+                    None
+                } else {
+                    Some(ed.end as usize)
+                };
                 let (x, y, w, h) = (ed.x, ed.y, ed.w, ed.h);
                 let text = ed.text.clone();
                 let font_size = ed.font_size;
@@ -1645,7 +1671,14 @@ impl PinSightApp {
 
     /// Add an empty group and make it the active one.
     fn create_group(&mut self) {
-        let next = self.config.pin_groups.iter().map(|g| g.id).max().unwrap_or(0) + 1;
+        let next = self
+            .config
+            .pin_groups
+            .iter()
+            .map(|g| g.id)
+            .max()
+            .unwrap_or(0)
+            + 1;
         self.config.pin_groups.push(config::PinGroup {
             id: next,
             name: String::new(),
@@ -1751,7 +1784,8 @@ impl PinSightApp {
         // on-screen size, so resize the bitmap to it — otherwise a full-res image
         // paired with a scaled width/height desyncs the stride and yields the
         // white/horizontal-noise corruption (triggered whenever scale < 1).
-        let image = image::imageops::resize(&image, pin_w, pin_h, image::imageops::FilterType::Triangle);
+        let image =
+            image::imageops::resize(&image, pin_w, pin_h, image::imageops::FilterType::Triangle);
         match Pin::create(
             id,
             Arc::new(image),
@@ -1800,7 +1834,8 @@ impl PinSightApp {
         // Resize the bitmap to the on-screen size so the BGRA stride matches the
         // width/height the pin window blits with (see `add_pin` for the full
         // explanation of why a mismatched full-res image corrupts the pin).
-        let image = image::imageops::resize(&image, pin_w, pin_h, image::imageops::FilterType::Triangle);
+        let image =
+            image::imageops::resize(&image, pin_w, pin_h, image::imageops::FilterType::Triangle);
         match Pin::create(
             id,
             Arc::new(image),
@@ -1989,12 +2024,8 @@ impl PinSightApp {
         {
             let items = self.tray_items();
             let icon = self.tray_icon_pixels();
-            self.tray = crate::tray::Tray::install_with(
-                tx,
-                items,
-                self.tr.tr.tray_tip.to_string(),
-                icon,
-            );
+            self.tray =
+                crate::tray::Tray::install_with(tx, items, self.tr.tr.tray_tip.to_string(), icon);
             // Let the tray wake the UI: with `ControlFlow::Wait` an idle app
             // never repaints, so queued commands would otherwise be ignored.
             let wake_ctx = ctx.clone();
@@ -2526,7 +2557,8 @@ impl PinSightApp {
                         self.toast(self.tr.tr.pinned, false);
                     }
                     OverlayAction::Save => {
-                        match util::save_image(&image, &self.config.save_dir, &self.save_options()) {
+                        match util::save_image(&image, &self.config.save_dir, &self.save_options())
+                        {
                             Ok(path) => {
                                 self.last_saved = Some(path.clone());
                                 if self.config.capture_sound_save {
@@ -2553,9 +2585,8 @@ impl PinSightApp {
                         }
                         let (tx, rx) = std::sync::mpsc::channel();
                         std::thread::spawn(move || {
-                            let result =
-                                crate::upload::upload_image(&image, &upload_cfg)
-                                    .map_err(|e| e.to_string());
+                            let result = crate::upload::upload_image(&image, &upload_cfg)
+                                .map_err(|e| e.to_string());
                             let _ = tx.send(result);
                         });
                         self.upload_rx = Some(rx);
@@ -2742,16 +2773,7 @@ impl PinSightApp {
         };
         let verb = HSTRING::from("runas");
         let file = HSTRING::from(exe.as_os_str());
-        let result = unsafe {
-            ShellExecuteW(
-                None,
-                &verb,
-                &file,
-                None,
-                None,
-                SW_SHOWNORMAL,
-            )
-        };
+        let result = unsafe { ShellExecuteW(None, &verb, &file, None, None, SW_SHOWNORMAL) };
         // ShellExecuteW returns a value > 32 on success (an HINSTANCE cast).
         if result.0 as isize <= 32 {
             self.toast(self.tr.tr.gen_admin_failed, true);
@@ -2804,8 +2826,14 @@ impl PinSightApp {
                 self.page = Page::Capture;
             }
             ui.add_space(4.0);
-            if ui::nav_button(ui, p, Icon::Image, t.nav_history, self.page == Page::History)
-                .clicked()
+            if ui::nav_button(
+                ui,
+                p,
+                Icon::Image,
+                t.nav_history,
+                self.page == Page::History,
+            )
+            .clicked()
             {
                 self.page = Page::History;
             }
@@ -2931,9 +2959,7 @@ impl PinSightApp {
                         let cb = egui::Rect::from_min_size(rect.min, egui::vec2(22.0, 22.0));
                         Self::draw_checkbox(ui, p, cb, selected);
                         if resp.clicked() {
-                            let pos = ui
-                                .input(|i| i.pointer.interact_pos())
-                                .unwrap_or(rect.min);
+                            let pos = ui.input(|i| i.pointer.interact_pos()).unwrap_or(rect.min);
                             if cb.contains(pos) {
                                 to_toggle = Some(f.path.clone());
                             } else {
@@ -3001,10 +3027,7 @@ impl PinSightApp {
             return;
         };
         match crate::pdf::export_paths(&chosen, &out) {
-            Ok(()) => self.toast(
-                format!("{} {}", chosen.len(), t.history_exported),
-                false,
-            ),
+            Ok(()) => self.toast(format!("{} {}", chosen.len(), t.history_exported), false),
             Err(err) => self.toast(format!("{}: {err}", t.history_export_pdf), true),
         }
     }
@@ -3012,9 +3035,18 @@ impl PinSightApp {
     /// Small selection tick drawn over a gallery tile's top-left corner.
     fn draw_checkbox(ui: &mut egui::Ui, p: &Palette, rect: egui::Rect, selected: bool) {
         let painter = ui.painter();
-        let fill = if selected { p.accent } else { egui::Color32::from_rgba_unmultiplied(255, 255, 255, 200) };
+        let fill = if selected {
+            p.accent
+        } else {
+            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 200)
+        };
         painter.rect_filled(rect, 5.0, fill);
-        painter.rect_stroke(rect, 5.0, egui::Stroke::new(1.0, p.stroke), egui::StrokeKind::Inside);
+        painter.rect_stroke(
+            rect,
+            5.0,
+            egui::Stroke::new(1.0, p.stroke),
+            egui::StrokeKind::Inside,
+        );
         if selected {
             // White check mark.
             let c = rect.center();
@@ -3051,7 +3083,7 @@ impl PinSightApp {
                 Some(HistoryFile { path, modified })
             })
             .collect();
-        out.sort_by(|a, b| b.modified.cmp(&a.modified));
+        out.sort_by_key(|a| std::cmp::Reverse(a.modified));
         out.truncate(240);
         self.history_scan = Some((Instant::now(), out.clone()));
         out
@@ -3372,7 +3404,8 @@ impl PinSightApp {
                         self.push_closed_pin(pin);
                     }
                 }
-                let restore_label = format!("{} ({})", t.pin_restore_action, self.closed_pins.len());
+                let restore_label =
+                    format!("{} ({})", t.pin_restore_action, self.closed_pins.len());
                 if ui::link_button(ui, p, Icon::Reset, &restore_label).clicked() {
                     self.restore_closed_pin();
                 }
@@ -3419,7 +3452,11 @@ impl PinSightApp {
                     ui,
                     p,
                     if hidden { Icon::Eye } else { Icon::EyeOff },
-                    if hidden { t.pin_group_show } else { t.pin_group_hide },
+                    if hidden {
+                        t.pin_group_show
+                    } else {
+                        t.pin_group_hide
+                    },
                 )
                 .clicked()
                 {
@@ -3446,8 +3483,11 @@ impl PinSightApp {
                     .width(200.0)
                     .show_ui(ui, |ui| {
                         for group in self.config.pin_groups.clone() {
-                            let label =
-                                format!("{} ({})", self.group_name(group.id), self.group_count(group.id));
+                            let label = format!(
+                                "{} ({})",
+                                self.group_name(group.id),
+                                self.group_count(group.id)
+                            );
                             if ui
                                 .selectable_label(group.id == self.active_group, label)
                                 .clicked()
@@ -3600,8 +3640,8 @@ impl PinSightApp {
                                 (Icon::Close, false, t.pin_close, PinAction::Close),
                                 (Icon::Layers, false, t.pin_group_move, PinAction::Group),
                             ];
-                            let strip = buttons.len() as f32 * BTN
-                                + (buttons.len() - 1) as f32 * 4.0;
+                            let strip =
+                                buttons.len() as f32 * BTN + (buttons.len() - 1) as f32 * 4.0;
                             let strip_x = rect.right() - PAD - strip;
 
                             let zoom = format!("{:.0}%", row.zoom * 100.0);
@@ -3650,10 +3690,7 @@ impl PinSightApp {
                                                     self.group_count(group.id)
                                                 );
                                                 if ui
-                                                    .selectable_label(
-                                                        group.id == row.group,
-                                                        label,
-                                                    )
+                                                    .selectable_label(group.id == row.group, label)
                                                     .clicked()
                                                 {
                                                     chosen = Some(group.id);
@@ -4088,10 +4125,13 @@ impl PinSightApp {
                     "Example — 示例窗口",
                 ));
                 ui.label(
-                    egui::RichText::new(format!("{preview}.{}", self.config.image_format.extension()))
-                        .monospace()
-                        .size(12.0)
-                        .color(p.accent),
+                    egui::RichText::new(format!(
+                        "{preview}.{}",
+                        self.config.image_format.extension()
+                    ))
+                    .monospace()
+                    .size(12.0)
+                    .color(p.accent),
                 );
             });
             ui.add_space(6.0);
@@ -4122,9 +4162,7 @@ impl PinSightApp {
                 }
 
                 ui.add_space(6.0);
-                ui.label(
-                    egui::RichText::new(t.nm_vars).size(11.0).color(p.text_weak),
-                );
+                ui.label(egui::RichText::new(t.nm_vars).size(11.0).color(p.text_weak));
                 for name in crate::naming::VAR_NAMES {
                     ui.horizontal(|ui| {
                         ui.label(
@@ -4356,7 +4394,10 @@ impl PinSightApp {
                         .show_ui(ui, |ui| {
                             let mut picked = None;
                             for pos in crate::decorate::WatermarkPos::ALL {
-                                if ui.selectable_label(pos == wm.position, label(pos)).clicked() {
+                                if ui
+                                    .selectable_label(pos == wm.position, label(pos))
+                                    .clicked()
+                                {
                                     picked = Some(pos);
                                 }
                             }
@@ -4459,7 +4500,12 @@ impl PinSightApp {
                     util::fmt_seconds(self.config.record_max_seconds)
                 };
                 ui.add_space(4.0);
-                ui.label(egui::RichText::new(text).monospace().size(11.0).color(p.text_weak));
+                ui.label(
+                    egui::RichText::new(text)
+                        .monospace()
+                        .size(11.0)
+                        .color(p.text_weak),
+                );
             });
             ui::field_row(ui, p, t.rec_audio, |ui| {
                 if ui::toggle(ui, p, &mut self.config.record_audio).changed() {
@@ -4467,7 +4513,10 @@ impl PinSightApp {
                 }
             });
             ui::field_row(ui, p, t.rec_audio_device, |ui| {
-                if ui.text_edit_singleline(&mut self.config.audio_device).changed() {
+                if ui
+                    .text_edit_singleline(&mut self.config.audio_device)
+                    .changed()
+                {
                     self.config.audio_device = self.config.audio_device.trim().to_string();
                     let _ = self.config.save();
                 }
@@ -4669,9 +4718,7 @@ impl PinSightApp {
             });
 
             ui::field_row(ui, p, t.gen_auto_backup, |ui| {
-                if ui::toggle(ui, p, &mut self.config.auto_backup_config)
-                    .changed()
-                {
+                if ui::toggle(ui, p, &mut self.config.auto_backup_config).changed() {
                     let _ = self.config.save();
                 }
             });
@@ -4823,9 +4870,7 @@ impl PinSightApp {
             });
 
             ui::field_row(ui, p, t.cap_crosshair, |ui| {
-                if ui::toggle(ui, p, &mut self.config.capture_crosshair)
-                    .changed()
-                {
+                if ui::toggle(ui, p, &mut self.config.capture_crosshair).changed() {
                     let _ = self.config.save();
                 }
             });
@@ -4837,9 +4882,7 @@ impl PinSightApp {
             });
 
             ui::field_row(ui, p, t.cap_magnifier, |ui| {
-                if ui::toggle(ui, p, &mut self.config.capture_magnifier)
-                    .changed()
-                {
+                if ui::toggle(ui, p, &mut self.config.capture_magnifier).changed() {
                     let _ = self.config.save();
                 }
             });
@@ -4870,9 +4913,7 @@ impl PinSightApp {
             }
 
             ui::field_row(ui, p, t.cap_pointer, |ui| {
-                if ui::toggle(ui, p, &mut self.config.capture_pointer)
-                    .changed()
-                {
+                if ui::toggle(ui, p, &mut self.config.capture_pointer).changed() {
                     let _ = self.config.save();
                 }
             });
@@ -4997,9 +5038,7 @@ impl PinSightApp {
                 }
             });
             ui::field_row(ui, p, t.cap_esc_confirm, |ui| {
-                if ui::toggle(ui, p, &mut self.config.capture_esc_confirm)
-                    .changed()
-                {
+                if ui::toggle(ui, p, &mut self.config.capture_esc_confirm).changed() {
                     let _ = self.config.save();
                 }
             });
@@ -5049,16 +5088,12 @@ impl PinSightApp {
         ui::card(ui, p, |ui| {
             ui::section_header(ui, p, Icon::Info, t.cap_sound);
             ui::field_row(ui, p, t.cap_sound_copy, |ui| {
-                if ui::toggle(ui, p, &mut self.config.capture_sound_copy)
-                    .changed()
-                {
+                if ui::toggle(ui, p, &mut self.config.capture_sound_copy).changed() {
                     let _ = self.config.save();
                 }
             });
             ui::field_row(ui, p, t.cap_sound_save, |ui| {
-                if ui::toggle(ui, p, &mut self.config.capture_sound_save)
-                    .changed()
-                {
+                if ui::toggle(ui, p, &mut self.config.capture_sound_save).changed() {
                     let _ = self.config.save();
                 }
             });
@@ -5169,9 +5204,7 @@ impl PinSightApp {
             });
 
             ui::field_row(ui, p, t.pin_zoom_at_cursor, |ui| {
-                if ui::toggle(ui, p, &mut self.config.pin_zoom_at_cursor)
-                    .changed()
-                {
+                if ui::toggle(ui, p, &mut self.config.pin_zoom_at_cursor).changed() {
                     let _ = self.config.save();
                 }
             });
@@ -5276,9 +5309,7 @@ impl PinSightApp {
             });
 
             ui::field_row(ui, p, t.pin_skip_file_paths, |ui| {
-                if ui::toggle(ui, p, &mut self.config.pin_skip_file_paths)
-                    .changed()
-                {
+                if ui::toggle(ui, p, &mut self.config.pin_skip_file_paths).changed() {
                     let _ = self.config.save();
                 }
             });
@@ -5333,9 +5364,7 @@ impl PinSightApp {
             ui.add_space(10.0);
 
             ui::field_row(ui, p, t.ctl_mouse_through, |ui| {
-                if ui::toggle(ui, p, &mut self.config.pin_through)
-                    .changed()
-                {
+                if ui::toggle(ui, p, &mut self.config.pin_through).changed() {
                     let _ = self.config.save();
                 }
             });
@@ -5353,7 +5382,9 @@ impl PinSightApp {
             ui.add_space(10.0);
 
             // One row per action: label, modifier, button, double-click flag.
-            let rows: [(&str, fn(&mut config::PinGestures) -> &mut config::Gesture); 6] = [
+            #[allow(clippy::type_complexity)]
+            let rows: [(&str, fn(&mut config::PinGestures) -> &mut config::Gesture);
+                6] = [
                 (t.gst_zoom, |g| &mut g.zoom),
                 (t.gst_opacity, |g| &mut g.opacity),
                 (t.gst_close, |g| &mut g.close),
@@ -5426,7 +5457,11 @@ impl PinSightApp {
                     // makes sense for the three buttons.
                     if next.button != config::GestureButton::Wheel {
                         ui.add_space(6.0);
-                        ui.label(egui::RichText::new(t.gst_double).size(11.5).color(p.text_weak));
+                        ui.label(
+                            egui::RichText::new(t.gst_double)
+                                .size(11.5)
+                                .color(p.text_weak),
+                        );
                         if ui::toggle(ui, p, &mut next.double_click).changed() {}
                     }
 
@@ -5689,9 +5724,7 @@ impl PinSightApp {
 
             if matches!(
                 self.config.proxy_mode,
-                config::ProxyMode::Manual
-                    | config::ProxyMode::Http
-                    | config::ProxyMode::Socks5
+                config::ProxyMode::Manual | config::ProxyMode::Http | config::ProxyMode::Socks5
             ) {
                 ui::field_row(ui, p, t.upd_proxy_addr, |ui| {
                     let width = (ui.available_width() - 40.0).clamp(160.0, 460.0);
@@ -6243,20 +6276,10 @@ fn taskbar_is_dark() -> bool {
     };
     use windows::core::HSTRING;
 
-    let path = HSTRING::from(
-        r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-    );
+    let path = HSTRING::from(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
     let mut key = HKEY::default();
     unsafe {
-        if RegOpenKeyExW(
-            HKEY_CURRENT_USER,
-            &path,
-            Some(0),
-            KEY_READ,
-            &mut key,
-        )
-        .is_err()
-        {
+        if RegOpenKeyExW(HKEY_CURRENT_USER, &path, Some(0), KEY_READ, &mut key).is_err() {
             return true;
         }
         let name = HSTRING::from("SystemUsesLightTheme");

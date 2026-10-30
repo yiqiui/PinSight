@@ -152,8 +152,7 @@ fn add_shadow(image: &RgbaImage, shadow: &ShadowDeco) -> RgbaImage {
     for y in 0..ih {
         for x in 0..iw {
             let a = image.get_pixel(x as u32, y as u32).0[3] as f32 / 255.0;
-            alpha[((y + spread) * mw + (x + spread)) as usize] =
-                a * shadow.opacity as f32 / 255.0;
+            alpha[((y + spread) * mw + (x + spread)) as usize] = a * shadow.opacity as f32 / 255.0;
         }
     }
     // 2. Box-blur the alpha three times for a smooth, Gaussian-like falloff.
@@ -315,7 +314,9 @@ fn apply_watermark(image: &mut RgbaImage, wm: &WatermarkDeco) {
         }
     }
     if !wm.text.trim().is_empty() {
-        if let Some(text_layer) = render_text_layer(&wm.text, small * wm.text_scale.clamp(0.01, 0.5)) {
+        if let Some(text_layer) =
+            render_text_layer(&wm.text, small * wm.text_scale.clamp(0.01, 0.5))
+        {
             layers.push(text_layer);
         }
     }

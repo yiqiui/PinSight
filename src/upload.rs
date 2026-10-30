@@ -12,7 +12,9 @@
 //! ever returns `Result` (it never panics), which matters because the release
 //! profile sets `panic = "abort"`.
 
-use crate::config::{HttpMethod, HttpUpload, LocalUpload, UploadBackend, UploadConfig, UploadResponse};
+use crate::config::{
+    HttpMethod, HttpUpload, LocalUpload, UploadBackend, UploadConfig, UploadResponse,
+};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -96,9 +98,8 @@ fn upload_http(image: &image::RgbaImage, cfg: &HttpUpload) -> Result<String> {
 
     let locator = match cfg.response {
         UploadResponse::Raw => body.trim().to_string(),
-        UploadResponse::Json => {
-            extract_json_field(&body, &cfg.json_field).context("reading the URL from the JSON response")?
-        }
+        UploadResponse::Json => extract_json_field(&body, &cfg.json_field)
+            .context("reading the URL from the JSON response")?,
     };
     if locator.trim().is_empty() {
         anyhow::bail!("upload succeeded but the response contained no URL");
@@ -141,7 +142,10 @@ mod tests {
     #[test]
     fn reads_nested_json_field() {
         let body = r#"{"data":{"url":"https://x/y.png"}}"#;
-        assert_eq!(extract_json_field(body, "data.url").unwrap(), "https://x/y.png");
+        assert_eq!(
+            extract_json_field(body, "data.url").unwrap(),
+            "https://x/y.png"
+        );
     }
 
     #[test]
@@ -152,8 +156,7 @@ mod tests {
 
     #[test]
     fn local_upload_writes_a_file() {
-        let dir =
-            std::env::temp_dir().join(format!("pinsight-upload-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("pinsight-upload-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let cfg = LocalUpload {
             folder: dir.clone(),

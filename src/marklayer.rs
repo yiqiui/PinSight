@@ -220,7 +220,12 @@ impl MarkLayer {
         let painter = ui.painter();
         for mark in &self.marks {
             match mark {
-                Mark::Arrow { from, to, color, width } => {
+                Mark::Arrow {
+                    from,
+                    to,
+                    color,
+                    width,
+                } => {
                     let stroke = Stroke::new(*width, *color);
                     painter.line_segment([*from, *to], stroke);
                     let delta = *to - *from;
@@ -232,17 +237,25 @@ impl MarkLayer {
                     let head = (width * 3.0).clamp(8.0, 22.0);
                     for sign in [-1.0_f32, 1.0] {
                         let (sin, cos) = (sign * 0.42).sin_cos();
-                        let dir = Vec2::new(
-                            back.x * cos - back.y * sin,
-                            back.x * sin + back.y * cos,
-                        );
+                        let dir =
+                            Vec2::new(back.x * cos - back.y * sin, back.x * sin + back.y * cos);
                         painter.line_segment([*to, *to + dir * head], stroke);
                     }
                 }
-                Mark::Line { from, to, color, width } => {
+                Mark::Line {
+                    from,
+                    to,
+                    color,
+                    width,
+                } => {
                     painter.line_segment([*from, *to], Stroke::new(*width, *color));
                 }
-                Mark::Rect { min, max, color, width } => {
+                Mark::Rect {
+                    min,
+                    max,
+                    color,
+                    width,
+                } => {
                     painter.rect_stroke(
                         Rect::from_two_pos(*min, *max),
                         4.0,
@@ -250,24 +263,29 @@ impl MarkLayer {
                         egui::StrokeKind::Inside,
                     );
                 }
-                Mark::Ellipse { center, radius, color, width } => {
+                Mark::Ellipse {
+                    center,
+                    radius,
+                    color,
+                    width,
+                } => {
                     painter.add(Shape::ellipse_stroke(
                         *center,
                         *radius,
                         Stroke::new(*width, *color),
                     ));
                 }
-                Mark::Text { pos, text, px, color } => {
-                    let galley = painter.layout_no_wrap(
-                        text.clone(),
-                        FontId::proportional(*px),
-                        *color,
-                    );
+                Mark::Text {
+                    pos,
+                    text,
+                    px,
+                    color,
+                } => {
+                    let galley =
+                        painter.layout_no_wrap(text.clone(), FontId::proportional(*px), *color);
                     let pad = 6.0;
-                    let box_rect = Rect::from_min_size(
-                        *pos,
-                        galley.size() + Vec2::splat(pad * 2.0),
-                    );
+                    let box_rect =
+                        Rect::from_min_size(*pos, galley.size() + Vec2::splat(pad * 2.0));
                     painter.rect_filled(
                         box_rect,
                         6.0,
@@ -304,10 +322,8 @@ impl MarkLayer {
                     let head = (self.width * 3.0).clamp(8.0, 22.0);
                     for sign in [-1.0_f32, 1.0] {
                         let (sin, cos) = (sign * 0.42).sin_cos();
-                        let dir = Vec2::new(
-                            back.x * cos - back.y * sin,
-                            back.x * sin + back.y * cos,
-                        );
+                        let dir =
+                            Vec2::new(back.x * cos - back.y * sin, back.x * sin + back.y * cos);
                         painter.line_segment([to, to + dir * head], stroke);
                     }
                 }
@@ -316,15 +332,16 @@ impl MarkLayer {
                 painter.line_segment([from, to], stroke);
             }
             MarkTool::Rect => {
-                painter.rect_stroke(Rect::from_two_pos(from, to), 4.0, stroke, egui::StrokeKind::Inside);
+                painter.rect_stroke(
+                    Rect::from_two_pos(from, to),
+                    4.0,
+                    stroke,
+                    egui::StrokeKind::Inside,
+                );
             }
             MarkTool::Ellipse => {
                 let center = from + (to - from) / 2.0;
-                painter.add(Shape::ellipse_stroke(
-                    center,
-                    (to - from) / 2.0,
-                    stroke,
-                ));
+                painter.add(Shape::ellipse_stroke(center, (to - from) / 2.0, stroke));
             }
             _ => {}
         }
@@ -432,49 +449,52 @@ impl MarkLayer {
         let mut cancel = false;
         let anchor = draft.pos;
         #[allow(deprecated)]
-        egui::Area::new(egui::Id::new(("pinsight-mark-text", anchor.x as i32, anchor.y as i32)))
-            .fixed_pos(anchor)
-            .order(egui::Order::Foreground)
-            .show(ui.ctx(), |ui| {
-                egui::Frame::NONE
-                    .fill(self.palette.card)
-                    .stroke(egui::Stroke::new(1.0, self.palette.stroke_strong))
-                    .corner_radius(10)
-                    .inner_margin(egui::Margin::symmetric(10, 8))
-                    .show(ui, |ui| {
-                        ui.set_width(260.0);
-                        // A multiline TextEdit swallows plain Enter as a
-                        // newline, so it could never be committed with Enter.
-                        // Consume Enter first: plain Enter commits, Shift+Enter
-                        // inserts a newline.
-                        let enter = ui.input_mut(|i| {
-                            i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
-                        });
-                        let response = ui.add(
-                            egui::TextEdit::multiline(&mut draft.buffer)
-                                .hint_text(self.tr.mk_text_hint)
-                                .desired_width(240.0)
-                                .font(egui::FontId::proportional(self.text_px * 0.8)),
-                        );
-                        if !draft.focused {
-                            response.request_focus();
-                            draft.focused = true;
-                        }
-                        if enter {
+        egui::Area::new(egui::Id::new((
+            "pinsight-mark-text",
+            anchor.x as i32,
+            anchor.y as i32,
+        )))
+        .fixed_pos(anchor)
+        .order(egui::Order::Foreground)
+        .show(ui.ctx(), |ui| {
+            egui::Frame::NONE
+                .fill(self.palette.card)
+                .stroke(egui::Stroke::new(1.0, self.palette.stroke_strong))
+                .corner_radius(10)
+                .inner_margin(egui::Margin::symmetric(10, 8))
+                .show(ui, |ui| {
+                    ui.set_width(260.0);
+                    // A multiline TextEdit swallows plain Enter as a
+                    // newline, so it could never be committed with Enter.
+                    // Consume Enter first: plain Enter commits, Shift+Enter
+                    // inserts a newline.
+                    let enter =
+                        ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+                    let response = ui.add(
+                        egui::TextEdit::multiline(&mut draft.buffer)
+                            .hint_text(self.tr.mk_text_hint)
+                            .desired_width(240.0)
+                            .font(egui::FontId::proportional(self.text_px * 0.8)),
+                    );
+                    if !draft.focused {
+                        response.request_focus();
+                        draft.focused = true;
+                    }
+                    if enter {
+                        commit = true;
+                    }
+                    ui.horizontal(|ui| {
+                        if ui::primary_button(ui, &self.palette, self.tr.mk_text).clicked() {
                             commit = true;
                         }
-                        ui.horizontal(|ui| {
-                            if ui::primary_button(ui, &self.palette, self.tr.mk_text).clicked() {
-                                commit = true;
-                            }
-                            if ui::link_button(ui, &self.palette, ui::Icon::Close, self.tr.mk_close)
-                                .clicked()
-                            {
-                                cancel = true;
-                            }
-                        });
+                        if ui::link_button(ui, &self.palette, ui::Icon::Close, self.tr.mk_close)
+                            .clicked()
+                        {
+                            cancel = true;
+                        }
                     });
-            });
+                });
+        });
         if cancel {
             self.text_draft = None;
             self.passthrough = true;
@@ -482,8 +502,7 @@ impl MarkLayer {
             if let Some(draft) = self.text_draft.take() {
                 let text = draft.buffer.trim().to_string();
                 if !text.is_empty() {
-                    let color =
-                        Color32::from_rgb(self.color[0], self.color[1], self.color[2]);
+                    let color = Color32::from_rgb(self.color[0], self.color[1], self.color[2]);
                     self.marks.push(Mark::Text {
                         pos: draft.pos,
                         text,
@@ -530,10 +549,8 @@ impl MarkLayer {
                                 }
                                 if ui
                                     .add(
-                                        egui::Button::new(
-                                            egui::RichText::new(*emoji).size(18.0),
-                                        )
-                                        .frame(false),
+                                        egui::Button::new(egui::RichText::new(*emoji).size(18.0))
+                                            .frame(false),
                                     )
                                     .clicked()
                                 {
@@ -643,13 +660,10 @@ impl MarkLayer {
                             // Colour swatches.
                             for rgb in COLORS {
                                 let active = self.color == rgb;
-                                let (rect, response) = ui.allocate_exact_size(
-                                    Vec2::splat(20.0),
-                                    egui::Sense::click(),
-                                );
+                                let (rect, response) =
+                                    ui.allocate_exact_size(Vec2::splat(20.0), egui::Sense::click());
                                 let color = Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
-                                ui.painter()
-                                    .rect_filled(rect, 5.0, color);
+                                ui.painter().rect_filled(rect, 5.0, color);
                                 if active {
                                     ui.painter().rect_stroke(
                                         rect,
@@ -672,14 +686,10 @@ impl MarkLayer {
                                     .size(11.0)
                                     .color(self.palette.text_weak),
                             );
-                            let widths: [(f32, &str); 3] =
-                                [(2.0, "细"), (4.0, "中"), (8.0, "粗")];
-                            if let Some(picked) = ui::segmented(
-                                ui,
-                                &self.palette,
-                                self.width,
-                                &widths,
-                            ) {
+                            let widths: [(f32, &str); 3] = [(2.0, "细"), (4.0, "中"), (8.0, "粗")];
+                            if let Some(picked) =
+                                ui::segmented(ui, &self.palette, self.width, &widths)
+                            {
                                 self.width = picked;
                             }
                             ui.add_space(8.0);

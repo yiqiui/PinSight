@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use image::{RgbaImage, RgbImage};
+use image::{RgbImage, RgbaImage};
 use serde::{Deserialize, Serialize};
 
 /// Timestamp used in generated file names.
@@ -93,11 +93,7 @@ impl Default for SaveOptions {
 /// The stem is expanded and sanitised, so a window title with a colon in it
 /// still yields a writable path. When the target exists, a counter is added
 /// rather than overwriting the earlier shot.
-pub fn save_image(
-    image: &RgbaImage,
-    dir: &Path,
-    options: &SaveOptions,
-) -> anyhow::Result<PathBuf> {
+pub fn save_image(image: &RgbaImage, dir: &Path, options: &SaveOptions) -> anyhow::Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     // Apply border / shadow / watermark before any format-specific encoding.
     // Skip the clone entirely when nothing is requested, so the common path is
@@ -115,9 +111,8 @@ pub fn save_image(
             let mut rgb = RgbImage::new(image.width(), image.height());
             for (out, src) in rgb.pixels_mut().zip(image.pixels()) {
                 let alpha = src.0[3] as u32;
-                let blend = |c: u8| -> u8 {
-                    ((c as u32 * alpha + 255 * (255 - alpha)) / 255) as u8
-                };
+                let blend =
+                    |c: u8| -> u8 { ((c as u32 * alpha + 255 * (255 - alpha)) / 255) as u8 };
                 out.0 = [blend(src.0[0]), blend(src.0[1]), blend(src.0[2])];
             }
             let mut jpeg = image::codecs::jpeg::JpegEncoder::new_with_quality(
@@ -302,7 +297,10 @@ mod tests {
                 Some(format.extension()),
                 "wrong extension for {format:?}"
             );
-            assert!(!path.to_string_lossy().contains('$'), "template left unexpanded");
+            assert!(
+                !path.to_string_lossy().contains('$'),
+                "template left unexpanded"
+            );
         }
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -16,9 +16,9 @@ use std::time::Duration;
 use egui::{Color32, Frame, RichText, Vec2};
 
 use crate::i18n::Strings;
+use crate::longshot::LongShotJob;
 use crate::record::RecordJob;
 use crate::theme::Palette;
-use crate::longshot::LongShotJob;
 use crate::ui;
 
 pub const RECORD_HUD_ID: &str = "pinsight-record-hud";
@@ -57,6 +57,7 @@ fn pill_position(monitor: &crate::util::PhysRect, scale: f32, width: f32) -> egu
 
 /// A small always-on-top window holding `add_contents` on a rounded card, so
 /// the status reads over any background.
+#[allow(clippy::too_many_arguments)]
 fn pill_window(
     ctx: &egui::Context,
     id: &str,
@@ -84,16 +85,10 @@ fn pill_window(
         .stroke(egui::Stroke::new(1.0, palette.stroke_strong))
         .corner_radius(16)
         .inner_margin(egui::Margin::symmetric(14, 8));
-    ctx.show_viewport_immediate(
-        egui::ViewportId::from_hash_of(id),
-        builder,
-        |ui, _| {
-            let add = body.take().expect("viewport body called once");
-            egui::CentralPanel::default()
-                .frame(frame)
-                .show(ui, add);
-        },
-    );
+    ctx.show_viewport_immediate(egui::ViewportId::from_hash_of(id), builder, |ui, _| {
+        let add = body.take().expect("viewport body called once");
+        egui::CentralPanel::default().frame(frame).show(ui, add);
+    });
 }
 
 /// Latest status line, if the toast is still fresh. Drawn under the pill so a
@@ -105,11 +100,7 @@ fn toast_line(ui: &mut egui::Ui, palette: &Palette, toast: Option<&str>) {
         return;
     }
     ui.add_space(6.0);
-    ui.label(
-        RichText::new(text)
-            .size(11.5)
-            .color(palette.text_weak),
-    );
+    ui.label(RichText::new(text).size(11.5).color(palette.text_weak));
 }
 
 /// Recording status pill: state, elapsed time, pause/stop and the annotation
@@ -151,8 +142,7 @@ pub fn show_record(
                     // Pulsing dot: solid red while recording, amber while
                     // paused.
                     let pulse = 0.55 + 0.45 * (elapsed.as_millis() as f32 / 1000.0).sin();
-                    let (rect, _) =
-                        ui.allocate_exact_size(Vec2::splat(12.0), egui::Sense::hover());
+                    let (rect, _) = ui.allocate_exact_size(Vec2::splat(12.0), egui::Sense::hover());
                     let dot = if paused {
                         palette.warn
                     } else {
@@ -190,7 +180,11 @@ pub fn show_record(
                     if ui::link_button(
                         ui,
                         palette,
-                        if paused { ui::Icon::Reset } else { ui::Icon::Record },
+                        if paused {
+                            ui::Icon::Reset
+                        } else {
+                            ui::Icon::Record
+                        },
                         if paused {
                             tr.rec_hud_resume
                         } else {
@@ -255,24 +249,22 @@ pub fn show_long(
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 10.0;
-                    let (rect, _) =
-                        ui.allocate_exact_size(Vec2::splat(12.0), egui::Sense::hover());
+                    let (rect, _) = ui.allocate_exact_size(Vec2::splat(12.0), egui::Sense::hover());
                     ui.painter().circle_filled(
                         rect.center(),
                         5.5,
                         palette.accent.gamma_multiply(0.9),
                     );
                     ui.label(
-                        RichText::new(tr.long_settings).size(12.5).color(palette.text),
+                        RichText::new(tr.long_settings)
+                            .size(12.5)
+                            .color(palette.text),
                     );
                     ui.label(
-                        RichText::new(format!(
-                            "{} {} · {} px",
-                            job.frames, tr.frames, job.height
-                        ))
-                        .monospace()
-                        .size(12.0)
-                        .color(palette.text),
+                        RichText::new(format!("{} {} · {} px", job.frames, tr.frames, job.height))
+                            .monospace()
+                            .size(12.0)
+                            .color(palette.text),
                     );
                     ui.add_space(4.0);
                     if ui::primary_button(ui, palette, tr.rec_hud_stop).clicked() {

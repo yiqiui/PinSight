@@ -1315,10 +1315,7 @@ impl CaptureSession {
         // keeps the full image for display.
         let crop = image::imageops::crop_imm(&self.image, x, y, w, h).to_image();
         self.ocr_rect = Some(ImgRect::from_min_size(
-            x as f32,
-            y as f32,
-            w as f32,
-            h as f32,
+            x as f32, y as f32, w as f32, h as f32,
         ));
         self.ocr_words = None;
         self.ocr_open = true;
@@ -1367,12 +1364,14 @@ impl CaptureSession {
             None => screen.center(),
         };
         let pos = egui::pos2(
-            anchor
-                .x
-                .clamp(screen.left() + 8.0, (screen.right() - width - 8.0).max(screen.left() + 8.0)),
-            anchor
-                .y
-                .clamp(screen.top() + 8.0, (screen.bottom() - 220.0).max(screen.top() + 8.0)),
+            anchor.x.clamp(
+                screen.left() + 8.0,
+                (screen.right() - width - 8.0).max(screen.left() + 8.0),
+            ),
+            anchor.y.clamp(
+                screen.top() + 8.0,
+                (screen.bottom() - 220.0).max(screen.top() + 8.0),
+            ),
         );
 
         // Snapshot the result out of `self` so the buttons below can mutate
@@ -1641,10 +1640,8 @@ impl CaptureSession {
             self.palette.text,
         );
         let size = galley.size() + egui::vec2(22.0, 10.0);
-        let rect = egui::Rect::from_center_size(
-            egui::pos2(screen.center().x, screen.top() + 26.0),
-            size,
-        );
+        let rect =
+            egui::Rect::from_center_size(egui::pos2(screen.center().x, screen.top() + 26.0), size);
         ui.painter().rect_filled(rect, 9.0, self.palette.card);
         ui.painter().rect_stroke(
             rect,
@@ -1722,15 +1719,11 @@ impl CaptureSession {
                     pixels.extend_from_slice(&[p[0], p[1], p[2], 255]);
                 }
             }
-            let color = egui::ColorImage::from_rgba_unmultiplied(
-                [cells as usize, cells as usize],
-                &pixels,
-            );
-            let texture = ui.ctx().load_texture(
-                "pinsight-magnifier",
-                color,
-                egui::TextureOptions::NEAREST,
-            );
+            let color =
+                egui::ColorImage::from_rgba_unmultiplied([cells as usize, cells as usize], &pixels);
+            let texture =
+                ui.ctx()
+                    .load_texture("pinsight-magnifier", color, egui::TextureOptions::NEAREST);
             self.magnifier = Some((cx, cy, cells as u32, texture));
         }
         let Some((_, _, _, texture)) = self.magnifier.as_ref() else {
@@ -1744,10 +1737,7 @@ impl CaptureSession {
 
         let info_h = 26.0;
         let pad = 6.0;
-        let panel_size = egui::vec2(
-            zoom_size + pad * 2.0,
-            zoom_size + info_h + pad * 2.0 + 4.0,
-        );
+        let panel_size = egui::vec2(zoom_size + pad * 2.0, zoom_size + info_h + pad * 2.0 + 4.0);
         // Prefer below-right of the cursor, flip when that would leave the
         // screen. The offset keeps the panel clear of the crosshair centre.
         let mut origin = cursor + egui::vec2(24.0, 24.0);
@@ -1757,12 +1747,20 @@ impl CaptureSession {
         if origin.y + panel_size.y > screen.bottom() {
             origin.y = cursor.y - 24.0 - panel_size.y;
         }
-        origin.x = origin.x.clamp(screen.left() + 2.0, screen.right() - panel_size.x - 2.0);
-        origin.y = origin.y.clamp(screen.top() + 2.0, screen.bottom() - panel_size.y - 2.0);
+        origin.x = origin
+            .x
+            .clamp(screen.left() + 2.0, screen.right() - panel_size.x - 2.0);
+        origin.y = origin
+            .y
+            .clamp(screen.top() + 2.0, screen.bottom() - panel_size.y - 2.0);
         let panel = egui::Rect::from_min_size(origin, panel_size);
 
         let painter = ui.painter();
-        painter.rect_filled(panel.translate(egui::vec2(0.0, 3.0)), 8.0, egui::Color32::from_black_alpha(70));
+        painter.rect_filled(
+            panel.translate(egui::vec2(0.0, 3.0)),
+            8.0,
+            egui::Color32::from_black_alpha(70),
+        );
         painter.rect_filled(panel, 8.0, egui::Color32::from_rgb(0x16, 0x1A, 0x21));
         painter.rect_stroke(
             panel,

@@ -79,7 +79,7 @@ fn set_clipboard_file(path: &Path) -> anyhow::Result<()> {
     use windows::Win32::System::DataExchange::{
         CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
     };
-    use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+    use windows::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock};
     use windows::Win32::System::Ole::CF_HDROP;
     use windows::Win32::UI::Shell::DROPFILES;
     use windows::core::BOOL;
@@ -116,10 +116,7 @@ fn set_clipboard_file(path: &Path) -> anyhow::Result<()> {
         OpenClipboard(None)?;
         EmptyClipboard()?;
         // SetClipboardData takes ownership of the handle; do not free it.
-        let result = SetClipboardData(
-            CF_HDROP.0 as u32,
-            Some(HANDLE(hglobal.0 as *mut std::ffi::c_void)),
-        );
+        let result = SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(hglobal.0)));
         let _ = CloseClipboard();
         result?;
         Ok(())

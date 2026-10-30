@@ -118,7 +118,7 @@ pub fn icon_from_rgba(width: u32, height: u32, rgba: &[u8]) -> Option<HICON> {
         return None;
     }
     unsafe {
-        let mut bmi = BITMAPINFO {
+        let bmi = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
                 biWidth: width as i32,
@@ -131,7 +131,7 @@ pub fn icon_from_rgba(width: u32, height: u32, rgba: &[u8]) -> Option<HICON> {
             ..Default::default()
         };
         let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
-        let color = CreateDIBSection(None, &mut bmi, DIB_RGB_COLORS, &mut bits, None, 0).ok()?;
+        let color = CreateDIBSection(None, &bmi, DIB_RGB_COLORS, &mut bits, None, 0).ok()?;
         if bits.is_null() {
             let _ = DeleteObject(HGDIOBJ(color.0));
             return None;
@@ -450,9 +450,9 @@ fn show_main_window() {
 }
 
 fn run_command(id: u32) {
-    let found = lock_state().as_ref().and_then(|state| {
-        find_command(&state.items, id)
-    });
+    let found = lock_state()
+        .as_ref()
+        .and_then(|state| find_command(&state.items, id));
     tracing::debug!(id, ?found, "tray run_command");
     if let Some(command) = found {
         send_command(command);
@@ -468,7 +468,9 @@ fn find_command(items: &[TrayItem], id: u32) -> Option<TrayCommand> {
                 command,
                 ..
             } if *item_id == id => return Some(*command),
-            TrayItem::Submenu { id: item_id, items, .. } if *item_id == id => {
+            TrayItem::Submenu {
+                id: item_id, items, ..
+            } if *item_id == id => {
                 return None;
             }
             TrayItem::Submenu { items, .. } => {

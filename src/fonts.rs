@@ -341,15 +341,12 @@ pub fn families() -> Vec<(String, PathBuf)> {
     {
         use std::collections::BTreeMap;
         use windows::Win32::System::Registry::{
-            HKEY, HKEY_LOCAL_MACHINE, KEY_READ, RegCloseKey, RegEnumValueW, RegOpenKeyExW,
-            REG_SZ,
+            HKEY, HKEY_LOCAL_MACHINE, KEY_READ, REG_SZ, RegCloseKey, RegEnumValueW, RegOpenKeyExW,
         };
         use windows::core::HSTRING;
 
         let mut out: BTreeMap<String, PathBuf> = BTreeMap::new();
-        let key = HSTRING::from(
-            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts",
-        );
+        let key = HSTRING::from(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts");
         let mut handle = HKEY::default();
         unsafe {
             if RegOpenKeyExW(HKEY_LOCAL_MACHINE, &key, Some(0), KEY_READ, &mut handle).is_err() {
@@ -375,9 +372,8 @@ pub fn families() -> Vec<(String, PathBuf)> {
                 if status.is_err() {
                     break;
                 }
-                let value = String::from_utf16_lossy(
-                    &data[..(data_len as usize / 2).saturating_sub(1)],
-                );
+                let value =
+                    String::from_utf16_lossy(&data[..(data_len as usize / 2).saturating_sub(1)]);
                 // "Microsoft YaHei & Microsoft YaHei UI (TrueType)" → family
                 let display = String::from_utf16_lossy(&name[..name_len as usize]);
                 let family = display
