@@ -243,13 +243,23 @@ All notable changes to PinSight are documented here. The format follows
   (`Tray` / `TrayItem` / `set_wake`), so the app builds and simply runs
   without a notification-area icon, exactly like a Windows machine whose
   shell refused the icon. The macOS OCR backend also compiles against
-  `objc2` 0.6 again (`AnyThread::alloc`, `VNRequestTextRecognitionLevel::Accurate`).
-- **Release workflow**: the Linux jobs install the system libraries the build
-  actually links (`libpipewire-0.3-dev` for `libspa-sys` via `xcap`,
-  `libtesseract-dev` for the Linux OCR backend). The Linux ARM cross-build is
-  removed from the matrix for now — it needs a full arm64 sysroot (wayland,
-  pipewire, gtk plus a cross linker) that pkg-config will not pick up without
-  multiarch setup; Windows ARM still builds natively.
+  `objc2` 0.6 again (`AnyThread::alloc`, `VNRequestTextRecognitionLevel::Accurate`,
+  associated-function call form for the `Allocated`-taking constructors, and
+  `NSArray::to_vec().first()` instead of a Rust-style `first`).
+- **Linux release build works.** `eframe` is built with
+  `default-features = false`, so winit's `x11`/`wayland` backends had to be
+  enabled explicitly (winit 0.30 otherwise fails with "platform not
+  supported"); the release job moved to ubuntu-24.04 (22.04's pipewire 0.3.48
+  is too old for the `libspa` crates `xcap` pulls in) and installs the system
+  libraries the build actually links (`libpipewire-0.3-dev`,
+  `libtesseract-dev`, `libgbm-dev`). The Linux OCR imports were hoisted to
+  module scope so all three Tesseract helpers can name `LepTess`/`Lang`.
+- **Release workflow**: the artefact upload now accepts `dist/*.zip` or
+  `dist/*.tar.gz` — macOS/Linux package a tarball and previously tripped
+  `if-no-files-found: error` after a successful build. The Linux ARM
+  cross-build is removed from the matrix for now — it needs a full arm64
+  sysroot (wayland, pipewire, gtk plus a cross linker) that pkg-config will
+  not pick up without multiarch setup; Windows ARM still builds natively.
 
 ### Changed
 
