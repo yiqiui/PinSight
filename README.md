@@ -218,7 +218,7 @@ PINSIGHT_UPX_ONLY=1 python tools/_repackage_portable.py    # 只出 UPX 版
   本目录的 `data\` / `captures\` 里，整个文件夹可以随意拷贝/删除，不在系统里留痕迹。
   删除该标记文件即可恢复为"按用户安装"行为。
 - 也可以手动触发便携模式：`pinsight.exe --portable` 或环境变量 `PINSIGHT_PORTABLE=1`。
-- CI 在打 `v*` 标签时自动构建发布包：Windows（x64 / ARM64）、macOS（x64 / ARM64）、Linux（x64）。
+- CI 在打 `v*` 标签时自动构建发布包：Windows（x64 / ARM64）、macOS（x64 / ARM64）、Linux（x64 / ARM64）。
 
 ---
 
@@ -425,7 +425,7 @@ PinSight/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                # Windows fmt / clippy / test / build
-│       └── release.yml           # v* 标签：Windows / macOS / Linux 三平台发布包
+│       └── release.yml           # v* 标签：Windows/macOS/Linux（x64 + ARM64）发布包
 ├── assets/
 │   ├── icon.png                  # 应用图标（多尺寸矢量导出）
 │   ├── icon.ico                  # Windows 图标

@@ -38,16 +38,19 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact: pinsight
             platform: linux-x86_64
+          # Linux ARM64 builds *natively* on GitHub's `ubuntu-24.04-arm`
+          # runner (arm64 hardware), so the regular apt dev libraries install
+          # as arm64 and no cross sysroot / pkg-config gymnastics are needed.
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact: pinsight
+            platform: linux-arm64
           # ARM builds:
           # - Windows on ARM builds natively on the Windows runner.
           # - macOS on Apple Silicon (macos-latest is arm64) builds
           #   aarch64-apple-darwin natively — no cross toolchain needed.
-          # Linux ARM is NOT in the matrix: cross-compiling it needs a full
-          # arm64 sysroot (wayland / pipewire / gtk under
-          # /usr/lib/aarch64-linux-gnu plus a cross linker), which pkg-config
-          # refuses to pick up without extra multiarch setup. Add it back once
-          # that sysroot is wired up; until then build it locally with
-          # `cross` or on an arm64 machine.
+          # - Linux ARM64 builds natively on GitHub's `ubuntu-24.04-arm`
+          #   runner (see entry above).
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             artifact: pinsight.exe
@@ -57,6 +60,11 @@ jobs:
             artifact: pinsight
             platform: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
+    env:
+      # On the native arm64 runner the system gcc is just `cc`/`gcc` (no
+      # aarch64-unknown-linux-gnu- prefix), so point the aarch64 target's
+      # linker at it. Harmless for the other (x86_64 / macOS / Windows) targets.
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: cc
     steps:
       - uses: actions/checkout@v4
 
@@ -78,6 +86,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            gcc \
             libgtk-3-dev \
             libxcb-render0-dev \
             libxcb-shape0-dev \
