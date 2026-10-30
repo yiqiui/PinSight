@@ -1,0 +1,106 @@
+[package]
+name = "pinsight"
+version = "0.1.0"
+edition = "2024"
+description = "Native screenshot, annotation, pinboard, long-capture and recording tool with an MCP server — no WebView."
+license = "MIT"
+authors = ["PinSight contributors"]
+repository = "https://github.com/your-org/PinSight"
+keywords = ["screenshot", "pin", "mcp", "egui", "windows"]
+categories = ["graphics", "gui"]
+rust-version = "1.85"
+
+[dependencies]
+ab_glyph = "0.2"
+anyhow = "1.0.104"
+arboard = "3.7.0"
+base64 = "0.23.1"
+chrono = "0.4.45"
+dirs = "7.0.0"
+eframe = { version = "0.37.0", default-features = false, features = ["glow", "default_fonts"] }
+# `monochrome_emoji_fonts` bundles NotoEmoji + emoji-icon-font so the annotation
+# emoji palette and emoji stamps actually render; without it egui's default
+# Proportional family has no emoji glyphs and the palette draws blank buttons.
+egui = { version = "0.37.0", features = ["monochrome_emoji_fonts"] }
+flate2 = "1.1"
+enigo = "0.6.1"
+gif = "0.14.2"
+global-hotkey = "0.9.0"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff", "gif"] }
+memmap2 = "0.9"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "multipart", "json", "rustls-tls"] }
+tiny-skia = "0.12.0"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+xcap = { version = "0.9.8", features = ["wgc"] }
+
+# Windows-only bindings (native pin windows, UI-language detection). Keeping them
+# target-gated is what lets the same tree build for macOS and Linux.
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62.2"
+features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dxgi",
+    "Win32_Security",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_Globalization",
+    "Win32_UI_Shell",
+    "Win32_System_Memory",
+    "Win32_System_DataExchange",
+    "Win32_System_Ole",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_System_WinRT",
+    "Win32_Media_Audio",
+    "Media_Ocr",
+    "Graphics_Imaging",
+    "Storage_Streams",
+    "Foundation",
+    "Foundation_Collections",
+]
+
+# macOS OCR: Apple Vision framework (offline, ships with macOS). Safe `objc2`
+# bindings — no system library to bundle, so the Mac build stays portable.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-vision = "0.3"
+
+# Linux OCR: Tesseract via `leptess`, linked against the system library
+# (option "L1"). Language packs (`tesseract-ocr-<lang>`) must be installed; the
+# code degrades to a clear error otherwise.
+[target.'cfg(target_os = "linux")'.dependencies]
+leptess = "0.14"
+
+# Native file pickers for the custom background image. rfd maps to the
+# platform dialog (IFileOpenDialog / NSOpenPanel / zenity) without a WebView.
+[dependencies.rfd]
+version = "0.15"
+default-features = false
+features = ["common-controls-v6", "xdg-portal", "async-std"]
+
+# Needed to reach the native HWND out of the eframe window for the tray icon.
+[target.'cfg(windows)'.dependencies.raw-window-handle]
+version = "0.6"
+
+# Release builds are what users run: smaller code pages (LTO + one codegen
+# unit + stripped symbols + panic=abort) shave several MB off the on-disk size,
+# which is the number a screenshot tool is judged on. `panic = "abort"` drops
+# the unwind runtime and `.eh_frame` tables — a GUI app gains nothing from
+# unwinding on a bug, and the few hundred KB it frees is real.
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+# Optimise for size rather than speed: this is a GUI tool whose hot paths are
+# I/O-bound (screen capture, codecs), so the few percent of runtime "s" costs is
+# invisible, while it removes ~1.5 MB of code (8.7 MB → ~7.2 MB).
+opt-level = "s"

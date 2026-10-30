@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      upx:
+        description: "UPX-compress the release binary (smaller, may trip antivirus)"
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.os }} / ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: pinsight.exe
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: pinsight
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            artifact: pinsight
+          # ARM builds: Windows on ARM and 64-bit ARM Linux (Raspberry Pi 4+,
+          # Apple Silicon VMs, ARM servers). Both run the same GUI and the
+          # `pinsight shot` CLI.
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            artifact: pinsight.exe
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            artifact: pinsight
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # Linux needs the system libraries that `eframe`/`xcap`/`arboard` load.
+      - name: Install system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libssl-dev \
+            libwayland-dev \
+            libxcursor-dev \
+            libxdo-dev
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: UPX compress
+        if: ${{ inputs.upx }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ runner.os }}" in
+            Windows) choco install upx -y --no-progress ;;
+            Linux)   sudo apt-get update && sudo apt-get install -y upx-ucl ;;
+            macOS)   brew install upx ;;
+          esac
+          upx --best --lzma "target/${{ matrix.target }}/release/${{ matrix.artifact }}"
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          stage="dist/pinsight-${{ matrix.target }}"
+          mkdir -p "$stage"
+          cp "target/${{ matrix.target }}/release/${{ matrix.artifact }}" "$stage/"
+          cp README.md LICENSE config.example.json "$stage/"
+          cp -r assets "$stage/"
+          echo "$version" > "$stage/VERSION"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            (cd dist && powershell -NoProfile -Command "Compress-Archive -Path 'pinsight-${{ matrix.target }}' -DestinationPath 'PinSight-$version-windows-x64.zip' -Force")
+          else
+            (cd dist && tar -czf "PinSight-$version-${{ matrix.target }}.tar.gz" "pinsight-${{ matrix.target }}")
+          fi
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinsight-${{ matrix.target }}
+          path: dist/*.zip
+          if-no-files-found: error
+          overwrite: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pinsight-${{ matrix.target }}-tarball
+          path: dist/*.tar.gz
+          if-no-files-found: ignore
+          overwrite: true

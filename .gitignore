@@ -1,0 +1,60 @@
+# Build output
+/target/
+target/
+*.pdb
+*.ilk
+
+# Local logs and test artefacts
+*.log
+/mcp_*.jsonl
+/mcp_out*.jsonl
+/shot*.png
+/overlay*.png
+/pin_*.png
+/after_*.png
+/pv_*.png
+/pvl_*.png
+/pinflow*.png
+/pre_click.png
+/post_click.png
+/crop_*.png
+/longshot_state.png
+/main_after_copy.png
+/printwindow.png
+/debug*.log
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local config overrides (never commit secrets)
+/.env
+/config.json
+
+# Runtime data created next to a portable build / on first launch
+/data/
+/log/
+/captures/
+
+# Packaging output (zips + staged portable folders)
+/dist/
+
+# Development screenshots and probe artefacts — these capture the local
+# desktop, so they must never be committed. Only the curated docs/images
+# mockups are published.
+/.shots/
+/.iconsheet.png
+/.iconsheet_big.png
+/probe.log
+/tools/*
+!/tools/subset_ui_font.py
+!/tools/_repackage_portable.py
+
+# One-off probe scripts; only the packaging script ships.
+/scripts/*
+!/scripts/package.ps1
+
+# Agent / editor working notes
+/.workbuddy-ai/
