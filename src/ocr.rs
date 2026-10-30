@@ -10,6 +10,14 @@
 use anyhow::{Context, Result};
 use image::{DynamicImage, ImageFormat, RgbaImage};
 
+// Shared by the three Linux-only helpers below (`recognize_tesseract`,
+// `leptess_new`, `tesseract_lang_codes`); hoisted here because function-local
+// imports would not cover the other signatures.
+#[cfg(target_os = "linux")]
+use crate::i18n::Lang;
+#[cfg(target_os = "linux")]
+use leptess::LepTess;
+
 /// One recognised word with its bounding box in image pixels.
 #[derive(Debug, Clone)]
 pub struct OcrWord {
@@ -229,9 +237,6 @@ fn recognize_apple(image: RgbaImage) -> Result<Vec<OcrWord>> {
 /// error (instead of crashing) when it is missing.
 #[cfg(target_os = "linux")]
 fn recognize_tesseract(image: RgbaImage) -> Result<Vec<OcrWord>> {
-    use crate::i18n::Lang;
-    use leptess::LepTess;
-
     let lang = Lang::detect();
     let mut lt = leptess_new(&tesseract_lang_codes(lang))?;
 

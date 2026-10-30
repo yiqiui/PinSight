@@ -107,16 +107,14 @@ jobs:
             (cd dist && tar -czf "PinSight-$version-${{ matrix.target }}.tar.gz" "pinsight-${{ matrix.target }}")
           fi
 
+      # Windows produces a zip, macOS/Linux a tar.gz — accept either so the
+      # `if-no-files-found: error` only trips when a build produced nothing.
       - name: Upload artefact
         uses: actions/upload-artifact@v4
         with:
           name: pinsight-${{ matrix.target }}
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
           if-no-files-found: error
-          overwrite: true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pinsight-${{ matrix.target }}-tarball
-          path: dist/*.tar.gz
-          if-no-files-found: ignore
           overwrite: true
