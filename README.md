@@ -1,7 +1,8 @@
 <div align="center">
   <img src="assets/icon.png" width="104" alt="PinSight icon" />
   <h1>PinSight</h1>
-  <p><strong>原生 Rust 截图 · 标注 · 贴图 · 长截图 · 录屏，内置 MCP 服务，无 WebView。</strong></p>
+  <p><strong>原生 Rust 截图 · 标注 · 贴图 · 长截图 · 录屏 · OCR · GIF 编辑 · 上传，内置 MCP 服务，无 WebView。</strong></p>
+  <p>Native Rust screenshot · annotation · pin · long-capture · recording tool with MCP, OCR, GIF editing and upload — no WebView.</p>
 
   <p>
     <img alt="Rust" src="https://img.shields.io/badge/Rust-1.85%2B-000?logo=rust" />
@@ -23,7 +24,7 @@
 
 > **状态：v0.1.0 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
 > 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪 / 裁切 / 加文字 / 转 MP4）、图片上传、
-> 语音便签、MCP、托盘菜单、自定义背景图与界面内热键录制均已跑通；长截图对固定页眉、
+> 语音便签（可录制，点击播放待完善）、MCP、托盘菜单、自定义背景图与界面内热键录制均已跑通；长截图对固定页眉、
 > 粘性元素与动画仍有一定敏感性。
 > 界面支持深/浅色主题、5 种强调色、7 种语言与字体切换，设置页分多个标签并记住上次打开的位置。
 > 项目使用原生 Win32 窗口与 GDI 绘制，不依赖 Electron、Tauri 或 WebView；
@@ -59,6 +60,9 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | 剪贴板贴图 | ✅ | 一键把剪贴板图片钉在屏幕上 |
 | 长截图 | 🧪 | 选区后自动滚轮+逐帧捕获+重叠区拼接；适合静态、无固定表头的内容 |
 | 录屏 | ✅ | 选区逐帧捕获；安装 `ffmpeg` 时输出 MP4，否则输出 GIF |
+| 离线 OCR | ✅ | 内置 Windows.Media.Ocr，工具栏一键选取区域识别；CLI `pinsight shot --ocr` 整屏识别 |
+| 图片上传 | ✅ | 编辑器上传按钮 + CLI `--upload`；默认本地后端落盘到 `<截图目录>/uploaded/`，可切 HTTP（POST/PUT、表单或 JSON 响应） |
+| 语音便签 | 🧪 | 可录制带音轨的录屏便签；点击播放尚未闭环（待接入音频播放库） |
 | 全局热键 | ✅ | 6 个动作均可在设置页内「录制」自定义（点 Record 后按组合键，Esc 取消），即时生效；注册失败会标红并说明原因 |
 | 命令行 | ✅ | `pinsight shot` 无窗口截图（scrot/maim 风格）：`--region` / `--monitor` / `--out` / `--clipboard` / `--delay` |
 | 单实例 | ✅ | 重复启动不会注册第二套热键，而是唤起已在运行的实例（Windows 命名互斥量，其他平台锁文件 + PID 存活检测） |
@@ -71,8 +75,8 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | 多语言 | ✅ | 简体中文、繁體中文、English、日本語、한국어、Français、Deutsch |
 | 字体 | ✅ | 自动匹配系统语言字体，或指定无衬线 / 衬线 / 等宽 / 自定义字体文件，字号 85%–135% 可调 |
 | 配置持久化 | ✅ | JSON 配置，外观改动即时写回；设置页标签位置也会记住 |
-| 文本标注 / OCR | ⏳ | 计划中 |
-| 单实例 | ⏳ | 计划中（当前重复启动会产生多个进程） |
+| 文本标注 | ✅ | 覆盖层内联输入框，Enter 提交 / Shift+Enter 换行，字号与颜色跟随工具栏；也可用工具栏「文字」按钮提交 |
+| 序号标注 | ✅ | `N` 点击即放置，编号按点击顺序自动递增（七段矢量数字），可撤销 |
 
 ---
 
@@ -144,7 +148,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 ### 构建与运行
 
 ```powershell
-git clone https://github.com/your-org/PinSight.git
+git clone https://github.com/yiqiui/PinSight.git
 cd PinSight
 
 # 开发运行
@@ -195,7 +199,7 @@ powershell -ExecutionPolicy Bypass -File scripts\package.ps1
 # 没有 Inno Setup 时只出便携包
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1 -SkipInstaller
 
-# UPX 压缩版：便携 zip 和安装包都用压缩后的 exe（7.2 MiB → 2.5 MiB）
+# UPX 压缩版：便携 zip 和安装包都用压缩后的 exe（约 10.3 MiB → 3.8 MiB）
 # 需要 upx 在 PATH 上；可能触发杀软误报，所以默认关闭
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1 -Upx
 ```
@@ -535,7 +539,7 @@ Tauri 的 UI 层就是 WebView。截图工具最敏感的路径是**冻结层标
 
 - **按需加载 CJK 回退字体**：主字体已覆盖 CJK 时不再加载第二个 20MB 字体；
   确需加载时用**内存映射**而非堆拷贝，页面由页面缓存支撑、可被回收。
-- **发布产物瘦身**：fat LTO + 单 codegen unit + 剥离符号，可执行文件约 8.6 MB。
+- **发布产物瘦身**：fat LTO + 单 codegen unit + 剥离符号，可执行文件约 10.3 MB（UPX 压缩后约 3.8 MB；含内置 emoji 字体）。
 - **逐帧增量落盘**：录屏边捕获边写，内存不随时长增长。
 - **长截图有硬上限**：`long_capture_max_height`（默认 20000px）与 80 帧封顶，
   防止拼接结果失控。
@@ -564,7 +568,7 @@ python scripts\measure.py 6
   交互一致但系统级行为（如真点击穿透）以平台能力为准；托盘图标目前仅 Windows。
 - **长截图**：不适合含固定侧栏/表头、无限滚动、强动画的页面；默认最多 80 帧 / 20000px。
 - **录屏**：帧率受捕获速度限制；GIF 体积较大；MP4 需要 `ffmpeg`。
-- **标注**：暂不支持文字、序号、模糊以外的撤销/重做栈（马赛克已支持）。
+- **标注**：矩形 / 椭圆 / 箭头 / 画笔 / 高亮 / 马赛克 / 序号 / 文字均支持 `Ctrl+Z` / `Ctrl+Y` 撤销重做（快照式历史）。
 - **混合 DPI 多显示器**：覆盖层用显示器逻辑坐标定位，极端缩放组合下可能需要微调。
 - **热键冲突**：`global-hotkey` 注册失败时，设置页会把该组合标红并写明"已被其他程序占用"，
   不会自动改键；点 `Record` 换一个组合即可，无需重启。
@@ -576,13 +580,17 @@ python scripts\measure.py 6
 
 ## Roadmap
 
-- [ ] 文本标注（需要文字排版与光标编辑，序号标注已用矢量数字实现）
+- [x] 文本标注（覆盖层内联输入框，Enter 提交 / Shift+Enter 换行，字号与颜色跟随工具栏）
+- [x] OCR（Windows.Media.Ocr 离线识别，工具栏一键识别 + CLI `pinsight shot --ocr`）
+- [x] GIF 编辑（裁剪 / 裁切 / 加文字 / 转 MP4）
+- [x] 图片上传（本地 / HTTP 后端，编辑器上传按钮 + CLI `--upload`）
 - [ ] 标注图层管理
-- [x] 撤销 / 重做（`Ctrl+Z` / `Ctrl+Y`，快照式历史）
+- [x] 撤销 / 重做（`Ctrl+Z` / `Ctrl+Y`，快照式历史，覆盖全部标注类型）
 - [x] 序号标注（`N`，七段矢量数字，自动递增）
 - [x] 单实例（命名互斥量 / 锁文件，二次启动唤起已有实例）
 - [ ] 滚动条感知的长截图；固定表头裁剪
-- [ ] OCR（Windows OCR / Tesseract）与 MCP `ocr_image`
+- [ ] MCP 工具 `ocr_image`（复用本地 OCR 引擎）
+- [ ] 语音便签点击播放（待接入音频播放库）
 - [ ] 贴图旋转、阴影、吸附对齐
 - [ ] 多显示器混合 DPI 校准
 - [ ] macOS / Linux 托盘与安装包（.dmg / .deb / AppImage）

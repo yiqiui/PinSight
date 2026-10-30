@@ -39,6 +39,16 @@ All notable changes to PinSight are documented here. The format follows
   are compared at full resolution, cutting the per-frame alignment work without
   changing the resulting offset.
 
+### Docs
+
+- **README refresh** to match the public GitHub project: hero now mirrors the repo
+  tagline (screenshot · annotation · pin · long-capture · recording · OCR · GIF
+  editing · upload · MCP, no WebView) with an English line; the feature table
+  marks text annotation, OCR, GIF editing, upload and voice-note recording as
+  done (voice-note playback still pending), removes the duplicate/⏳ single-instance
+  row, fixes the clone URL (`yiqiui/PinSight`), and the roadmap now checks off the
+  completed items while keeping `MCP ocr_image` and voice-note playback open.
+
 ### Added
 
 - **Upload**: a configurable share step (`src/upload.rs`). An HTTP backend posts
