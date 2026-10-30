@@ -17,7 +17,16 @@ arboard = "3.7.0"
 base64 = "0.23.1"
 chrono = "0.4.45"
 dirs = "7.0.0"
-eframe = { version = "0.37.0", default-features = false, features = ["glow", "default_fonts"] }
+# `x11`/`wayland` are winit 0.30's non-default Linux backends: with
+# `default-features = false` they must be listed or `winit` fails to compile
+# on Linux with "The platform you're compiling for is not supported".
+# Both are no-ops on Windows and macOS.
+eframe = { version = "0.37.0", default-features = false, features = [
+    "glow",
+    "default_fonts",
+    "x11",
+    "wayland",
+] }
 # `monochrome_emoji_fonts` bundles NotoEmoji + emoji-icon-font so the annotation
 # emoji palette and emoji stamps actually render; without it egui's default
 # Proportional family has no emoji glyphs and the palette draws blank buttons.

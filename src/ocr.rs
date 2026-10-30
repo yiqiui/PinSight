@@ -176,9 +176,16 @@ fn recognize_apple(image: RgbaImage) -> Result<Vec<OcrWord>> {
     let data = NSData::with_bytes(&png);
     let options = NSDictionary::<objc2_vision::VNImageOption, AnyObject>::new();
 
-    let handler = VNImageRequestHandler::alloc().initWithData_options(&data, &options);
+    // `initWithData_options` / `init` are generated with `this: Allocated<Self>`
+    // kept as a plain parameter rather than a `self` receiver, so they must be
+    // called as associated functions (method-call syntax does not resolve).
+    let handler = VNImageRequestHandler::initWithData_options(
+        VNImageRequestHandler::alloc(),
+        &data,
+        &options,
+    );
 
-    let request = unsafe { VNRecognizeTextRequest::alloc().init() };
+    let request = unsafe { VNRecognizeTextRequest::init(VNRecognizeTextRequest::alloc()) };
     request.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate);
     request.setUsesLanguageCorrection(true);
 

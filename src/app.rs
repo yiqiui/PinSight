@@ -4741,7 +4741,12 @@ impl PinSightApp {
                     let _ = self.config.save();
                     // Rebuild the icon in place: dropping the old tray removes
                     // the shell icon, installing again picks up the new art.
-                    self.tray = None;
+                    // (`cfg!` rather than `#[cfg]`: the field exists on every
+                    // platform via the tray stub, and attributes on expression
+                    // statements are unstable.)
+                    if cfg!(windows) {
+                        self.tray = None;
+                    }
                     self.install_tray(&ctx);
                 }
             });
@@ -4755,7 +4760,9 @@ impl PinSightApp {
                         {
                             self.config.tray_icon_path = Some(path);
                             let _ = self.config.save();
-                            self.tray = None;
+                            if cfg!(windows) {
+                                self.tray = None;
+                            }
                             self.install_tray(&ctx);
                         }
                     }
