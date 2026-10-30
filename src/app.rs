@@ -2013,6 +2013,16 @@ impl PinSightApp {
 
     // ---- tray -------------------------------------------------------------
 
+    /// Drop the live tray so the next `install_tray` builds a fresh one. A
+    /// no-op on platforms without a tray (the field only exists on Windows).
+    #[cfg(windows)]
+    fn tray_reset(&mut self) {
+        self.tray = None;
+    }
+
+    #[cfg(not(windows))]
+    fn tray_reset(&mut self) {}
+
     /// Build the tray menu from the current language and install the icon.
     /// On anything other than Windows this is a no-op: the hotkeys and the
     /// main window still work, which is what matters most.
@@ -4741,12 +4751,7 @@ impl PinSightApp {
                     let _ = self.config.save();
                     // Rebuild the icon in place: dropping the old tray removes
                     // the shell icon, installing again picks up the new art.
-                    // (`cfg!` rather than `#[cfg]`: the field exists on every
-                    // platform via the tray stub, and attributes on expression
-                    // statements are unstable.)
-                    if cfg!(windows) {
-                        self.tray = None;
-                    }
+                    self.tray_reset();
                     self.install_tray(&ctx);
                 }
             });
@@ -4760,9 +4765,7 @@ impl PinSightApp {
                         {
                             self.config.tray_icon_path = Some(path);
                             let _ = self.config.save();
-                            if cfg!(windows) {
-                                self.tray = None;
-                            }
+                            self.tray_reset();
                             self.install_tray(&ctx);
                         }
                     }

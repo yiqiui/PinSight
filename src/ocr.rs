@@ -162,8 +162,8 @@ fn recognize_apple(image: RgbaImage) -> Result<Vec<OcrWord>> {
     use objc2::runtime::AnyObject;
     use objc2_foundation::{NSArray, NSData, NSDictionary};
     use objc2_vision::{
-        VNImageRequestHandler, VNRecognizeTextRequest, VNRecognizedTextObservation, VNRequest,
-        VNRequestTextRecognitionLevel,
+        VNImageRequestHandler, VNRecognizeTextRequest, VNRecognizedText,
+        VNRecognizedTextObservation, VNRequest, VNRequestTextRecognitionLevel,
     };
 
     let mut png = Vec::new();
@@ -197,10 +197,12 @@ fn recognize_apple(image: RgbaImage) -> Result<Vec<OcrWord>> {
     let mut words = Vec::new();
     if let Some(results) = request.results() {
         for (li, obs) in results.to_vec().into_iter().enumerate() {
-            let obs = obs.as_ref();
+            let obs: &VNRecognizedTextObservation = obs.as_ref();
             // Each observation is one text region; take its top candidate line.
+            // (`NSArray` has no Rust-style `first`; go through `to_vec`.)
             let candidates = obs.topCandidates(1);
-            if let Some(candidate) = candidates.first() {
+            if let Some(candidate) = candidates.to_vec().first() {
+                let candidate: &VNRecognizedText = candidate;
                 let line = candidate.string().to_string();
                 for w in line.split_whitespace() {
                     if w.is_empty() {
