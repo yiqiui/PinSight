@@ -53,6 +53,9 @@ mod text_font;
 mod theme;
 #[cfg(windows)]
 mod tray;
+#[cfg(not(windows))]
+#[path = "tray_stub.rs"]
+mod tray;
 mod ui;
 mod upload;
 mod util;

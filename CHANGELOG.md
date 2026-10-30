@@ -234,6 +234,23 @@ All notable changes to PinSight are documented here. The format follows
   selection, so ending a session never depends on remembering a separate
   shortcut.
 
+### Fixed
+
+- **Non-Windows builds compile again.** The tray field on `PinSightApp` was the
+  one remaining unconditional reference to the Windows-only `tray` module, so
+  the macOS build failed with `unresolved import crate::tray`. Non-Windows
+  targets now compile a no-op `tray` stub with the same public surface
+  (`Tray` / `TrayItem` / `set_wake`), so the app builds and simply runs
+  without a notification-area icon, exactly like a Windows machine whose
+  shell refused the icon. The macOS OCR backend also compiles against
+  `objc2` 0.6 again (`AnyThread::alloc`, `VNRequestTextRecognitionLevel::Accurate`).
+- **Release workflow**: the Linux jobs install the system libraries the build
+  actually links (`libpipewire-0.3-dev` for `libspa-sys` via `xcap`,
+  `libtesseract-dev` for the Linux OCR backend). The Linux ARM cross-build is
+  removed from the matrix for now — it needs a full arm64 sysroot (wayland,
+  pipewire, gtk plus a cross linker) that pkg-config will not pick up without
+  multiarch setup; Windows ARM still builds natively.
+
 ### Changed
 
 - Closing the main window now keeps PinSight running in the tray instead of

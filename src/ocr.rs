@@ -157,6 +157,7 @@ pub fn recognize(_image: RgbaImage) -> Result<Vec<OcrWord>> {
 /// uses the user's installed language packs).
 #[cfg(target_os = "macos")]
 fn recognize_apple(image: RgbaImage) -> Result<Vec<OcrWord>> {
+    use objc2::AnyThread as _;
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
     use objc2_foundation::{NSArray, NSData, NSDictionary};
@@ -178,8 +179,7 @@ fn recognize_apple(image: RgbaImage) -> Result<Vec<OcrWord>> {
     let handler = VNImageRequestHandler::alloc().initWithData_options(&data, &options);
 
     let request = unsafe { VNRecognizeTextRequest::alloc().init() };
-    request
-        .setRecognitionLevel(VNRequestTextRecognitionLevel::VNRequestTextRecognitionLevelAccurate);
+    request.setRecognitionLevel(VNRequestTextRecognitionLevel::Accurate);
     request.setUsesLanguageCorrection(true);
 
     let requests = NSArray::from_slice(&[&request as &VNRequest]);
