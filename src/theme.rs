@@ -37,6 +37,8 @@ pub enum Accent {
     Emerald,
     Amber,
     Rose,
+    /// Owl-eye cyan: the right iris of the logo.
+    Cyan,
     /// Whatever the user picked in the colour dialog.
     Custom,
 }
@@ -87,6 +89,7 @@ impl Accent {
             Self::Emerald => egui::Color32::from_rgb(0x34, 0xD3, 0x99),
             Self::Amber => egui::Color32::from_rgb(0xFB, 0xBF, 0x24),
             Self::Rose => egui::Color32::from_rgb(0xFB, 0x71, 0x85),
+            Self::Cyan => egui::Color32::from_rgb(0x22, 0xD3, 0xEE),
             Self::Custom => egui::Color32::from_rgb(0x5B, 0x9D, 0xFF),
         }
     }
@@ -98,6 +101,7 @@ impl Accent {
             Self::Emerald => egui::Color32::from_rgb(0x05, 0x96, 0x69),
             Self::Amber => egui::Color32::from_rgb(0xB4, 0x53, 0x09),
             Self::Rose => egui::Color32::from_rgb(0xE1, 0x1D, 0x48),
+            Self::Cyan => egui::Color32::from_rgb(0x08, 0x91, 0xA8),
             Self::Custom => egui::Color32::from_rgb(0x25, 0x63, 0xEB),
         }
     }
