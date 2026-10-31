@@ -59,16 +59,31 @@ def head_layer():
                (cx + S * 0.28, S * 0.72)], fill=HEAD_DIM + (255,))
     # head
     d.ellipse([cx - S * 0.30, S * 0.24, cx + S * 0.30, S * 0.84], fill=HEAD + (255,))
-    # ear tufts
-    d.polygon([(cx - S * 0.26, S * 0.32), (cx - S * 0.08, S * 0.22),
-               (cx - S * 0.19, S * 0.40)], fill=HEAD + (255,))
-    d.polygon([(cx + S * 0.26, S * 0.32), (cx + S * 0.08, S * 0.22),
-               (cx + S * 0.19, S * 0.40)], fill=HEAD + (255,))
+    # ear tufts drawn as viewfinder corner brackets (screenshot-tool signature):
+    # each tuft is an L-shaped bracket whose vertical leg dips behind the head,
+    # so the brackets read as framing the head itself.
+    bw = S * 0.05   # bracket stroke width
+    top = S * 0.135
+    outer_l, inner_l = cx - S * 0.36, cx - S * 0.115
+    outer_r, inner_r = cx + S * 0.36, cx + S * 0.115
+    bot = S * 0.38   # vertical legs end behind the head edge
+    # left bracket
+    d.polygon([(outer_l, top), (inner_l, top), (inner_l, top + bw),
+               (outer_l + bw, top + bw), (outer_l + bw, bot), (outer_l, bot)],
+              fill=HEAD + (255,))
+    # right bracket (mirrored)
+    d.polygon([(outer_r, top), (inner_r, top), (inner_r, top + bw),
+               (outer_r - bw, top + bw), (outer_r - bw, bot), (outer_r, bot)],
+              fill=HEAD + (255,))
     return layer
 
 
 def eyes_layer():
-    """Two focus-ring eyes: white ring, iris, black pupil."""
+    """Two focus-ring eyes: white ring, iris, pupil.
+
+    Left pupil is a camera focus cross (crosshair reticle); the right one is a
+    plain dot.  The asymmetric amber/cyan pair is the app's signature.
+    """
     layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     cx = S / 2
@@ -83,8 +98,21 @@ def eyes_layer():
         d.ellipse([ex - iris_r, ey - iris_r, ex + iris_r, ey + iris_r],
                   fill=iris + (255,))
         pupil_r = iris_r * 0.45
-        d.ellipse([ex - pupil_r, ey - pupil_r, ex + pupil_r, ey + pupil_r],
-                  fill=PUPIL + (255,))
+        if sign < 0:
+            # left eye: crosshair reticle instead of a round pupil
+            pw = max(3, int(S * 0.018))
+            arm = pupil_r * 1.05
+            for (dx0, dy0, dx1, dy1) in (
+                (ex - arm, ey, ex + arm, ey),
+                (ex, ey - arm, ex, ey + arm),
+            ):
+                d.line([(dx0, dy0), (dx1, dy1)], fill=PUPIL + (255,), width=pw)
+            d.ellipse([ex - pupil_r * 0.55, ey - pupil_r * 0.55,
+                       ex + pupil_r * 0.55, ey + pupil_r * 0.55],
+                      fill=PUPIL + (255,))
+        else:
+            d.ellipse([ex - pupil_r, ey - pupil_r, ex + pupil_r, ey + pupil_r],
+                      fill=PUPIL + (255,))
     return layer
 
 

@@ -58,7 +58,7 @@ PinSight 想做的是一个**可读、可改、可自动化**的开源实现：
 - **为长期使用而设计**：主题、强调色、字号、界面语言、字体都可切换，控件与图标全部矢量手绘，不随缩放失真。
 - **对 AI 友好**：内置 MCP stdio 服务，Claude Desktop、Cursor、Continue 等客户端可以直接调用截图、贴图、长截图、录屏能力。
 - **工程透明**：模块边界、线程模型、坐标空间和失败模式都写在 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-- **猫头鹰 logo**：双眼是相机对焦环（左琥珀 / 右青），对应选区四角的对焦环手柄与冻结层羽翼式展开的入场动画；两种眼瞳色也进入了强调色预设。图标由 [`scripts/make_owl_icon.py`](scripts/make_owl_icon.py) 生成。
+- **猫头鹰 logo**：耳羽是**取景框四角**，左眼是**十字对焦丝**、右眼是圆瞳（琥珀 / 青异色瞳）——截图工具的专属构图，与选区四角的对焦环手柄、冻结层羽翼式入场一脉相承；两种眼瞳色也进入了强调色预设。图标由 [`scripts/make_owl_icon.py`](scripts/make_owl_icon.py) 生成。
 
 PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、粘性元素、动画）与 Snipaste
 可能仍有差距，macOS / Linux 上的贴图后端也仍在打磨中。核心能力（截图、标注、
