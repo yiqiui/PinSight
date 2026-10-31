@@ -316,6 +316,7 @@ strings! {
     accent_emerald { en: "Emerald", zh: "翠绿", tw: "翠綠", ja: "エメラルド", ko: "에메랄드", fr: "Émeraude", de: "Smaragd" }
     accent_amber { en: "Amber", zh: "琥珀", tw: "琥珀", ja: "アンバー", ko: "앰버", fr: "Ambre", de: "Bernstein" }
     accent_rose { en: "Rose", zh: "玫瑰", tw: "玫瑰", ja: "ローズ", ko: "로즈", fr: "Rose", de: "Rosé" }
+    accent_cyan { en: "Cyan", zh: "青色", tw: "青色", ja: "シアン", ko: "시안", fr: "Cyan", de: "Cyan" }
     language { en: "Language", zh: "语言", tw: "語言", ja: "言語", ko: "언어", fr: "Langue", de: "Sprache" }
     font_family { en: "Font", zh: "字体", tw: "字型", ja: "フォント", ko: "글꼴", fr: "Police", de: "Schrift" }
     font_auto { en: "Auto (match language)", zh: "自动（匹配语言）", tw: "自動（符合語言）", ja: "自動（言語に合わせる）", ko: "자동 (언어에 맞춤)", fr: "Auto (selon la langue)", de: "Automatisch (nach Sprache)" }

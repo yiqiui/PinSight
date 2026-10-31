@@ -187,6 +187,8 @@ pub struct CaptureSession {
     ocr_rect: Option<ImgRect>,
     /// Whether the OCR results panel is open.
     ocr_open: bool,
+    /// Creation instant, for the wing-unfold entrance of the dim mask.
+    born_at: std::time::Instant,
     tr: &'static Strings,
     palette: Palette,
 }
@@ -226,6 +228,7 @@ impl CaptureSession {
             ocr_words: None,
             ocr_rect: None,
             ocr_open: false,
+            born_at: std::time::Instant::now(),
             tr,
             palette,
         }
@@ -360,11 +363,16 @@ impl CaptureSession {
         }
 
         // Dim everything, then reveal the selection by clipping the screenshot.
+        // The mask eases in over ~180 ms like a pair of wings folding over the
+        // screen (owl-wing entrance); after that it stays fully opaque.
         let [mr, mg, mb] = self.prefs.mask_color;
+        let wing_t = ((self.born_at.elapsed().as_secs_f32()) / 0.18).min(1.0);
+        let wing_ease = 1.0 - (1.0 - wing_t) * (1.0 - wing_t); // ease-out quad
+        let mask_alpha = (self.prefs.mask_alpha as f32 * wing_ease) as u8;
         ui.painter().rect_filled(
             screen,
             0.0,
-            egui::Color32::from_rgba_unmultiplied(mr, mg, mb, self.prefs.mask_alpha),
+            egui::Color32::from_rgba_unmultiplied(mr, mg, mb, mask_alpha),
         );
         // Crosshair: two full-width lines through the cursor, Snipaste style.
         if self.prefs.crosshair {
@@ -1032,19 +1040,40 @@ impl CaptureSession {
     }
 
     fn paint_handles(&self, ui: &egui::Ui, rect: egui::Rect) {
-        let points = [
+        let corner_points = [
             rect.left_top(),
-            rect.center_top(),
             rect.right_top(),
+            rect.left_bottom(),
+            rect.right_bottom(),
+        ];
+        let edge_points = [
+            rect.center_top(),
             rect.left_center(),
             rect.right_center(),
-            rect.left_bottom(),
             rect.center_bottom(),
-            rect.right_bottom(),
         ];
         let [ar, ag, ab] = self.prefs.anchor_color;
         let anchor_stroke = egui::Color32::from_rgb(ar, ag, ab);
-        for point in points {
+        let accent = self.palette.accent;
+
+        // Corners read as owl eyes: a white focus ring around an accent iris
+        // with a dark pupil, matching the app logo.
+        let ring_r = 6.5;
+        for point in corner_points {
+            let c = point;
+            // white focus ring
+            ui.painter().circle_stroke(
+                c,
+                ring_r,
+                egui::Stroke::new(1.6, egui::Color32::from_rgb(0xFA, 0xFA, 0xFA)),
+            );
+            // accent iris
+            ui.painter().circle_filled(c, ring_r - 2.2, accent);
+            // dark pupil
+            ui.painter().circle_filled(c, (ring_r - 2.2) * 0.42, egui::Color32::from_rgb(16, 18, 24));
+        }
+        // Edge midpoints stay small square handles.
+        for point in edge_points {
             let r = egui::Rect::from_center_size(point, egui::vec2(7.5, 7.5));
             ui.painter().rect_filled(r, 1.5, self.palette.card);
             ui.painter().rect_stroke(
