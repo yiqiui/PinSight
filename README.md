@@ -64,7 +64,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | 图片上传 | ✅ | 编辑器上传按钮 + CLI `--upload`；默认本地后端落盘到 `<截图目录>/uploaded/`，可切 HTTP（POST/PUT、表单或 JSON 响应） |
 | 语音便签 | 🧪 | 可录制带音轨的录屏便签；点击播放尚未闭环（待接入音频播放库） |
 | 全局热键 | ✅ | 6 个动作均可在设置页内「录制」自定义（点 Record 后按组合键，Esc 取消），即时生效；注册失败会标红并说明原因 |
-| 命令行 | ✅ | `pinsight shot` 无窗口截图（scrot/maim 风格）：`--region` / `--monitor` / `--out` / `--clipboard` / `--delay` |
+| 命令行 | ✅ | 无窗口子命令（scrot/maim 风格）：`shot` 截图、`pdf` 拼 PDF、`gif` 编辑动图、`voice` 录音便签，详见下文 |
 | 单实例 | ✅ | 重复启动不会注册第二套热键，而是唤起已在运行的实例（Windows 命名互斥量，其他平台锁文件 + PID 存活检测） |
 | 托盘菜单 | ✅ | 任务栏图标 + 本地化右键菜单（含各项快捷键提示），Explorer 重启后自动恢复 |
 | 自定义背景 | ✅ | 主窗口背景图：文件选择、高斯模糊、压暗 veil、cover/contain/stretch 三种适配 |
@@ -73,7 +73,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | MCP | ✅ | `--mcp` 启动 stdio 服务，暴露 9 个工具 |
 | 主题 | ✅ | 跟随系统 / 浅色 / 深色，5 种强调色，即时生效 |
 | 多语言 | ✅ | 简体中文、繁體中文、English、日本語、한국어、Français、Deutsch |
-| 字体 | ✅ | 自动匹配系统语言字体，或指定无衬线 / 衬线 / 等宽 / 自定义字体文件，字号 85%–135% 可调 |
+| 字体 | ✅ | 自动匹配系统语言字体，或指定无衬线 / 衬线 / 等宽 / 自定义字体文件；界面字号 8–16 pt 分段可选（默认 9 pt） |
 | 配置持久化 | ✅ | JSON 配置，外观改动即时写回；设置页标签位置也会记住 |
 | 文本标注 | ✅ | 覆盖层内联输入框，Enter 提交 / Shift+Enter 换行，字号与颜色跟随工具栏；也可用工具栏「文字」按钮提交 |
 | 序号标注 | ✅ | `N` 点击即放置，编号按点击顺序自动递增（七段矢量数字），可撤销 |
@@ -118,7 +118,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
   日文 → Yu Gothic、韩文 → Malgun Gothic…），并追加 CJK 回退字体，避免豆腐块。
 - **无衬线 / 衬线 / 等宽**：从系统字体目录中挑选最合适的候选。
 - **自定义**：填入任意 `.ttf` / `.otf` / `.ttc` 路径（例如思源黑体）。
-- **字号**：85%–135% 缩放，影响全部文本样式（标题、正文、快捷键徽章）。
+- **字号**：8–16 pt 分段可选（默认 9 pt），影响全部文本样式（标题、正文、快捷键徽章）。
 
 设置页底部会显示实际解析到的字体组合，例如 `字体: Microsoft YaHei + Microsoft JhengHei`，
 方便排查"为什么看起来没变"。
@@ -176,18 +176,39 @@ cargo build --release
 
 不开窗口、不建 GL 上下文，适合脚本、远程会话和没有托盘的 Linux 桌面：
 
+`pinsight` 的无头命令（别名 `capture` / `screenshot`）：
+
 ```text
-pinsight shot                              # 整屏 → 保存目录，stdout 打印路径
-pinsight shot --out shot.png               # 整屏 → 指定文件
-pinsight shot --region 100,100,640,480     # 物理像素矩形
-pinsight shot --monitor 65537 --out m.png  # 指定显示器
+# shot：截图（scrot/maim 风格，无窗口、无 GL 上下文）
+pinsight shot                              # 光标所在显示器 → 保存目录，stdout 打印路径
+pinsight shot --out shot.png               # → 指定文件
+pinsight shot --region 100,100,640,480     # 物理像素矩形 X,Y,W,H
+pinsight shot --monitor 65537 --out m.png  # 指定显示器（id 见 --list-monitors）
+pinsight shot --window 12345 --out w.png   # 指定顶层窗口（id 见 --list-windows）
 pinsight shot --clipboard                  # 只进剪贴板
+pinsight shot --upload                     # 上传后 stdout 打印分享链接
+pinsight shot --ocr                        # 离线 OCR 识别，文本打 stdout、路径打 stderr
 pinsight shot --delay 3 --out s.png        # 3 秒后截
 pinsight shot --list-monitors              # 列出显示器 id 与几何
+pinsight shot --list-windows               # 列出窗口 id / 标题
+
+# pdf：多张图片合并为一个 PDF（长截图自动跨页，透明背景铺白）
+pinsight pdf a.png b.png --out book.pdf
+
+# gif：编辑现有动图
+pinsight gif trim  clip.gif --start 2 --end 20   # 裁剪片段（按帧）
+pinsight gif crop  clip.gif --x 10 --y 10 --w 200 --h 120   # 裁切画面（矩形）
+pinsight gif text  clip.gif --text "Hello" --font 48 --pos 3   # 烧字（pos 0..4）
+pinsight gif mp4   clip.gif                          # 转 H.264 MP4（需 ffmpeg）
+
+# voice：麦克风录音便签 → WAV（需 ffmpeg）
+pinsight voice --out note.wav --seconds 30
 ```
 
-约定与 `maim` 一致：`stdout` 只输出一行绝对路径（方便 `$(...)` 取用），
+约定与 `maim` 一致：`stdout` 只输出机器可读的一行结果（截图 = 绝对路径、
+`--upload` = 分享链接、`--ocr` = 识别文本、`pdf`/`gif`/`voice` = 产物路径），
 错误写 `stderr` 并以非零码退出。`--clipboard` 可与 `--out` 同时使用。
+`gif` 与 `voice` 需要系统安装 `ffmpeg`。
 
 ### 安装与打包
 
@@ -357,13 +378,24 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
   },
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
   "gif_fps": 12,
+  "record_max_seconds": 0,
   "long_capture_max_height": 20000,
+  "long_scroll_ticks": 4,
+  "long_scroll_delay_ms": 420,
+  "long_diff_threshold": 1.5,
+  "long_idle_limit": 8,
+  "long_manual_idle_limit": 30,
+  "long_max_frames": 400,
+  "hdr_fix": true,
   "mcp_enabled": false,
   "theme": "system",
   "accent": "blue",
+  "accent_custom": [91, 157, 255],
+  "custom_colors": [],
   "lang": "zh-hans",
   "font": "auto",
-  "font_scale": 1.0,
+  "font_family": null,
+  "font_size_pt": 9.0,
   "font_path": null,
   "bg_image": null,
   "bg_blur": 12.0,
@@ -371,7 +403,25 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
   "bg_fit": "cover",
   "close_to_tray": true,
   "run_at_startup": false,
-  "settings_tab": "appearance"
+  "settings_tab": "appearance",
+  "tray_icon_style": "auto",
+  "tray_icon_path": null,
+  "capture_magnifier": true,
+  "capture_magnifier_size": 15,
+  "color_format": "hex",
+  "capture_pointer": false,
+  "pin_restore_limit": 5,
+  "pin_gestures": {
+    "zoom": { "modifier": "none", "button": "wheel", "double_click": false },
+    "opacity": { "modifier": "ctrl", "button": "wheel", "double_click": false },
+    "close": { "modifier": "none", "button": "left", "double_click": true },
+    "reset": { "modifier": "none", "button": "middle", "double_click": false },
+    "thumbnail": { "modifier": "shift", "button": "left", "double_click": true },
+    "copy_text": { "modifier": "shift", "button": "right", "double_click": false }
+  },
+  "pin_groups": [
+    { "id": 1, "name": "", "hidden": false }
+  ]
 }
 ```
 
@@ -382,12 +432,12 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
 - `accent`：`blue` / `violet` / `emerald` / `amber` / `rose`。
 - `lang`：`zh-hans` / `zh-hant` / `en` / `ja` / `ko` / `fr` / `de`。
 - `font`：`auto` / `sans` / `serif` / `mono` / `custom`；`custom` 时读取 `font_path`。
-- `font_scale`：文本缩放，0.85–1.35。
+- `font_size_pt`：界面字号（pt），可选 8 / 9 / 10 / 11 / 12 / 14 / 16，默认 9。
 - `bg_image`：主窗口背景图片路径，`null` 为纯色；`bg_blur` 为高斯模糊半径（px），
   `bg_dim` 为压暗强度（0–0.85），`bg_fit` 为 `cover` / `contain` / `stretch`。
 - `close_to_tray`：关闭主窗口时藏到托盘而非退出（仅 Windows 默认开启）。
 - `run_at_startup`：开机自启（Windows 注册表 / Linux autostart / macOS LaunchAgent）。
-- `settings_tab`：设置页记住的标签，`appearance` / `output` / `hotkeys` / `about`。
+- `settings_tab`：设置页记住的标签，`general` / `appearance` / `capture` / `pins` / `output` / `controls`（别名 `hotkeys`）/ `updates` / `about`。
 
 外观相关的字段在设置页改动后立即写回，不需要重启。
 
@@ -449,27 +499,43 @@ PinSight/
 │   ├── undo_probe.py             # 端到端验证撤销/重做（像素计数）
 │   └── number_probe.py           # 端到端验证序号标注（圆盘+数字检测）
 ├── src/
-│   ├── main.rs                   # CLI、日志、eframe 启动、窗口图标
-│   ├── app.rs                    # 应用状态机、页面、主窗口、捕获流程编排
-│   ├── ui.rs                     # 手绘控件与矢量图标集（24×24 网格）
-│   ├── theme.rs                  # 调色板、控件样式、字号阶梯
-│   ├── fonts.rs                  # 系统字体发现与语言匹配
-│   ├── i18n.rs                   # 7 种语言的文案表与语言检测
-│   ├── capture.rs                # 显示器枚举 / 全屏 / 物理矩形抓取
-│   ├── overlay.rs                # 冻结层、选区、工具栏、快捷键
-│   ├── annotate.rs               # 标注模型、预览、tiny-skia 光栅化
-│   ├── pin.rs                    # Windows 原生贴图窗口（Win32 消息循环 + GDI）
-│   ├── pin_viewport.rs           # 其他平台的贴图（egui 视口实现）
-│   ├── longshot.rs               # 滚动捕获、重叠检测、拼接
-│   ├── record.rs                 # 录屏线程、GIF 编码、ffmpeg MP4
-│   ├── hotkeys.rs                # 全局热键注册、解析、冲突分类、热更新
-│   ├── tray.rs                   # Windows 托盘图标、消息窗口与右键菜单
-│   ├── startup.rs                # 开机自启（注册表 / autostart / LaunchAgent）
-│   ├── single_instance.rs        # 单实例：命名互斥量 / 锁文件，二次启动唤起已有实例
-│   ├── background.rs             # 自定义背景图：解码、模糊、适配、纹理
-│   ├── mcp.rs                    # 手写 MCP stdio server + 工具定义
-│   ├── config.rs                 # JSON 配置读写、便携模式路径解析
-│   └── util.rs                   # 时间戳、PNG、剪贴板、路径工具
+│   ├── main.rs                       # CLI、日志、eframe 启动、窗口图标
+│   ├── app.rs                        # 应用状态机、页面、主窗口、捕获流程编排
+│   ├── cli.rs                        # 命令行入口：shot / pdf / gif / voice 子命令
+│   ├── app_keys.rs                   # 覆盖层内快捷键（"V"/"Ctrl+Z" 文本）解析
+│   ├── ui.rs                         # 手绘控件与矢量图标集（24×24 网格）
+│   ├── theme.rs                      # 调色板、控件样式、字号阶梯
+│   ├── fonts.rs                      # 系统字体发现与语言匹配
+│   ├── i18n.rs                       # 7 种语言的文案表与语言检测
+│   ├── text_font.rs                  # 文字标注字形轮廓光栅化
+│   ├── capture.rs                    # 显示器枚举 / 全屏 / 物理矩形抓取
+│   ├── overlay.rs                    # 冻结层、选区、工具栏、快捷键
+│   ├── annotate.rs                   # 标注模型、预览、tiny-skia 光栅化
+│   ├── marklayer.rs                  # 录屏叠加标注层（双置顶透明窗口）
+│   ├── pin.rs                        # Windows 原生贴图窗口（Win32 消息循环 + GDI）
+│   ├── pin_viewport.rs               # 其他平台的贴图（egui 视口实现）
+│   ├── decorate.rs                   # 截图后装饰：边框 / 阴影 / 水印
+│   ├── hud.rs                        # 后台任务浮动状态窗口
+│   ├── longshot.rs                   # 滚动捕获、重叠检测、拼接
+│   ├── record.rs                     # 录屏线程、GIF 编码、ffmpeg MP4
+│   ├── ocr.rs                        # 离线 OCR（Windows.Media.Ocr / macOS Vision / Linux Tesseract）
+│   ├── voice.rs                      # 麦克风录音便签（ffmpeg → WAV）
+│   ├── gifedit.rs                    # GIF 编辑：裁剪片段 / 裁切画面 / 加文字 / 转 MP4
+│   ├── pdf.rs                        # PDF 页面栅格化（可选）
+│   ├── hotkeys.rs                    # 全局热键注册、解析、冲突分类、热更新
+│   ├── tray.rs                       # Windows 托盘图标、消息窗口与右键菜单
+│   ├── tray_stub.rs                  # 非 Windows 平台的托盘空实现
+│   ├── startup.rs                    # 开机自启（注册表 / .desktop / LaunchAgent）
+│   ├── single_instance.rs            # 单实例：命名互斥量 / 锁文件 + PID 存活检测
+│   ├── background.rs                 # 自定义背景图：解码、模糊、适配、纹理
+│   ├── picker.rs                     # Windows 风格取色对话框
+│   ├── naming.rs                     # 保存文件名模板（占位符展开）
+│   ├── clipboard.rs                  # 剪贴板输出（按 ClipboardMode，arboard）
+│   ├── upload.rs                     # 图片上传（HTTP / 本地后端）
+│   ├── hdr.rs                        # HDR 高级色彩检测与修正
+│   ├── mcp.rs                        # 手写 MCP stdio server + 9 个工具定义
+│   ├── config.rs                     # JSON 配置读写、便携模式路径解析
+│   └── util.rs                       # 时间戳、PNG、剪贴板、路径工具
 └── .gitignore
 ```
 
@@ -540,7 +606,7 @@ Tauri 的 UI 层就是 WebView。截图工具最敏感的路径是**冻结层标
   确需加载时用**内存映射**而非堆拷贝，页面由页面缓存支撑、可被回收。
 - **发布产物瘦身**：fat LTO + 单 codegen unit + 剥离符号，可执行文件约 10.3 MB（UPX 压缩后约 3.8 MB；含内置 emoji 字体）。
 - **逐帧增量落盘**：录屏边捕获边写，内存不随时长增长。
-- **长截图有硬上限**：`long_capture_max_height`（默认 20000px）与 80 帧封顶，
+- **长截图有硬上限**：`long_capture_max_height`（默认 20000px）与 `long_max_frames`（默认 400 帧）封顶，
   防止拼接结果失控。
 
 复现方式：
@@ -565,7 +631,7 @@ python scripts\measure.py 6
 
 - **平台差异**：贴图在 Windows 用原生 Win32 窗口，macOS / Linux 自动切换为 egui 视口实现，
   交互一致但系统级行为（如真点击穿透）以平台能力为准；托盘图标目前仅 Windows。
-- **长截图**：不适合含固定侧栏/表头、无限滚动、强动画的页面；默认最多 80 帧 / 20000px。
+- **长截图**：不适合含固定侧栏/表头、无限滚动、强动画的页面；默认最多 400 帧 / 20000px。
 - **录屏**：帧率受捕获速度限制；GIF 体积较大；MP4 需要 `ffmpeg`。
 - **标注**：矩形 / 椭圆 / 箭头 / 画笔 / 高亮 / 马赛克 / 序号 / 文字均支持 `Ctrl+Z` / `Ctrl+Y` 撤销重做（快照式历史）。
 - **混合 DPI 多显示器**：覆盖层用显示器逻辑坐标定位，极端缩放组合下可能需要微调。

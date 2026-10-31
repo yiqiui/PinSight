@@ -5,7 +5,7 @@ edition = "2024"
 description = "Native screenshot, annotation, pinboard, long-capture and recording tool with an MCP server — no WebView."
 license = "Apache-2.0"
 authors = ["PinSight contributors"]
-repository = "https://github.com/your-org/PinSight"
+repository = "https://github.com/yiqiui/PinSight"
 keywords = ["screenshot", "pin", "mcp", "egui", "windows"]
 categories = ["graphics", "gui"]
 rust-version = "1.85"
@@ -111,5 +111,7 @@ strip = true
 panic = "abort"
 # Optimise for size rather than speed: this is a GUI tool whose hot paths are
 # I/O-bound (screen capture, codecs), so the few percent of runtime "s" costs is
-# invisible, while it removes ~1.5 MB of code (8.7 MB → ~7.2 MB).
+# invisible, while it sheds roughly 1.5 MB of code. The on-disk exe lands
+# around 10 MB (UPX brings it to ~3.8 MB); the size win from "s" is real but
+# secondary to LTO + one codegen unit + stripped symbols.
 opt-level = "s"
