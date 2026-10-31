@@ -1,26 +1,40 @@
 <div align="center">
-  <img src="assets/icon.png" width="104" alt="PinSight icon" />
-  <h1>PinSight</h1>
-  <p><strong>原生 Rust 截图 · 标注 · 贴图 · 长截图 · 录屏 · OCR · GIF 编辑 · 上传，内置 MCP 服务，无 WebView。</strong></p>
-  <p>Native Rust screenshot · annotation · pin · long-capture · recording tool with MCP, OCR, GIF editing and upload — no WebView.</p>
 
-  <p>
-    <img alt="Rust" src="https://img.shields.io/badge/Rust-1.85%2B-000?logo=rust" />
-    <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0078D6" />
-    <img alt="MCP" src="https://img.shields.io/badge/MCP-stdio-6B5BFF" />
-    <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-2EA043" />
-  </p>
+<img src="assets/icon.png" width="160" alt="PinSight" />
 
-  <p>
-    <a href="#快速开始">快速开始</a> ·
-    <a href="#界面">界面与本地化</a> ·
-    <a href="#mcp-集成">MCP</a> ·
-    <a href="#架构">架构</a> ·
-    <a href="#roadmap">Roadmap</a>
-  </p>
+# PinSight
+
 </div>
 
-![PinSight 主界面](docs/images/main.png)
+<hr />
+
+<div align="center">
+
+**原生 Rust 截图 · 标注 · 贴图 · 长截图 · 录屏 · OCR · GIF 编辑 · 上传，内置 MCP 服务，无 WebView。**
+
+Native Rust screenshot · annotation · pin · long-capture · recording tool with MCP, OCR, GIF editing and upload — no WebView.
+
+<br />
+
+[![Release](https://img.shields.io/badge/release-v0.1.0-2EA043)](https://github.com/yiqiui/PinSight/releases)
+[![Stars](https://img.shields.io/github/stars/yiqiui/PinSight?style=social)](https://github.com/yiqiui/PinSight/stargazers)
+[![License](https://img.shields.io/badge/license-Apache--2.0-2EA043)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-stdio-6B5BFF)](https://github.com/yiqiui/PinSight/blob/main/README.md#mcp-集成)
+[![Rust](https://img.shields.io/badge/Rust-1.85%2B-000?logo=rust)](https://www.rust-lang.org)
+
+[![Windows](https://img.shields.io/badge/Windows-x64%20%C2%B7%20ARM64-0078D6)](https://github.com/yiqiui/PinSight/releases)
+[![macOS](https://img.shields.io/badge/macOS-Intel%20%C2%B7%20Apple%20Silicon-0078D6)](https://github.com/yiqiui/PinSight/releases)
+[![Linux](https://img.shields.io/badge/Linux-x64%20%C2%B7%20ARM64-2EA043)](https://github.com/yiqiui/PinSight/releases)
+
+[快速开始](#快速开始) · [界面](#界面) · [MCP](#mcp-集成) · [架构](#架构) · [Roadmap](#roadmap)
+
+</div>
+
+<br />
+
+<div align="center">
+  <img src="docs/images/main.png" width="720" alt="PinSight 主界面" />
+</div>
 
 > **状态：v0.1.0 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
 > 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）、图片上传、
