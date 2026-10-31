@@ -6,6 +6,21 @@ All notable changes to PinSight are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Owl logo** (`scripts/make_owl_icon.py`): a geometry-only owl whose eyes are
+  camera focus rings — amber left iris, cyan right iris. The icon set
+  (`assets/icon.png`, `icon.ico`, `tray.ico`) is generated from one script.
+- **Selection corners read as owl eyes**: the four corner handles of the
+  capture overlay draw as focus rings (white ring + accent iris + dark pupil)
+  instead of plain squares; edge midpoints keep the square handles.
+- **Wing-fold entrance**: the freeze overlay's dim mask eases in over ~180 ms
+  (ease-out quad), like a pair of wings folding over the screen.
+- **Cyan accent**: a sixth accent preset (the owl's right-eye colour), with
+  full light/dark palette entries and localised labels.
+- **Bilingual README**: `README_EN.md` mirrors the Chinese one; both hero
+  sections cross-link via "English · 简体中文".
+
 ### Changed
 
 - License changed from MIT to **Apache-2.0** (adds an explicit patent grant and

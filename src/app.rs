@@ -3843,7 +3843,6 @@ impl PinSightApp {
                     (theme::Accent::Emerald, t.accent_emerald),
                     (theme::Accent::Amber, t.accent_amber),
                     (theme::Accent::Rose, t.accent_rose),
-                    (theme::Accent::Cyan, t.accent_cyan),
                 ];
                 let mut items: Vec<(egui::Color32, bool, &str)> = presets
                     .iter()

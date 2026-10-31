@@ -28,8 +28,6 @@ Native Rust screenshot · annotation · pin · long-capture · recording tool wi
 
 [快速开始](#快速开始) · [界面](#界面) · [MCP](#mcp-集成) · [架构](#架构) · [Roadmap](#roadmap)
 
-[English](README_EN.md) · 简体中文
-
 </div>
 
 <br />
@@ -42,7 +40,7 @@ Native Rust screenshot · annotation · pin · long-capture · recording tool wi
 > 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）、图片上传、
 > 语音便签（可录制，点击播放待完善）、MCP、托盘菜单、自定义背景图与界面内热键录制均已跑通；长截图对固定页眉、
 > 粘性元素与动画仍有一定敏感性。
-> 界面支持深/浅色主题、6 种强调色、7 种语言与字体切换，设置页分多个标签并记住上次打开的位置。
+> 界面支持深/浅色主题、5 种强调色、7 种语言与字体切换，设置页分多个标签并记住上次打开的位置。
 > 项目使用原生 Win32 窗口与 GDI 绘制，不依赖 Electron、Tauri 或 WebView；
 > 除 Windows 外也可在 macOS 与 Linux 上构建运行（贴图自动切换为 egui 视口实现）。
 
@@ -58,7 +56,6 @@ PinSight 想做的是一个**可读、可改、可自动化**的开源实现：
 - **为长期使用而设计**：主题、强调色、字号、界面语言、字体都可切换，控件与图标全部矢量手绘，不随缩放失真。
 - **对 AI 友好**：内置 MCP stdio 服务，Claude Desktop、Cursor、Continue 等客户端可以直接调用截图、贴图、长截图、录屏能力。
 - **工程透明**：模块边界、线程模型、坐标空间和失败模式都写在 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-- **猫头鹰 logo**：双眼是相机对焦环（左琥珀 / 右青），对应选区四角的对焦环手柄与冻结层羽翼式展开的入场动画；两种眼瞳色也进入了强调色预设。图标由 [`scripts/make_owl_icon.py`](scripts/make_owl_icon.py) 生成。
 
 PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、粘性元素、动画）与 Snipaste
 可能仍有差距，macOS / Linux 上的贴图后端也仍在打磨中。核心能力（截图、标注、
@@ -88,7 +85,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | 开机自启 | ✅ | Windows 注册表 / Linux `.desktop` / macOS LaunchAgent，设置页一键开关 |
 | 便携模式 | ✅ | `--portable` 或 `pinsight.portable` 标记文件：配置与截图全部落在安装目录内 |
 | MCP | ✅ | `--mcp` 启动 stdio 服务，暴露 9 个工具 |
-| 主题 | ✅ | 跟随系统 / 浅色 / 深色，6 种强调色，即时生效 |
+| 主题 | ✅ | 跟随系统 / 浅色 / 深色，5 种强调色，即时生效 |
 | 多语言 | ✅ | 简体中文、繁體中文、English、日本語、한국어、Français、Deutsch |
 | 字体 | ✅ | 自动匹配系统语言字体，或指定无衬线 / 衬线 / 等宽 / 自定义字体文件；界面字号 8–16 pt 分段可选（默认 9 pt） |
 | 配置持久化 | ✅ | JSON 配置，外观改动即时写回；设置页标签位置也会记住 |
@@ -109,7 +106,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 ### 主题
 
 - **跟随系统**（默认）/ **浅色** / **深色**，切换即时生效并写回配置。
-- **6 种强调色**：蓝、紫、翡翠、琥珀、玫红、青色（左琥珀 / 右青正是猫头鹰 logo 的双眼瞳色）。强调色同时决定选中态、主按钮、选区描边和贴图卡片高亮。
+- **5 种强调色**：蓝、紫、翡翠、琥珀、玫红。强调色同时决定选中态、主按钮、选区描边和贴图卡片高亮。
 - 冻结层与工具栏始终使用暗色玻璃质感，保证在任意桌面背景上都有足够对比度。
 
 ### 多语言
@@ -446,7 +443,7 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
 - `long_capture_max_height`：长截图最大高度，防止内存失控。
 - `mcp_enabled`：保留字段；是否启动 MCP 由 `--mcp` 决定。
 - `theme`：`system` / `light` / `dark`。
-- `accent`：`blue` / `violet` / `emerald` / `amber` / `rose` / `cyan`。
+- `accent`：`blue` / `violet` / `emerald` / `amber` / `rose`。
 - `lang`：`zh-hans` / `zh-hant` / `en` / `ja` / `ko` / `fr` / `de`。
 - `font`：`auto` / `sans` / `serif` / `mono` / `custom`；`custom` 时读取 `font_path`。
 - `font_size_pt`：界面字号（pt），可选 8 / 9 / 10 / 11 / 12 / 14 / 16，默认 9。
@@ -484,8 +481,7 @@ flowchart LR
 PinSight/
 ├── Cargo.toml
 ├── Cargo.lock
-├── README.md               # 简体中文
-├── README_EN.md            # English
+├── README.md
 ├── LICENSE
 ├── CONTRIBUTING.md
 ├── CHANGELOG.md
