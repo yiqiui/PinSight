@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Draw the PinSight owl logo as PNG/ICO assets.
+"""Draw the PinSight owl logo as PNG/ICO assets (v4).
 
-Geometry-only owl: rounded-square dark plate, cream owl head, two big eyes
-drawn as camera focus rings with an amber (left) and cyan (right) iris --
-the amber/cyan pair echoes the accent colours.  Ear tufts, a small beak and
-two wing wedges so the bird still reads at 16 px tray size.
+Composition: the owl's face IS a screenshot selection.  A rounded rectangle
+(the "face") framed by four viewfinder corner brackets -- amber on the left
+pair, cyan on the right -- with two eyes inside: the left a focus cross in
+amber, the right a plain dot in cyan.  A small triangular beak below centre.
+No round head, no ear tufts, no wings: nothing left of the generic cute-owl
+template.  The whole mark reads as "a region being captured" first and an
+owl second.
 """
 import os
 
@@ -16,13 +19,10 @@ ASSETS = os.path.normpath(os.path.join(HERE, "..", "assets"))
 # palette ---------------------------------------------------------------
 PLATE_TOP = (24, 28, 36)        # dark plate, slight vertical shade
 PLATE_BOT = (13, 16, 22)
-HEAD = (237, 233, 224)          # cream head
-HEAD_DIM = (216, 210, 197)      # wing shade
-EYE_RING = (250, 250, 250)      # focus ring white
-AMBER = (0xFB, 0xBF, 0x24)      # left iris  -- Accent::Amber
-CYAN = (0x22, 0xD3, 0xEE)       # right iris -- Accent::Cyan
+FACE = (237, 233, 224)          # cream face (the "selection")
+AMBER = (0xFB, 0xBF, 0x24)      # Accent::Amber
+CYAN = (0x22, 0xD3, 0xEE)       # Accent::Cyan
 PUPIL = (16, 18, 24)
-BEAK = (0xFB, 0xBF, 0x24)       # beak reuses the amber accent
 
 S = 1024                        # master canvas (supersample)
 
@@ -31,15 +31,12 @@ def rounded_plate():
     """Rounded-square plate with a subtle vertical shade."""
     r = int(S * 0.225)
     plate = Image.new("RGBA", (S, S), PLATE_TOP + (255,))
-    # darker towards the bottom through a gradient mask
     grad = Image.new("L", (1, S))
     for y in range(S):
         t = (y / S - 0.35) / 0.65
         grad.putpixel((0, y), int(255 * min(1.0, max(0.0, t))))
-    grad = grad.resize((S, S))
     dark = Image.new("RGBA", (S, S), PLATE_BOT + (255,))
-    plate = Image.composite(dark, plate, grad)
-    # punch through a rounded-rect mask
+    plate = Image.composite(dark, plate, grad.resize((S, S)))
     mask = Image.new("L", (S, S), 0)
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, S - 1, S - 1], radius=r, fill=255)
     out = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -47,88 +44,62 @@ def rounded_plate():
     return out
 
 
-def head_layer():
-    """Cream owl: wings behind the head, head circle, ear tufts."""
+def face_layer():
+    """The selection-rectangle face with corner brackets and eyes."""
     layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    cx = S / 2
-    # wings (behind the head)
-    d.polygon([(cx - S * 0.28, S * 0.36), (cx - S * 0.42, S * 0.66),
-               (cx - S * 0.28, S * 0.72)], fill=HEAD_DIM + (255,))
-    d.polygon([(cx + S * 0.28, S * 0.36), (cx + S * 0.42, S * 0.66),
-               (cx + S * 0.28, S * 0.72)], fill=HEAD_DIM + (255,))
-    # head
-    d.ellipse([cx - S * 0.30, S * 0.24, cx + S * 0.30, S * 0.84], fill=HEAD + (255,))
-    # ear tufts drawn as viewfinder corner brackets (screenshot-tool signature):
-    # each tuft is an L-shaped bracket whose vertical leg dips behind the head,
-    # so the brackets read as framing the head itself.
-    bw = S * 0.05   # bracket stroke width
-    top = S * 0.135
-    outer_l, inner_l = cx - S * 0.36, cx - S * 0.115
-    outer_r, inner_r = cx + S * 0.36, cx + S * 0.115
-    bot = S * 0.38   # vertical legs end behind the head edge
-    # left bracket
-    d.polygon([(outer_l, top), (inner_l, top), (inner_l, top + bw),
-               (outer_l + bw, top + bw), (outer_l + bw, bot), (outer_l, bot)],
-              fill=HEAD + (255,))
-    # right bracket (mirrored)
-    d.polygon([(outer_r, top), (inner_r, top), (inner_r, top + bw),
-               (outer_r - bw, top + bw), (outer_r - bw, bot), (outer_r, bot)],
-              fill=HEAD + (255,))
-    return layer
+    # face: a rounded rectangle, wider than tall, slightly above centre
+    fx0, fy0, fx1, fy1 = S * 0.16, S * 0.24, S * 0.84, S * 0.76
+    d.rounded_rectangle([fx0, fy0, fx1, fy1], radius=S * 0.09, fill=FACE + (255,))
 
+    # corner brackets: amber on the left pair, cyan on the right pair,
+    # drawn outside the face with a gap -- the classic marquee look.
+    bw = S * 0.045          # bracket stroke width
+    leg = S * 0.14          # bracket leg length
+    gap = S * 0.028
+    pairs = (
+        (fx0 - gap, fy0 - gap, -1, AMBER),   # top-left
+        (fx0 - gap, fy1 + gap, -1, AMBER),   # bottom-left
+        (fx1 + gap, fy0 - gap, 1, CYAN),     # top-right
+        (fx1 + gap, fy1 + gap, 1, CYAN),     # bottom-right
+    )
+    for bx, by, side, colour in pairs:
+        # horizontal leg points inward toward the face
+        x_in = bx + side * leg
+        d.line([(bx, by), (x_in, by)], fill=colour + (255,), width=int(bw))
+        # vertical leg points inward vertically too (toward the face)
+        y_in = by + (leg if by > fy0 else -leg)
+        d.line([(bx, by), (bx, y_in)], fill=colour + (255,), width=int(bw))
 
-def eyes_layer():
-    """Two focus-ring eyes: white ring, iris, pupil.
+    # eyes: left = focus cross in amber, right = dot in cyan
+    ey = (fy0 + fy1) / 2 - S * 0.02
+    ex_l, ex_r = cx_left, cx_right = fx0 + (fx1 - fx0) * 0.30, fx0 + (fx1 - fx0) * 0.70
+    eye_r = S * 0.088
+    # left eye: amber ring + cross pupil
+    d.ellipse([ex_l - eye_r, ey - eye_r, ex_l + eye_r, ey + eye_r],
+              outline=AMBER + (255,), width=int(S * 0.024))
+    arm = eye_r * 0.62
+    pw = max(4, int(S * 0.018))
+    d.line([(ex_l - arm, ey), (ex_l + arm, ey)], fill=PUPIL + (255,), width=pw)
+    d.line([(ex_l, ey - arm), (ex_l, ey + arm)], fill=PUPIL + (255,), width=pw)
+    # right eye: cyan ring + round pupil
+    d.ellipse([ex_r - eye_r, ey - eye_r, ex_r + eye_r, ey + eye_r],
+              outline=CYAN + (255,), width=int(S * 0.024))
+    pupil_r = eye_r * 0.42
+    d.ellipse([ex_r - pupil_r, ey - pupil_r, ex_r + pupil_r, ey + pupil_r],
+              fill=PUPIL + (255,))
 
-    Left pupil is a camera focus cross (crosshair reticle); the right one is a
-    plain dot.  The asymmetric amber/cyan pair is the app's signature.
-    """
-    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    cx = S / 2
-    eye_r = S * 0.115
-    ring_w = max(3, int(S * 0.022))
-    for sign, iris in ((-1, AMBER), (1, CYAN)):
-        ex = cx + sign * S * 0.135
-        ey = S * 0.49
-        d.ellipse([ex - eye_r, ey - eye_r, ex + eye_r, ey + eye_r],
-                  outline=EYE_RING + (255,), width=ring_w)
-        iris_r = eye_r * 0.62
-        d.ellipse([ex - iris_r, ey - iris_r, ex + iris_r, ey + iris_r],
-                  fill=iris + (255,))
-        pupil_r = iris_r * 0.45
-        if sign < 0:
-            # left eye: crosshair reticle instead of a round pupil
-            pw = max(3, int(S * 0.018))
-            arm = pupil_r * 1.05
-            for (dx0, dy0, dx1, dy1) in (
-                (ex - arm, ey, ex + arm, ey),
-                (ex, ey - arm, ex, ey + arm),
-            ):
-                d.line([(dx0, dy0), (dx1, dy1)], fill=PUPIL + (255,), width=pw)
-            d.ellipse([ex - pupil_r * 0.55, ey - pupil_r * 0.55,
-                       ex + pupil_r * 0.55, ey + pupil_r * 0.55],
-                      fill=PUPIL + (255,))
-        else:
-            d.ellipse([ex - pupil_r, ey - pupil_r, ex + pupil_r, ey + pupil_r],
-                      fill=PUPIL + (255,))
-    return layer
-
-
-def beak_layer():
-    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    cx = S / 2
-    d.polygon([(cx - S * 0.035, S * 0.60), (cx + S * 0.035, S * 0.60),
-               (cx, S * 0.67)], fill=BEAK + (255,))
+    # beak: small triangle below the eyes
+    cx = (fx0 + fx1) / 2
+    by0 = ey + eye_r + S * 0.035
+    d.polygon([(cx - S * 0.030, by0), (cx + S * 0.030, by0), (cx, by0 + S * 0.055)],
+              fill=(0xB4, 0x53, 0x09, 255))
     return layer
 
 
 def build():
     img = rounded_plate()
-    for layer in (head_layer(), eyes_layer(), beak_layer()):
-        img.alpha_composite(layer)
+    img.alpha_composite(face_layer())
 
     png = img.resize((256, 256), Image.LANCZOS)
     png.save(os.path.join(ASSETS, "icon.png"))
