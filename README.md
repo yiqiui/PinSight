@@ -23,7 +23,7 @@
 ![PinSight 主界面](docs/images/main.png)
 
 > **状态：v0.1.0 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
-> 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪 / 裁切 / 加文字 / 转 MP4）、图片上传、
+> 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）、图片上传、
 > 语音便签（可录制，点击播放待完善）、MCP、托盘菜单、自定义背景图与界面内热键录制均已跑通；长截图对固定页眉、
 > 粘性元素与动画仍有一定敏感性。
 > 界面支持深/浅色主题、5 种强调色、7 种语言与字体切换，设置页分多个标签并记住上次打开的位置。
@@ -580,8 +580,8 @@ python scripts\measure.py 6
 ## Roadmap
 
 - [x] 文本标注（覆盖层内联输入框，Enter 提交 / Shift+Enter 换行，字号与颜色跟随工具栏）
-- [x] OCR（Windows.Media.Ocr 离线识别，工具栏一键识别 + CLI `pinsight shot --ocr`）
-- [x] GIF 编辑（裁剪 / 裁切 / 加文字 / 转 MP4）
+- [x] OCR（Windows 用 `Windows.Media.Ocr`、macOS 用 Vision、Linux 用 Tesseract；工具栏一键识别 + CLI `pinsight shot --ocr`）
+- [x] GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）
 - [x] 图片上传（本地 / HTTP 后端，编辑器上传按钮 + CLI `--upload`）
 - [ ] 标注图层管理
 - [x] 撤销 / 重做（`Ctrl+Z` / `Ctrl+Y`，快照式历史，覆盖全部标注类型）
