@@ -1070,7 +1070,11 @@ impl CaptureSession {
             // accent iris
             ui.painter().circle_filled(c, ring_r - 2.2, accent);
             // dark pupil
-            ui.painter().circle_filled(c, (ring_r - 2.2) * 0.42, egui::Color32::from_rgb(16, 18, 24));
+            ui.painter().circle_filled(
+                c,
+                (ring_r - 2.2) * 0.42,
+                egui::Color32::from_rgb(16, 18, 24),
+            );
         }
         // Edge midpoints stay small square handles.
         for point in edge_points {
