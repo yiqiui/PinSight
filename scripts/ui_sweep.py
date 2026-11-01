@@ -40,7 +40,18 @@ def shot(hwnd, name):
 
 
 def click_tab(hwnd, lx):
-    """Tabs are thin; try a few y candidates until the page changes."""
+    """Tabs are thin; try a few y candidates until the page changes. If the
+    target tab is already active, bounce to the first tab and come back so the
+    click is guaranteed to change something."""
+    before, _ = shot(hwnd, "tab_probe")
+    for ly in TAB_Y_CANDIDATES:
+        ui.click(hwnd, lx, ly)
+        time.sleep(0.65)
+        after, _ = shot(hwnd, "tab_probe")
+        if after != before:
+            return True
+    ui.click(hwnd, TABS[0][1], TAB_Y_CANDIDATES[0])
+    time.sleep(0.65)
     before, _ = shot(hwnd, "tab_probe")
     for ly in TAB_Y_CANDIDATES:
         ui.click(hwnd, lx, ly)
