@@ -80,7 +80,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | 离线 OCR | ✅ | 离线识别：Windows 用内置 `Windows.Media.Ocr`，macOS 用 Vision，Linux 用 Tesseract；工具栏一键选取区域识别；CLI `pinsight shot --ocr` 整屏识别 |
 | 图片上传 | ✅ | 编辑器上传按钮 + CLI `--upload`；默认本地后端落盘到 `<截图目录>/uploaded/`，可切 HTTP（POST/PUT、表单或 JSON 响应） |
 | 语音便签 | 🧪 | 可录制带音轨的录屏便签；点击播放尚未闭环（待接入音频播放库） |
-| 全局热键 | ✅ | 6 个动作均可在设置页内「录制」自定义（点 Record 后按组合键，Esc 取消），即时生效；注册失败会标红并说明原因 |
+| 全局热键 | ✅ | 7 个动作均可在设置页内「录制」自定义（点 Record 后按组合键，Esc 取消），即时生效；注册失败会标红并说明原因 |
 | 命令行 | ✅ | 无窗口子命令（scrot/maim 风格）：`shot` 截图、`pdf` 拼 PDF、`gif` 编辑动图、`voice` 录音便签，详见下文 |
 | 单实例 | ✅ | 重复启动不会注册第二套热键，而是唤起已在运行的实例（Windows 命名互斥量，其他平台锁文件 + PID 存活检测） |
 | 托盘菜单 | ✅ | 任务栏图标 + 本地化右键菜单（含各项快捷键提示），Explorer 重启后自动恢复 |
@@ -272,11 +272,12 @@ PINSIGHT_UPX_ONLY=1 python tools/_repackage_portable.py    # 只出 UPX 版
 | `Ctrl+Shift+L` | 长截图（再次按下取消） |
 | `Ctrl+Shift+R` | 开始 / 停止选区录屏 |
 | `Ctrl+Shift+S` | 保存最近一次截图 |
+| `Ctrl+Shift+H` | 显示 / 隐藏全部贴图（Snipaste 式 F3 切换） |
 
 > 早期版本使用 `Ctrl+Alt+*`，实测与 Snipaste / QQ / 微信的截图快捷键冲突，因此改为
 > `Ctrl+Shift+*`。如果你的系统仍冲突，启动时主窗口会列出不可用的组合。
 
-全部 6 个组合都可以在**设置页 → 快捷键**里直接重新录制：点某一行的 `Record`，
+全部 7 个组合都可以在**设置页 → 快捷键**里直接重新录制：点某一行的 `Record`，
 然后按下新的组合键（需要至少一个修饰键，`Esc` 取消）。录制成功后立即重新注册，
 无需重启；被其他程序占用的组合会标红并说明原因。
 
@@ -391,11 +392,13 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
     "pin_clipboard": "Ctrl+Shift+V",
     "long_capture": "Ctrl+Shift+L",
     "record": "Ctrl+Shift+R",
-    "save_last": "Ctrl+Shift+S"
+    "save_last": "Ctrl+Shift+S",
+    "toggle_pins": "Ctrl+Shift+H"
   },
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
   "gif_fps": 12,
   "record_max_seconds": 0,
+  "record_countdown": 0,
   "long_capture_max_height": 20000,
   "long_scroll_ticks": 4,
   "long_scroll_delay_ms": 420,
@@ -443,6 +446,7 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
 ```
 
 - `gif_fps`：录屏帧率（4–30）。
+- `record_countdown`：录屏开始前的倒计时秒数（0 / 3 / 5，最长 10），留出摆好窗口的时间。
 - `long_capture_max_height`：长截图最大高度，防止内存失控。
 - `mcp_enabled`：保留字段；是否启动 MCP 由 `--mcp` 决定。
 - `theme`：`system` / `light` / `dark`。

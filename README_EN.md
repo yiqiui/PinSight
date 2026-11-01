@@ -71,7 +71,7 @@ PinSight is still iterating quickly: edge cases of scrolling long capture (fixed
 | Offline OCR | ✅ | Windows uses the built-in `Windows.Media.Ocr`, macOS uses Vision, Linux uses Tesseract; one-click region OCR in the toolbar; CLI `pinsight shot --ocr` for full screen |
 | Image upload | ✅ | Toolbar upload button + CLI `--upload`; defaults to a local backend writing into `<save dir>/uploaded/`, switchable to HTTP (POST/PUT, form or JSON responses) |
 | Voice notes | 🧪 | Record screen notes with an audio track; click-to-play not closed yet (audio playback library pending) |
-| Global hotkeys | ✅ | All 6 actions can be re-recorded in the settings window (press Record, then the combo; Esc cancels), effective instantly; conflicts are flagged in red with the reason |
+| Global hotkeys | ✅ | All 7 actions can be re-recorded in the settings window (press Record, then the combo; Esc cancels), effective instantly; conflicts are flagged in red with the reason |
 | Command line | ✅ | Headless subcommands (scrot/maim style): `shot` capture, `pdf` bundle PDF, `gif` edit animated GIFs, `voice` voice notes — see below |
 | Single instance | ✅ | Launching twice wakes the running instance instead of registering a second hotkey set (named mutex on Windows, lock file + PID check elsewhere) |
 | Tray menu | ✅ | Taskbar icon with a localised context menu (hotkey hints included); re-registers itself after an Explorer restart |
@@ -240,11 +240,12 @@ Defaults (all editable in the config file):
 | `Ctrl+Shift+V` | Pin the clipboard image to the screen |
 | `Ctrl+Shift+L` | Long capture (press again to cancel) |
 | `Ctrl+Shift+R` | Start / stop region recording |
+| `Ctrl+Shift+H` | Show / hide all pins (Snipaste-style F3 toggle) |
 | `Ctrl+Shift+S` | Save the most recent capture |
 
 > Earlier versions used `Ctrl+Alt+*`, which collided with Snipaste / QQ / WeChat in testing — hence `Ctrl+Shift+*`. If a combo is still taken, the main window lists it at startup.
 
-All 6 combos can be re-recorded in **Settings → Hotkeys**: click `Record` on a row, press the new combo (at least one modifier required; `Esc` cancels). Registration is hot-swapped, no restart; combos taken by other software are flagged in red with the reason.
+All 7 combos can be re-recorded in **Settings → Hotkeys**: click `Record` on a row, press the new combo (at least one modifier required; `Esc` cancels). Registration is hot-swapped, no restart; combos taken by other software are flagged in red with the reason.
 
 ### Overlay hotkeys
 
@@ -353,11 +354,13 @@ Default content (see also [`config.example.json`](config.example.json)):
     "pin_clipboard": "Ctrl+Shift+V",
     "long_capture": "Ctrl+Shift+L",
     "record": "Ctrl+Shift+R",
-    "save_last": "Ctrl+Shift+S"
+    "save_last": "Ctrl+Shift+S",
+    "toggle_pins": "Ctrl+Shift+H"
   },
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
   "gif_fps": 12,
   "record_max_seconds": 0,
+  "record_countdown": 0,
   "long_capture_max_height": 20000,
   "long_scroll_ticks": 4,
   "long_scroll_delay_ms": 420,

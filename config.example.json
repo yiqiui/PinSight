@@ -5,7 +5,8 @@
     "pin_clipboard": "Ctrl+Shift+V",
     "long_capture": "Ctrl+Shift+L",
     "record": "Ctrl+Shift+R",
-    "save_last": "Ctrl+Shift+S"
+    "save_last": "Ctrl+Shift+S",
+    "toggle_pins": "Ctrl+Shift+H"
   },
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
   "gif_fps": 12,
@@ -21,7 +22,11 @@
   "mcp_enabled": false,
   "theme": "system",
   "accent": "blue",
-  "accent_custom": [91, 157, 255],
+  "accent_custom": [
+    91,
+    157,
+    255
+  ],
   "custom_colors": [],
   "lang": "zh-hans",
   "font": "auto",
@@ -43,14 +48,43 @@
   "capture_pointer": false,
   "pin_restore_limit": 5,
   "pin_gestures": {
-    "zoom": { "modifier": "none", "button": "wheel", "double_click": false },
-    "opacity": { "modifier": "ctrl", "button": "wheel", "double_click": false },
-    "close": { "modifier": "none", "button": "left", "double_click": true },
-    "reset": { "modifier": "none", "button": "middle", "double_click": false },
-    "thumbnail": { "modifier": "shift", "button": "left", "double_click": true },
-    "copy_text": { "modifier": "shift", "button": "right", "double_click": false }
+    "zoom": {
+      "modifier": "none",
+      "button": "wheel",
+      "double_click": false
+    },
+    "opacity": {
+      "modifier": "ctrl",
+      "button": "wheel",
+      "double_click": false
+    },
+    "close": {
+      "modifier": "none",
+      "button": "left",
+      "double_click": true
+    },
+    "reset": {
+      "modifier": "none",
+      "button": "middle",
+      "double_click": false
+    },
+    "thumbnail": {
+      "modifier": "shift",
+      "button": "left",
+      "double_click": true
+    },
+    "copy_text": {
+      "modifier": "shift",
+      "button": "right",
+      "double_click": false
+    }
   },
   "pin_groups": [
-    { "id": 1, "name": "", "hidden": false }
-  ]
+    {
+      "id": 1,
+      "name": "",
+      "hidden": false
+    }
+  ],
+  "record_countdown": 0
 }
