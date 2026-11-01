@@ -8,6 +8,11 @@ All notable changes to PinSight are documented here. The format follows
 
 ### Added
 
+- **Repeat last area** (`Ctrl+Shift+P`): re-grabs the previous overlay
+  selection straight to the clipboard without re-selecting; falls back to a
+  normal region capture when nothing has been selected yet.
+- **Per-group pin hotkeys**: each pin group can bind its own global hotkey
+  (edited next to the group selector) to toggle that group's visibility.
 - **Recording countdown** (`record_countdown`, 0–10 s): the status pill shows
   "starting in N s" before frame 0; stopping during the countdown cancels
   quietly instead of raising an error toast.
