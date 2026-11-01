@@ -394,6 +394,7 @@ strings! {
     rec_hud_recording { en: "Recording", zh: "录制中", tw: "錄製中", ja: "録画中", ko: "녹화 중", fr: "Enregistrement", de: "Aufnahme" }
     rec_countdown { en: "Starting in {n}s", zh: "{n} 秒后开始录制", tw: "{n} 秒後開始錄製", ja: "{n} 秒後に録画開始", ko: "{n}초 후 녹화 시작", fr: "Départ dans {n} s", de: "Start in {n} s" }
     rec_countdown_label { en: "Countdown", zh: "录制倒计时", tw: "錄製倒數", ja: "録画カウントダウン", ko: "녹화 카운트다운", fr: "Compte à rebours", de: "Countdown" }
+    rec_countdown_off { en: "Off", zh: "关", tw: "關", ja: "オフ", ko: "끄기", fr: "Désactivé", de: "Aus" }
     rec_hud_paused { en: "Paused", zh: "已暂停", tw: "已暫停", ja: "一時停止", ko: "일시 정지", fr: "En pause", de: "Pausiert" }
     rec_hud_pause { en: "Pause", zh: "暂停", tw: "暫停", ja: "一時停止", ko: "일시 정지", fr: "Pause", de: "Pause" }
     rec_hud_resume { en: "Resume", zh: "继续", tw: "繼續", ja: "再開", ko: "재개", fr: "Reprendre", de: "Fortsetzen" }

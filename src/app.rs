@@ -3696,16 +3696,15 @@ impl PinSightApp {
                             ui::paint_thumbnail(&painter, thumb, &texture, p);
 
                             // Clicking the preview raises that pin.
-                            let focus = ui.interact(
-                                thumb,
-                                ui.scope_id().with(("pin-thumb", row.id)),
-                                egui::Sense::click(),
-                            );
+                            let focus = ui
+                                .interact(
+                                    thumb,
+                                    ui.scope_id().with(("pin-thumb", row.id)),
+                                    egui::Sense::click(),
+                                )
+                                .on_hover_cursor(egui::CursorIcon::PointingHand);
                             if focus.clicked() {
                                 action = Some((row.id, PinAction::Focus));
-                            }
-                            if focus.hovered() {
-                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                             }
 
                             let foot_y = thumb.bottom() + 20.0;
@@ -4619,7 +4618,7 @@ impl PinSightApp {
                     let _ = self.config.save();
                 }
                 let text = if self.config.record_countdown == 0 {
-                    t.rec_unlimited.to_string()
+                    t.rec_countdown_off.to_string()
                 } else {
                     format!("{} s", self.config.record_countdown)
                 };

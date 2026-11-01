@@ -22,54 +22,54 @@ use crate::ui::{self, Icon};
 
 /// The classic 48-colour palette every Windows colour dialog shows.
 const BASIC: [[u8; 3]; 48] = [
-    [0x00, 0x00, 0x00],
-    [0x99, 0x33, 0x00],
-    [0x33, 0x33, 0x00],
-    [0x00, 0x33, 0x00],
-    [0x00, 0x33, 0x66],
-    [0x00, 0x00, 0x80],
-    [0x33, 0x33, 0x99],
-    [0x33, 0x33, 0x33],
-    [0x80, 0x00, 0x00],
-    [0xFF, 0x66, 0x00],
-    [0x80, 0x80, 0x00],
-    [0x00, 0x80, 0x00],
-    [0x00, 0x80, 0x80],
-    [0x00, 0x00, 0xFF],
-    [0x66, 0x66, 0x99],
-    [0x80, 0x80, 0x80],
-    [0xFF, 0x00, 0x00],
-    [0xFF, 0x99, 0x00],
-    [0x99, 0xCC, 0x00],
-    [0x33, 0x99, 0x66],
-    [0x33, 0xCC, 0xCC],
-    [0x33, 0x66, 0xFF],
-    [0x80, 0x00, 0x80],
-    [0x96, 0x96, 0x96],
-    [0xFF, 0x00, 0xFF],
-    [0xFF, 0xCC, 0x00],
-    [0xFF, 0xFF, 0x00],
-    [0x00, 0xFF, 0x00],
-    [0x00, 0xFF, 0xFF],
-    [0x00, 0xCC, 0xFF],
-    [0x99, 0x33, 0x66],
-    [0xC0, 0xC0, 0xC0],
-    [0xFF, 0x99, 0xCC],
-    [0xFF, 0xCC, 0x99],
-    [0xFF, 0xFF, 0x99],
-    [0xCC, 0xFF, 0xCC],
-    [0xCC, 0xFF, 0xFF],
-    [0x99, 0xCC, 0xFF],
-    [0xCC, 0x99, 0xFF],
     [0xFF, 0xFF, 0xFF],
-    [0xE6, 0xE6, 0xE6],
-    [0xD9, 0xD9, 0xD9],
-    [0xBF, 0xBF, 0xBF],
-    [0xA6, 0xA6, 0xA6],
-    [0x8C, 0x8C, 0x8C],
-    [0x73, 0x73, 0x73],
-    [0x59, 0x59, 0x59],
-    [0x40, 0x40, 0x40],
+    [0xFF, 0xA6, 0x4D],
+    [0xFF, 0xFF, 0x8C],
+    [0x39, 0xE6, 0x39],
+    [0x5C, 0xE6, 0xE6],
+    [0x45, 0x45, 0xE6],
+    [0xB8, 0x5C, 0xE6],
+    [0xFF, 0xFF, 0xFF],
+    [0x26, 0x26, 0x26],
+    [0xD9, 0x8D, 0x41],
+    [0xD9, 0xD9, 0x77],
+    [0x31, 0xC3, 0x31],
+    [0x4E, 0xC3, 0xC3],
+    [0x3B, 0x3B, 0xC3],
+    [0x9C, 0x4E, 0xC3],
+    [0xD5, 0xD5, 0xD5],
+    [0x26, 0x26, 0x26],
+    [0xB2, 0x74, 0x36],
+    [0xB2, 0xB2, 0x62],
+    [0x28, 0xA1, 0x28],
+    [0x40, 0xA1, 0xA1],
+    [0x30, 0x30, 0xA1],
+    [0x81, 0x40, 0xA1],
+    [0xAB, 0xAB, 0xAB],
+    [0x26, 0x26, 0x26],
+    [0x8C, 0x5B, 0x2A],
+    [0x8C, 0x8C, 0x4D],
+    [0x20, 0x7E, 0x20],
+    [0x32, 0x7E, 0x7E],
+    [0x26, 0x26, 0x7E],
+    [0x65, 0x32, 0x7E],
+    [0x81, 0x81, 0x81],
+    [0x26, 0x26, 0x26],
+    [0x66, 0x42, 0x1F],
+    [0x66, 0x66, 0x38],
+    [0x17, 0x5C, 0x17],
+    [0x25, 0x5C, 0x5C],
+    [0x1C, 0x1C, 0x5C],
+    [0x49, 0x25, 0x5C],
+    [0x57, 0x57, 0x57],
+    [0x26, 0x26, 0x26],
+    [0x40, 0x29, 0x13],
+    [0x40, 0x40, 0x23],
+    [0x0E, 0x39, 0x0E],
+    [0x17, 0x39, 0x39],
+    [0x11, 0x11, 0x39],
+    [0x2E, 0x17, 0x39],
+    [0xFF, 0xFF, 0xFF],
 ];
 
 /// Which setting the dialog is editing. Kept as data so the dialog itself does
@@ -280,11 +280,15 @@ impl ColorPicker {
 
             ui.add_space(16.0);
 
-            // ---- right: HSV field + numbers ------------------------------
+            // ---- right: HSV field + vertical hue bar + numbers -----------
             ui.vertical(|ui| {
-                self.sv_field(ui, p);
-                ui.add_space(6.0);
-                self.hue_strip(ui, p);
+                ui.horizontal(|ui| {
+                    self.sv_field(ui, p);
+                    ui.add_space(8.0);
+                    // Windows places the hue strip vertically to the right of
+                    // the field, spanning the same height.
+                    self.hue_strip_vertical(ui, p);
+                });
                 ui.add_space(10.0);
 
                 // Numbers, Windows style: two columns of label + spin box.
@@ -465,7 +469,7 @@ impl ColorPicker {
 
     /// Saturation/value square with the hue applied.
     fn sv_field(&mut self, ui: &mut egui::Ui, p: &Palette) {
-        let size = Vec2::new(190.0, 150.0);
+        let size = Vec2::new(240.0, 170.0);
         let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
         let response = response.on_hover_cursor(egui::CursorIcon::Crosshair);
         if response.dragged() || response.clicked() {
@@ -530,10 +534,11 @@ impl ColorPicker {
             .circle_stroke(knob, 6.5, Stroke::new(1.0, Color32::from_black_alpha(120)));
     }
 
-    fn hue_strip(&mut self, ui: &mut egui::Ui, p: &Palette) {
+    /// Vertical hue bar (Windows style), right of the SV field.
+    fn hue_strip_vertical(&mut self, ui: &mut egui::Ui, p: &Palette) {
         let (rect, response) =
-            ui.allocate_exact_size(Vec2::new(190.0, 16.0), Sense::click_and_drag());
-        let response = response.on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+            ui.allocate_exact_size(Vec2::new(16.0, 170.0), Sense::click_and_drag());
+        let response = response.on_hover_cursor(egui::CursorIcon::ResizeVertical);
         if response.dragged() || response.clicked() {
             self.dragging = Some(Drag::Hue);
         }
@@ -545,35 +550,34 @@ impl ColorPicker {
         if self.dragging == Some(Drag::Hue) {
             if let Some(pos) = ui.ctx().pointer_interact_pos() {
                 self.h =
-                    (((pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0) * 360.0).min(359.9);
+                    (((pos.y - rect.top()) / rect.height()).clamp(0.0, 1.0) * 360.0).min(359.9);
             }
         }
-
         const STEPS: usize = 12;
         let mut mesh = egui::Mesh::default();
         for i in 0..STEPS {
             let h0 = i as f32 / STEPS as f32 * 360.0;
             let h1 = (i + 1) as f32 / STEPS as f32 * 360.0;
-            let x0 = rect.left() + rect.width() * i as f32 / STEPS as f32;
-            let x1 = rect.left() + rect.width() * (i + 1) as f32 / STEPS as f32;
+            let y0 = rect.top() + rect.height() * i as f32 / STEPS as f32;
+            let y1 = rect.top() + rect.height() * (i + 1) as f32 / STEPS as f32;
             let c0 = hsv_to_rgb(h0, 1.0, 1.0);
             let c1 = hsv_to_rgb(h1.min(359.9), 1.0, 1.0);
             let base = mesh.vertices.len() as u32;
             mesh.colored_vertex(
-                Pos2::new(x0, rect.top()),
+                Pos2::new(rect.left(), y0),
                 Color32::from_rgb(c0[0], c0[1], c0[2]),
             );
             mesh.colored_vertex(
-                Pos2::new(x1, rect.top()),
-                Color32::from_rgb(c1[0], c1[1], c1[2]),
-            );
-            mesh.colored_vertex(
-                Pos2::new(x1, rect.bottom()),
-                Color32::from_rgb(c1[0], c1[1], c1[2]),
-            );
-            mesh.colored_vertex(
-                Pos2::new(x0, rect.bottom()),
+                Pos2::new(rect.right(), y0),
                 Color32::from_rgb(c0[0], c0[1], c0[2]),
+            );
+            mesh.colored_vertex(
+                Pos2::new(rect.right(), y1),
+                Color32::from_rgb(c1[0], c1[1], c1[2]),
+            );
+            mesh.colored_vertex(
+                Pos2::new(rect.left(), y1),
+                Color32::from_rgb(c1[0], c1[1], c1[2]),
             );
             mesh.add_triangle(base, base + 1, base + 2);
             mesh.add_triangle(base, base + 2, base + 3);
@@ -585,23 +589,23 @@ impl ColorPicker {
             Stroke::new(1.0, p.stroke_strong),
             StrokeKind::Inside,
         );
-
-        let x = rect.left() + (self.h / 360.0) * rect.width();
-        let marker = Rect::from_center_size(
-            Pos2::new(x, rect.center().y),
-            Vec2::new(4.0, rect.height() + 4.0),
-        );
-        ui.painter().rect_stroke(
-            marker,
-            1.0,
+        // Hue knob: a small caret on the right edge.
+        let ky = rect.top() + (self.h / 360.0) * rect.height();
+        let tip = Pos2::new(rect.right() + 5.0, ky);
+        ui.painter().line_segment(
+            [tip, Pos2::new(rect.right() + 1.0, ky - 4.0)],
             Stroke::new(1.5, Color32::WHITE),
-            StrokeKind::Outside,
         );
-        ui.painter().rect_stroke(
-            marker,
-            1.0,
-            Stroke::new(1.0, Color32::from_black_alpha(140)),
-            StrokeKind::Inside,
+        ui.painter().line_segment(
+            [tip, Pos2::new(rect.right() + 1.0, ky + 4.0)],
+            Stroke::new(1.5, Color32::WHITE),
+        );
+        ui.painter().line_segment(
+            [
+                Pos2::new(rect.right() + 1.0, ky - 4.0),
+                Pos2::new(rect.right() + 1.0, ky + 4.0),
+            ],
+            Stroke::new(1.5, Color32::WHITE),
         );
     }
 

@@ -727,7 +727,7 @@ impl Default for Config {
             clipboard_mode: ClipboardMode::Image,
             gif_fps: 12,
             record_max_seconds: 0,
-            record_countdown: 0,
+            record_countdown: 3,
             record_audio: false,
             audio_device: String::new(),
             voice_seconds: 10,
