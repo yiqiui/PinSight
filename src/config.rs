@@ -226,6 +226,10 @@ pub struct Config {
     /// recorder still stops after an hour so a forgotten session cannot fill
     /// the disk).
     pub record_max_seconds: u32,
+    /// Countdown before a recording starts, in seconds (0/3/5). Lets the user
+    /// position the mouse or focus a window before frame 0 lands.
+    #[serde(default)]
+    pub record_countdown: u32,
     /// Record desktop/microphone audio together with the screen capture.
     /// Requires `ffmpeg` (the recorder already shells out to it for MP4).
     pub record_audio: bool,
@@ -659,6 +663,13 @@ pub struct Hotkeys {
     pub long_capture: String,
     pub record: String,
     pub save_last: String,
+    /// Show or hide every open pin (Snipaste-style F3 toggle).
+    #[serde(default = "default_toggle_pins_hotkey")]
+    pub toggle_pins: String,
+}
+
+fn default_toggle_pins_hotkey() -> String {
+    "Ctrl+Shift+H".into()
 }
 
 impl Hotkeys {
@@ -672,11 +683,12 @@ impl Hotkeys {
             Action::LongCapture => &self.long_capture,
             Action::Record => &self.record,
             Action::SaveLast => &self.save_last,
+            Action::TogglePins => &self.toggle_pins,
         }
     }
 
     /// Every binding in settings-row order, for conflict checks.
-    pub fn all(&self) -> [&str; 6] {
+    pub fn all(&self) -> [&str; 7] {
         [
             &self.capture_area,
             &self.capture_full,
@@ -684,6 +696,7 @@ impl Hotkeys {
             &self.long_capture,
             &self.record,
             &self.save_last,
+            &self.toggle_pins,
         ]
     }
 }
@@ -699,6 +712,7 @@ impl Default for Config {
             clipboard_mode: ClipboardMode::Image,
             gif_fps: 12,
             record_max_seconds: 0,
+            record_countdown: 0,
             record_audio: false,
             audio_device: String::new(),
             voice_seconds: 10,
@@ -804,6 +818,7 @@ impl Default for Hotkeys {
             long_capture: "Ctrl+Shift+L".into(),
             record: "Ctrl+Shift+R".into(),
             save_last: "Ctrl+Shift+S".into(),
+            toggle_pins: default_toggle_pins_hotkey(),
         }
     }
 }

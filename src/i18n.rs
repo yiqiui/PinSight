@@ -335,6 +335,7 @@ strings! {
     hk_long_capture { en: "Scroll capture", zh: "长截图", tw: "長截圖", ja: "スクロール撮影", ko: "스크롤 캡처", fr: "Capture défilante", de: "Scroll-Aufnahme" }
     hk_record { en: "Record / stop", zh: "录屏 / 停止", tw: "錄影 / 停止", ja: "録画 / 停止", ko: "녹화 / 중지", fr: "Enregistrer / arrêter", de: "Aufzeichnen / Stopp" }
     hk_save_last { en: "Save last", zh: "保存最近", tw: "儲存最近", ja: "直前を保存", ko: "최근 저장", fr: "Enregistrer la dernière", de: "Letzte sichern" }
+    hk_toggle_pins { en: "Show / hide pins", zh: "显示 / 隐藏贴图", tw: "顯示 / 隱藏貼圖", ja: "ピン表示切替", ko: "핀 표시 전환", fr: "Afficher / masquer les épingles", de: "Pins ein-/ausblenden" }
     version { en: "Version", zh: "版本", tw: "版本", ja: "バージョン", ko: "버전", fr: "Version", de: "Version" }
     mcp_status { en: "MCP server", zh: "MCP 服务", tw: "MCP 服務", ja: "MCP サーバー", ko: "MCP 서버", fr: "Serveur MCP", de: "MCP-Server" }
     mcp_desc_on { en: "Listening on stdio — AI clients can drive PinSight.", zh: "正在 stdio 上监听，AI 客户端可调用 PinSight。", tw: "正在 stdio 上監聽，AI 用戶端可呼叫 PinSight。", ja: "stdio で待機中。AI クライアントから操作できます。", ko: "stdio에서 대기 중. AI 클라이언트가 PinSight를 제어할 수 있습니다.", fr: "En écoute sur stdio — les clients IA peuvent piloter PinSight.", de: "Lauscht auf stdio — KI-Clients können PinSight steuern." }
@@ -385,6 +386,8 @@ strings! {
     rec_audio_hint { en: "Needs ffmpeg. Blank = default device (Windows auto-detects).", zh: "需要 ffmpeg。留空用默认设备（Windows 自动检测）。", tw: "需要 ffmpeg。留空用預設裝置（Windows 自動偵測）。", ja: "ffmpeg が必要。空欄は既定デバイス（Windows 自動検出）。", ko: "ffmpeg 필요. 비우면 기본 장치(Windows 자동 감지).", fr: "Nécessite ffmpeg. Vide = périphérique par défaut (détection auto Windows).", de: "Benötigt ffmpeg. Leer = Standardgerät (Windows automatisch)." }
     rec_unlimited { en: "Unlimited", zh: "不限", tw: "不限", ja: "無制限", ko: "제한 없음", fr: "Illimité", de: "Unbegrenzt" }
     rec_hud_recording { en: "Recording", zh: "录制中", tw: "錄製中", ja: "録画中", ko: "녹화 중", fr: "Enregistrement", de: "Aufnahme" }
+    rec_countdown { en: "Starting in {n}s", zh: "{n} 秒后开始录制", tw: "{n} 秒後開始錄製", ja: "{n} 秒後に録画開始", ko: "{n}초 후 녹화 시작", fr: "Départ dans {n} s", de: "Start in {n} s" }
+    rec_countdown_label { en: "Countdown", zh: "录制倒计时", tw: "錄製倒數", ja: "録画カウントダウン", ko: "녹화 카운트다운", fr: "Compte à rebours", de: "Countdown" }
     rec_hud_paused { en: "Paused", zh: "已暂停", tw: "已暫停", ja: "一時停止", ko: "일시 정지", fr: "En pause", de: "Pausiert" }
     rec_hud_pause { en: "Pause", zh: "暂停", tw: "暫停", ja: "一時停止", ko: "일시 정지", fr: "Pause", de: "Pause" }
     rec_hud_resume { en: "Resume", zh: "继续", tw: "繼續", ja: "再開", ko: "재개", fr: "Reprendre", de: "Fortsetzen" }

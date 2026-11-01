@@ -18,6 +18,8 @@ pub enum Action {
     LongCapture,
     Record,
     SaveLast,
+    /// Show or hide every open pin (the Snipaste-style F3 toggle).
+    TogglePins,
 }
 
 /// Why a binding could not be installed. The UI turns these into localised
@@ -104,6 +106,7 @@ impl Hotkeys {
             (&config.long_capture, Action::LongCapture),
             (&config.record, Action::Record),
             (&config.save_last, Action::SaveLast),
+            (&config.toggle_pins, Action::TogglePins),
         ];
 
         for (text, action) in specs {

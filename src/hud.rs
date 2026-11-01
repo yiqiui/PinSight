@@ -107,7 +107,7 @@ fn toast_line(ui: &mut egui::Ui, palette: &Palette, toast: Option<&str>) {
 /// layer toggle. Returns the action the user picked, if any.
 pub fn show_record(
     ctx: &egui::Context,
-    job: &RecordJob,
+    job: &mut RecordJob,
     tr: &'static Strings,
     palette: &Palette,
     toast: Option<&str>,
@@ -116,13 +116,18 @@ pub fn show_record(
     // the GPU when nothing else changes.
     ctx.request_repaint_after(Duration::from_millis(500));
 
-    let elapsed = job.started.elapsed();
+    // Clock that stops while paused — the same semantics as every desktop
+    // recorder. `active_elapsed` updates the job's active-time accumulator.
+    let elapsed = job.active_elapsed();
     let paused = job.paused();
-    let time = format!(
-        "{:02}:{:02}",
-        elapsed.as_secs() / 60,
-        elapsed.as_secs() % 60
-    );
+    let secs = elapsed.as_secs();
+    let time = if secs >= 3600 {
+        format!("{}:{:02}:{:02}", secs / 3600, (secs % 3600) / 60, secs % 60)
+    } else {
+        format!("{:02}:{:02}", secs / 60, secs % 60)
+    };
+    // Pre-recording countdown replaces the state label ("starting in 3 s").
+    let countdown = job.countdown;
     let limit = job.max_seconds;
     let mut action = None;
 
@@ -153,15 +158,16 @@ pub fn show_record(
                         5.5,
                         dot.gamma_multiply(if paused { 1.0 } else { pulse }),
                     );
-                    ui.label(
-                        RichText::new(if paused {
-                            tr.rec_hud_paused
-                        } else {
-                            tr.rec_hud_recording
-                        })
-                        .size(12.5)
-                        .color(palette.text),
-                    );
+                    let status: std::borrow::Cow<'_, str> = if countdown > 0 {
+                        std::borrow::Cow::Owned(
+                            tr.rec_countdown.replace("{n}", &countdown.to_string()),
+                        )
+                    } else if paused {
+                        std::borrow::Cow::Borrowed(tr.rec_hud_paused)
+                    } else {
+                        std::borrow::Cow::Borrowed(tr.rec_hud_recording)
+                    };
+                    ui.label(RichText::new(status).size(12.5).color(palette.text));
                     ui.label(
                         RichText::new(time.clone())
                             .monospace()

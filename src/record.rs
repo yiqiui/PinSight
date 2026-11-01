@@ -17,9 +17,22 @@ use crate::capture;
 use crate::util;
 
 pub enum RecordUpdate {
-    Progress { frames: u32 },
-    Finished { path: PathBuf, frames: u32 },
+    /// Emitted once per second while the pre-recording countdown runs. The
+    /// HUD swaps its status row for "starting in N s" during this phase.
+    Countdown {
+        remaining: u32,
+    },
+    Progress {
+        frames: u32,
+    },
+    Finished {
+        path: PathBuf,
+        frames: u32,
+    },
     Failed(String),
+    /// The user stopped during the countdown: no file was written, and the
+    /// UI should just put everything back without a toast.
+    Cancelled,
 }
 
 /// Set by the low-level keyboard hook while a recording runs. A watcher thread
@@ -92,6 +105,16 @@ pub struct RecordJob {
     pub path: PathBuf,
     pub frames: u32,
     pub started: Instant,
+    /// Recorded time EXCLUDING paused spans. The HUD timer reads this, so the
+    /// clock stops while paused (as it does in every desktop recorder).
+    pub active: Duration,
+    /// Wall-clock instant of the last `active` update; not exposed.
+    pub last_tick: Instant,
+    /// Whether the job was paused at `last_tick`.
+    pub was_paused: bool,
+    /// Seconds left in the pre-recording countdown; 0 once recording. The HUD
+    /// polls this through `poll()` updates rather than reading it directly.
+    pub countdown: u32,
     /// Wall-clock seconds the recording may run; 0 means no limit.
     pub max_seconds: u32,
     /// Absolute physical rectangle being recorded — where the status pill and
@@ -123,10 +146,23 @@ impl RecordJob {
         self.pause.load(Ordering::Relaxed)
     }
 
+    /// Recorded time excluding paused spans. Call this from the UI instead of
+    /// reading `started.elapsed()` so the timer freezes while paused.
+    pub fn active_elapsed(&mut self) -> Duration {
+        let now = Instant::now();
+        if !self.was_paused {
+            self.active += now - self.last_tick;
+        }
+        self.last_tick = now;
+        self.was_paused = self.pause.load(Ordering::Relaxed);
+        self.active
+    }
+
     pub fn poll(&mut self) -> Option<RecordUpdate> {
         while let Ok(update) = self.rx.try_recv() {
             match &update {
                 RecordUpdate::Progress { frames, .. } => self.frames = *frames,
+                RecordUpdate::Countdown { remaining } => self.countdown = *remaining,
                 _ => {
                     self.done.store(true, Ordering::Relaxed);
                     return Some(update);
@@ -147,6 +183,7 @@ pub fn start(
     max_seconds: u32,
     record_audio: bool,
     audio_device: String,
+    countdown: u32,
 ) -> RecordJob {
     let stop = Arc::new(AtomicBool::new(false));
     let pause = Arc::new(AtomicBool::new(false));
@@ -204,6 +241,7 @@ pub fn start(
                 max_seconds,
                 record_audio,
                 &audio_device,
+                countdown,
             ) {
                 let _ = tx.send(RecordUpdate::Failed(err));
             }
@@ -219,6 +257,10 @@ pub fn start(
         max_seconds,
         frames: 0,
         started: Instant::now(),
+        active: Duration::ZERO,
+        last_tick: Instant::now(),
+        was_paused: false,
+        countdown: countdown.clamp(0, 10),
         region: abs_region,
         monitor: monitor_rect,
         scale,
@@ -237,7 +279,23 @@ fn run(
     max_seconds: u32,
     record_audio: bool,
     audio_device: &str,
+    countdown: u32,
 ) -> Result<(), String> {
+    // Pre-recording countdown: one update per second, abortable via stop
+    // (Esc or the pill) at any point before frame 0.
+    for remaining in (1..=countdown.clamp(0, 10)).rev() {
+        if stop.load(Ordering::Relaxed) {
+            let _ = tx.send(RecordUpdate::Cancelled);
+            return Ok(());
+        }
+        let _ = tx.send(RecordUpdate::Countdown { remaining });
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    if stop.load(Ordering::Relaxed) {
+        let _ = tx.send(RecordUpdate::Cancelled);
+        return Ok(());
+    }
+
     let _monitor = capture::find_monitor(monitor_id).map_err(|e| e.to_string())?;
     let rx = region.x.round().max(0.0) as u32;
     let ry = region.y.round().max(0.0) as u32;
@@ -270,6 +328,11 @@ fn run(
     };
     let mut frames = 0u32;
     let mut last_progress = Instant::now();
+    // Last captured frame, held so a pause can be filled with it: the MP4
+    // pipe advances at a constant frame rate, so skipping writes while paused
+    // would make the video fast-forward through the pause. Repeating the last
+    // frame keeps the timeline honest (and GIFs get a free freeze-frame).
+    let mut held: Option<image::RgbaImage> = None;
 
     // Enumerate monitors once. `Monitor::all()` is expensive; calling it every
     // frame (15–30×/s) starved the compositor and made the live cursor stutter
@@ -286,8 +349,21 @@ fn run(
             break;
         }
         // Paused: idle in small steps so Stop still answers immediately.
+        let mut paused_this_pause = false;
         while pause.load(Ordering::Relaxed) && !stop.load(Ordering::Relaxed) {
+            paused_this_pause = true;
             std::thread::sleep(Duration::from_millis(60));
+        }
+        // Back from a pause: top the stream up with the held frame so the
+        // encoded timeline matches wall-clock time.
+        if paused_this_pause {
+            if let Some(held_frame) = &held {
+                let owed = frames_owed(start.elapsed(), frames, fps);
+                for _ in 0..owed {
+                    sink.write(held_frame, fps)?;
+                    frames += 1;
+                }
+            }
         }
         let tick = Instant::now();
         let image = match mon.capture_region(rx, ry, rw, rh) {
@@ -300,6 +376,7 @@ fn run(
             }
         };
         sink.write(&image, fps)?;
+        held = Some(image);
         frames += 1;
 
         if last_progress.elapsed() > Duration::from_millis(400) {
@@ -321,6 +398,14 @@ fn run(
         frames,
     });
     Ok(())
+}
+
+/// Frames owed to fill a paused span so the encoded timeline stays aligned
+/// with wall-clock time. Pure helper so it can be unit-tested.
+fn frames_owed(elapsed: Duration, frames_done: u32, fps: u32) -> u32 {
+    ((elapsed.as_secs_f64() * fps as f64) as u32)
+        .saturating_sub(frames_done)
+        .min(3600 * fps.max(1))
 }
 
 enum Sink {
@@ -562,4 +647,22 @@ fn windows_default_dshow_audio_device() -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::frames_owed;
+    use std::time::Duration;
+
+    #[test]
+    fn owes_frames_for_the_paused_span() {
+        // 2 s at 10 fps with 5 frames already written → 15 owed.
+        assert_eq!(frames_owed(Duration::from_secs(2), 5, 10), 15);
+        // Nothing owed when the timeline is already ahead.
+        assert_eq!(frames_owed(Duration::from_secs(1), 30, 10), 0);
+        // Sanity cap: an hour of frames at most, regardless of elapsed.
+        assert_eq!(frames_owed(Duration::from_secs(100_000), 0, 10), 3600 * 10);
+        // fps 0 encodes no frames whatever the elapsed time.
+        assert_eq!(frames_owed(Duration::from_secs(1), 0, 0), 0);
+    }
 }

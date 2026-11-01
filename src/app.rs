@@ -637,7 +637,7 @@ impl PinSightApp {
         crate::capture::set_capture_exclusion(crate::hud::RECORD_WINDOW_TITLE);
         crate::capture::set_capture_exclusion(crate::hud::LONG_WINDOW_TITLE);
 
-        if let Some(job) = self.record_job.as_ref() {
+        if let Some(job) = self.record_job.as_mut() {
             match crate::hud::show_record(ctx, job, self.tr.tr, p, Some(toast.as_str())) {
                 Some(crate::hud::RecordHudAction::Pause) => job.pause(),
                 Some(crate::hud::RecordHudAction::Resume) => job.resume(),
@@ -1043,6 +1043,7 @@ impl PinSightApp {
                     self.config.record_max_seconds,
                     self.config.record_audio,
                     self.config.audio_device.clone(),
+                    self.config.record_countdown,
                 );
                 let path = job.path.display().to_string();
                 self.record_job = Some(job);
@@ -1143,9 +1144,16 @@ impl PinSightApp {
                     self.restore_root(ctx);
                     self.toast(format!("{}: {err}", self.tr.tr.save_failed), true)
                 }
+                Some(RecordUpdate::Cancelled) => {
+                    self.restore_root(ctx);
+                }
                 Some(RecordUpdate::Progress { .. }) => {
                     self.record_job = Some(job);
                     ctx.request_repaint_after(Duration::from_millis(250));
+                }
+                Some(RecordUpdate::Countdown { .. }) => {
+                    self.record_job = Some(job);
+                    ctx.request_repaint_after(Duration::from_millis(200));
                 }
                 None => {
                     self.record_job = Some(job);
@@ -1184,6 +1192,7 @@ impl PinSightApp {
                     }
                 }
                 Action::SaveLast => self.save_last(),
+                Action::TogglePins => self.toggle_all_pins(),
             }
             ctx.request_repaint();
         }
@@ -2670,6 +2679,7 @@ impl PinSightApp {
                     self.config.record_max_seconds,
                     self.config.record_audio,
                     self.config.audio_device.clone(),
+                    self.config.record_countdown,
                 );
                 let path = job.path.clone();
                 self.record_job = Some(job);
@@ -3424,7 +3434,7 @@ impl PinSightApp {
 
         // ---- groups -------------------------------------------------------
         // Renaming takes over the row so the user can type in place.
-        if let Some((editing, draft)) = self.group_rename.clone() {
+        if let Some((editing, mut draft)) = self.group_rename.clone() {
             ui::field_row(ui, p, t.pin_group_rename, |ui| {
                 if ui::link_button(ui, p, Icon::Check, t.ok).clicked() {
                     self.rename_group(editing, draft.clone());
@@ -3434,13 +3444,18 @@ impl PinSightApp {
                     self.group_rename = None;
                 }
                 let response = ui.add(
-                    egui::TextEdit::singleline(&mut self.group_rename.as_mut().unwrap().1)
+                    egui::TextEdit::singleline(&mut draft)
                         .hint_text(t.pin_group_name_hint)
                         .desired_width(200.0),
                 );
                 if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                     self.rename_group(editing, draft.clone());
                     self.group_rename = None;
+                }
+                // Keep the in-progress text across frames unless the rename
+                // finished above (then the branch is left with None set).
+                if self.group_rename.is_some() {
+                    self.group_rename = Some((editing, draft));
                 }
             });
         } else {
@@ -4509,6 +4524,26 @@ impl PinSightApp {
                     t.rec_unlimited.to_string()
                 } else {
                     util::fmt_seconds(self.config.record_max_seconds)
+                };
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(text)
+                        .monospace()
+                        .size(11.0)
+                        .color(p.text_weak),
+                );
+            });
+            ui::field_row(ui, p, t.rec_countdown_label, |ui| {
+                let mut value = self.config.record_countdown as f32;
+                // 0 = off; 3 and 5 are the values every other recorder offers.
+                if ui::slider(ui, p, &mut value, 0.0..=10.0, 0, " s").changed() {
+                    self.config.record_countdown = value.round() as u32;
+                    let _ = self.config.save();
+                }
+                let text = if self.config.record_countdown == 0 {
+                    t.rec_unlimited.to_string()
+                } else {
+                    format!("{} s", self.config.record_countdown)
                 };
                 ui.add_space(4.0);
                 ui.label(
@@ -5814,14 +5849,16 @@ impl PinSightApp {
                 self.hotkeys.failure_for(Action::LongCapture),
                 self.hotkeys.failure_for(Action::Record),
                 self.hotkeys.failure_for(Action::SaveLast),
+                self.hotkeys.failure_for(Action::TogglePins),
             ];
-            let fields: [(&mut String, &str); 6] = [
+            let fields: [(&mut String, &str); 7] = [
                 (&mut self.hotkey_draft.capture_area, t.hk_capture_area),
                 (&mut self.hotkey_draft.capture_full, t.hk_capture_full),
                 (&mut self.hotkey_draft.pin_clipboard, t.hk_pin_clipboard),
                 (&mut self.hotkey_draft.long_capture, t.hk_long_capture),
                 (&mut self.hotkey_draft.record, t.hk_record),
                 (&mut self.hotkey_draft.save_last, t.hk_save_last),
+                (&mut self.hotkey_draft.toggle_pins, t.hk_toggle_pins),
             ];
 
             for (i, (value, label)) in fields.into_iter().enumerate() {
