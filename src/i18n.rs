@@ -338,7 +338,10 @@ strings! {
     hk_toggle_pins { en: "Show / hide pins", zh: "显示 / 隐藏贴图", tw: "顯示 / 隱藏貼圖", ja: "ピン表示切替", ko: "핀 표시 전환", fr: "Afficher / masquer les épingles", de: "Pins ein-/ausblenden" }
     hk_repeat_capture { en: "Repeat last area", zh: "重复上次区域", tw: "重複上次區域", ja: "前回の範囲を再取得", ko: "마지막 영역 반복", fr: "Répéter la dernière zone", de: "Letzten Bereich wiederholen" }
     hk_group_hotkey { en: "Group hotkey", zh: "分组热键", tw: "分組熱鍵", ja: "グループ ホットキー", ko: "그룹 단축키", fr: "Raccourci du groupe", de: "Gruppen-Kürzel" }
-    hk_group_hotkey_hint { en: "e.g. Ctrl+Shift+1 (empty = off)", zh: "如 Ctrl+Shift+1（留空关闭）", tw: "如 Ctrl+Shift+1（留空關閉）", ja: "例: Ctrl+Shift+1（空欄で無効）", ko: "예: Ctrl+Shift+1 (빈 칸 = 끄기)", fr: "ex. Ctrl+Shift+1 (vide = désactivé)", de: "z. B. Strg+Umschalt+1 (leer = aus)" }
+    tray_repeat_last { en: "Repeat last area", zh: "重复上次区域", tw: "重複上次區域", ja: "前回の範囲を再取得", ko: "마지막 영역 반복", fr: "Répéter la dernière zone", de: "Letzten Bereich wiederholen" }
+    tray_repeat_copy { en: "Copy", zh: "复制", tw: "複製", ja: "コピー", ko: "복사", fr: "Copier", de: "Kopieren" }
+    tray_repeat_save { en: "Save to file", zh: "保存到文件", tw: "儲存到檔案", ja: "ファイルに保存", ko: "파일로 저장", fr: "Enregistrer", de: "Speichern" }
+    tray_repeat_pin { en: "Pin to screen", zh: "贴到屏幕", tw: "貼到螢幕", ja: "画面にピン留め", ko: "화면에 고정", fr: "Épingler", de: "Anheften" }
     version { en: "Version", zh: "版本", tw: "版本", ja: "バージョン", ko: "버전", fr: "Version", de: "Version" }
     mcp_status { en: "MCP server", zh: "MCP 服务", tw: "MCP 服務", ja: "MCP サーバー", ko: "MCP 서버", fr: "Serveur MCP", de: "MCP-Server" }
     mcp_desc_on { en: "Listening on stdio — AI clients can drive PinSight.", zh: "正在 stdio 上监听，AI 客户端可调用 PinSight。", tw: "正在 stdio 上監聽，AI 用戶端可呼叫 PinSight。", ja: "stdio で待機中。AI クライアントから操作できます。", ko: "stdio에서 대기 중. AI 클라이언트가 PinSight를 제어할 수 있습니다.", fr: "En écoute sur stdio — les clients IA peuvent piloter PinSight.", de: "Lauscht auf stdio — KI-Clients können PinSight steuern." }

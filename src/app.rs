@@ -52,9 +52,27 @@ struct Toast {
 enum AreaJob {
     Overlay(Intent),
     FullCopy,
-    /// Grab the last overlay selection again, straight to the clipboard —
-    /// no re-selecting (Snipaste's "repeat last area").
-    Repeat,
+    /// Grab the last overlay selection again, without re-selecting
+    /// (Snipaste's "repeat last area"). The payload decides what happens
+    /// to the new frame.
+    Repeat(RepeatAction),
+}
+
+/// Which hotkey slot the recorder writes into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HotkeyTarget {
+    /// A row in the main hotkey table (index into the settings fields).
+    Main(usize),
+    /// The hotkey of the pin group with this id.
+    Group(u32),
+}
+
+/// What to do with the frame produced by [`AreaJob::Repeat`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RepeatAction {
+    Copy,
+    Save,
+    Pin,
 }
 
 struct PendingArea {
@@ -109,6 +127,8 @@ pub(crate) enum TrayCommand {
     RestorePin,
     /// Drop the capture history.
     ClearHistory,
+    /// Re-grab the last selection and copy/save/pin it.
+    RepeatLast(RepeatAction),
     /// Temporarily release every global hotkey.
     ToggleHotkeys,
     /// Open the releases page in the browser.
@@ -260,7 +280,8 @@ pub struct PinSightApp {
     background: Option<Background>,
     settings_tab: SettingsTab,
     /// Index of the hotkey row currently recording a combination, if any.
-    recording_hotkey: Option<usize>,
+    /// Which hotkey slot the recorder is armed for, if any.
+    recording_hotkey: Option<HotkeyTarget>,
     /// Set while the tray menu is open so the click that dismisses it does not
     /// also fall through to the UI.
     tray_rx: Option<Receiver<TrayCommand>>,
@@ -737,15 +758,16 @@ impl PinSightApp {
         self.start_pending(AreaJob::FullCopy, ctx);
     }
 
-    /// Re-grab the last overlay selection straight to the clipboard. Falls
-    /// back to a normal region capture when nothing has been selected yet.
-    fn repeat_capture(&mut self, ctx: &egui::Context) {
+    /// Re-grab the last overlay selection and apply `action` to the frame.
+    /// Falls back to a normal region capture when nothing has been selected
+    /// yet (then only copy makes sense, which the fallback does anyway).
+    fn repeat_capture(&mut self, action: RepeatAction, ctx: &egui::Context) {
         if self.busy_with_capture() {
             self.toast(self.tr.tr.capture_in_progress, true);
             return;
         }
         if self.last_region.is_some() {
-            self.start_pending(AreaJob::Repeat, ctx);
+            self.start_pending(AreaJob::Repeat(action), ctx);
         } else {
             self.begin_area(Intent::Copy, ctx);
         }
@@ -881,7 +903,7 @@ impl PinSightApp {
                         }
                     }
                 }
-                AreaJob::Repeat => {
+                AreaJob::Repeat(action) => {
                     let Some((monitor_id, rect)) = self.last_region else {
                         self.restore_root(ctx);
                         return;
@@ -898,19 +920,50 @@ impl PinSightApp {
                     self.restore_root(ctx);
                     match result {
                         Ok(image) => {
-                            let image = Arc::new(image);
-                            match copy_to_clipboard(&self.config, &image) {
-                                Ok(()) => {
-                                    if self.config.clipboard_mode != config::ClipboardMode::Disabled
-                                    {
-                                        self.toast(self.tr.tr.copied, false);
+                            self.last_capture_at = Some(Instant::now());
+                            self.last_image = Some(Arc::new(image.clone()));
+                            match action {
+                                RepeatAction::Copy => {
+                                    let image = Arc::new(image);
+                                    match copy_to_clipboard(&self.config, &image) {
+                                        Ok(()) => {
+                                            if self.config.clipboard_mode
+                                                != config::ClipboardMode::Disabled
+                                            {
+                                                self.toast(self.tr.tr.copied, false);
+                                            }
+                                        }
+                                        Err(err) => self.toast(
+                                            format!("{}: {err}", self.tr.tr.clipboard_error),
+                                            true,
+                                        ),
                                     }
                                 }
-                                Err(err) => self
-                                    .toast(format!("{}: {err}", self.tr.tr.clipboard_error), true),
+                                RepeatAction::Save => match util::save_image(
+                                    &image,
+                                    &self.config.save_dir,
+                                    &self.save_options(),
+                                ) {
+                                    Ok(path) => {
+                                        self.last_saved = Some(path.clone());
+                                        if self.config.capture_sound_save {
+                                            util::play_notification(
+                                                self.config.sound_file.as_deref(),
+                                            );
+                                        }
+                                        self.toast(
+                                            format!("{}: {}", self.tr.tr.saved, path.display()),
+                                            false,
+                                        );
+                                    }
+                                    Err(err) => self
+                                        .toast(format!("{}: {err}", self.tr.tr.save_failed), true),
+                                },
+                                RepeatAction::Pin => {
+                                    self.add_pin(image);
+                                    self.toast(self.tr.tr.clipboard_pinned, false);
+                                }
                             }
-                            self.last_capture_at = Some(Instant::now());
-                            self.last_image = Some(image);
                         }
                         Err(err) => {
                             self.toast(format!("{}: {err}", self.tr.tr.capture_failed), true)
@@ -1250,7 +1303,7 @@ impl PinSightApp {
                 }
                 Action::SaveLast => self.save_last(),
                 Action::TogglePins => self.toggle_all_pins(),
-                Action::RepeatCapture => self.repeat_capture(ctx),
+                Action::RepeatCapture => self.repeat_capture(RepeatAction::Copy, ctx),
                 Action::ToggleGroup(id) => self.toggle_group(id),
             }
             ctx.request_repaint();
@@ -2327,6 +2380,27 @@ impl PinSightApp {
                 label: row(t.tray_long_capture, &hk.long_capture),
                 command: TrayCommand::LongCapture,
             },
+            TrayItem::Submenu {
+                id: 30,
+                label: t.tray_repeat_last.to_string(),
+                items: vec![
+                    TrayItem::Command {
+                        id: 31,
+                        label: t.tray_repeat_copy.to_string(),
+                        command: TrayCommand::RepeatLast(RepeatAction::Copy),
+                    },
+                    TrayItem::Command {
+                        id: 32,
+                        label: t.tray_repeat_save.to_string(),
+                        command: TrayCommand::RepeatLast(RepeatAction::Save),
+                    },
+                    TrayItem::Command {
+                        id: 33,
+                        label: t.tray_repeat_pin.to_string(),
+                        command: TrayCommand::RepeatLast(RepeatAction::Pin),
+                    },
+                ],
+            },
             TrayItem::Command {
                 id: 5,
                 label: row(t.tray_record, &hk.record),
@@ -2481,6 +2555,7 @@ impl PinSightApp {
                     }
                 }
                 TrayCommand::SaveLast => self.save_last(),
+                TrayCommand::RepeatLast(action) => self.repeat_capture(action, ctx),
                 TrayCommand::TogglePins => self.toggle_all_pins(),
                 TrayCommand::FocusPin(id) => {
                     if let Some(pin) = self.pins.iter().find(|p| p.id == id) {
@@ -3629,35 +3704,66 @@ impl PinSightApp {
                 }
             });
             ui.add_space(2.0);
-            // Per-group global hotkey: type a combination like Ctrl+Shift+1;
-            // empty = unbound. Applied on focus loss.
+            // Per-group global hotkey with the same click-to-record UX as the
+            // main table: press Record, then the combination (Esc cancels).
             ui::field_row(ui, p, t.hk_group_hotkey, |ui| {
-                let mut current = self
+                let target = HotkeyTarget::Group(self.active_group);
+                let current = self
                     .config
                     .pin_groups
                     .iter()
                     .find(|g| g.id == self.active_group)
                     .map(|g| g.hotkey.clone())
                     .unwrap_or_default();
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut current)
-                        .hint_text(t.hk_group_hotkey_hint)
-                        .desired_width(200.0),
-                );
-                if response.lost_focus() {
-                    let trimmed = current.trim().to_string();
+                let recording = self.recording_hotkey == Some(target);
+                if recording {
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(150.0, 22.0), egui::Sense::click());
+                    ui.painter().rect_filled(rect, 6.0, p.accent_soft);
+                    ui.painter().rect_stroke(
+                        rect,
+                        6.0,
+                        egui::Stroke::new(1.5, p.accent),
+                        egui::StrokeKind::Inside,
+                    );
+                    let galley = ui.painter().layout_no_wrap(
+                        t.hk_press_prompt.to_owned(),
+                        egui::FontId::proportional(11.0),
+                        p.accent,
+                    );
+                    ui.painter().galley(
+                        egui::pos2(
+                            rect.center().x - galley.size().x * 0.5,
+                            rect.center().y - galley.size().y * 0.5,
+                        ),
+                        galley,
+                        p.accent,
+                    );
+                } else {
+                    let mut shown = current.clone();
+                    ui.add(
+                        egui::TextEdit::singleline(&mut shown)
+                            .desired_width(140.0)
+                            .font(egui::TextStyle::Monospace),
+                    );
+                }
+                ui.add_space(4.0);
+                if ui::link_button(ui, p, Icon::Keyboard, t.hk_press).clicked() {
+                    self.recording_hotkey = Some(target);
+                }
+                if !current.is_empty()
+                    && ui::link_button(ui, p, Icon::Close, t.key_cancel).clicked()
+                {
                     if let Some(group) = self
                         .config
                         .pin_groups
                         .iter_mut()
                         .find(|g| g.id == self.active_group)
                     {
-                        if group.hotkey != trimmed {
-                            group.hotkey = trimmed;
-                            let _ = self.config.save();
-                            self.apply_hotkey_state();
-                        }
+                        group.hotkey.clear();
                     }
+                    let _ = self.config.save();
+                    self.apply_hotkey_state();
                 }
             });
             ui.add_space(2.0);
@@ -6000,7 +6106,7 @@ impl PinSightApp {
 
             for (i, (value, label)) in fields.into_iter().enumerate() {
                 let failure = status[i];
-                let recording = self.recording_hotkey == Some(i);
+                let recording = self.recording_hotkey == Some(HotkeyTarget::Main(i));
                 ui::field_row(ui, p, label, |ui| {
                     if recording {
                         // Show a live highlight instead of the field so the
@@ -6049,7 +6155,7 @@ impl PinSightApp {
 
                     let record = ui::link_button(ui, p, Icon::Keyboard, t.hk_press);
                     if record.clicked() {
-                        self.recording_hotkey = Some(i);
+                        self.recording_hotkey = Some(HotkeyTarget::Main(i));
                     }
 
                     if let Some(kind) = failure {
@@ -6090,15 +6196,15 @@ impl PinSightApp {
 
             // Recording is handled here, after the widgets, so the press that
             // armed it is not read back as the new combination.
-            if let Some(index) = self.recording_hotkey {
-                self.capture_hotkey(ui, index);
+            if let Some(target) = self.recording_hotkey {
+                self.capture_hotkey(ui, target);
             }
             let _ = ctx;
         });
     }
 
     /// Read one key press and store it as the draft binding for `index`.
-    fn capture_hotkey(&mut self, ui: &egui::Ui, index: usize) {
+    fn capture_hotkey(&mut self, ui: &egui::Ui, target: HotkeyTarget) {
         /// What the recorder saw: nothing, a cancelled session, a key with no
         /// modifier (a mistake worth explaining), or a usable binding.
         enum Outcome {
@@ -6150,37 +6256,64 @@ impl PinSightApp {
         // Refuse a combination another action already owns: both would be
         // registered, the second would fail, and the settings page would show
         // a phantom "already in use" conflict.
-        let duplicate = self
-            .hotkey_draft
-            .all()
-            .iter()
-            .enumerate()
-            .any(|(i, binding)| i != index && binding.eq_ignore_ascii_case(&text));
+        let duplicate = match target {
+            HotkeyTarget::Main(index) => self
+                .hotkey_draft
+                .all()
+                .iter()
+                .enumerate()
+                .any(|(i, binding)| i != index && binding.eq_ignore_ascii_case(&text)),
+            // A group hotkey may not collide with a main binding either.
+            HotkeyTarget::Group(_) => self
+                .hotkey_draft
+                .all()
+                .iter()
+                .any(|binding| binding.eq_ignore_ascii_case(&text)),
+        };
         if duplicate {
             self.toast(self.tr.tr.hk_duplicate, true);
             return;
         }
-        let field = match index {
-            0 => &mut self.hotkey_draft.capture_area,
-            1 => &mut self.hotkey_draft.capture_full,
-            2 => &mut self.hotkey_draft.pin_clipboard,
-            3 => &mut self.hotkey_draft.long_capture,
-            4 => &mut self.hotkey_draft.record,
-            _ => &mut self.hotkey_draft.save_last,
-        };
-        *field = text;
-        // Apply straight away: recording a key and then hunting for an Apply
-        // button is two steps where one is expected.
-        self.config.hotkeys = self.hotkey_draft.clone();
-        let _ = self.config.save();
-        self.hotkeys
-            .rebind(&self.config.hotkeys, &self.config.pin_groups);
-        if self.hotkeys.failures.is_empty() {
-            self.toast(self.tr.tr.hotkeys_applied, false);
-        } else {
-            let msg = self.hotkey_failure_message();
-            self.toast(msg, true);
+        match target {
+            HotkeyTarget::Main(index) => {
+                let field = match index {
+                    0 => &mut self.hotkey_draft.capture_area,
+                    1 => &mut self.hotkey_draft.capture_full,
+                    2 => &mut self.hotkey_draft.pin_clipboard,
+                    3 => &mut self.hotkey_draft.long_capture,
+                    4 => &mut self.hotkey_draft.record,
+                    _ => &mut self.hotkey_draft.save_last,
+                };
+                *field = text;
+                // Apply straight away: recording a key and then hunting for an
+                // Apply button is two steps where one is expected.
+                self.config.hotkeys = self.hotkey_draft.clone();
+                let _ = self.config.save();
+                self.hotkeys
+                    .rebind(&self.config.hotkeys, &self.config.pin_groups);
+                if self.hotkeys.failures.is_empty() {
+                    self.toast(self.tr.tr.hotkeys_applied, false);
+                } else {
+                    let msg = self.hotkey_failure_message();
+                    self.toast(msg, true);
+                }
+            }
+            HotkeyTarget::Group(id) => {
+                if let Some(group) = self.config.pin_groups.iter_mut().find(|g| g.id == id) {
+                    group.hotkey = text;
+                }
+                let _ = self.config.save();
+                self.hotkeys
+                    .rebind(&self.config.hotkeys, &self.config.pin_groups);
+                if self.hotkeys.failures.is_empty() {
+                    self.toast(self.tr.tr.hotkeys_applied, false);
+                } else {
+                    let msg = self.hotkey_failure_message();
+                    self.toast(msg, true);
+                }
+            }
         }
+        let _ = ui;
     }
 
     /// Build, version and runtime status.
