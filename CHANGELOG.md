@@ -8,6 +8,17 @@ All notable changes to PinSight are documented here. The format follows
 
 ### Added
 
+- **Recording countdown** (`record_countdown`, 0–10 s): the status pill shows
+  "starting in N s" before frame 0; stopping during the countdown cancels
+  quietly instead of raising an error toast.
+- **Pause-aware recording timer**: the HUD clock now freezes while paused
+  (it used to keep counting wall-clock time), and switches to `H:MM:SS`
+  past an hour.
+- **Pause frame backfill**: resuming after a pause repeats the last held
+  frame to fill the gap, so MP4 timelines stay aligned with wall-clock time
+  instead of fast-forwarding through the pause.
+- **Global toggle-pins hotkey** (`Ctrl+Shift+H`): a seventh action that shows
+  or hides every open pin — the Snipaste-style F3 toggle.
 - **Owl logo** (`scripts/make_owl_icon.py`): a geometry-only owl whose eyes are
   camera focus rings — amber left iris, cyan right iris. The icon set
   (`assets/icon.png`, `icon.ico`, `tray.ico`) is generated from one script.
@@ -20,6 +31,11 @@ All notable changes to PinSight are documented here. The format follows
   full light/dark palette entries and localised labels.
 - **Bilingual README**: `README_EN.md` mirrors the Chinese one; both hero
   sections cross-link via "English · 简体中文".
+
+### Fixed
+
+- The pin-group rename box could panic (`unwrap` on a slot the same frame
+  had just cleared); the draft now lives in a local variable.
 
 ### Changed
 
