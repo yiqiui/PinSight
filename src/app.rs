@@ -3569,6 +3569,10 @@ impl PinSightApp {
                     ui.add_space(28.0);
                 });
             });
+            ui.add_space(10.0);
+            // The group card must be reachable with zero pins: binding a group
+            // hotkey or renaming is exactly what happens before the first pin.
+            self.group_card(ui, p);
             return;
         }
 
@@ -3610,174 +3614,7 @@ impl PinSightApp {
             });
         });
 
-        // ---- groups -------------------------------------------------------
-        // Renaming takes over the row so the user can type in place.
-        if let Some((editing, mut draft)) = self.group_rename.clone() {
-            ui::field_row(ui, p, t.pin_group_rename, |ui| {
-                if ui::link_button(ui, p, Icon::Check, t.ok).clicked() {
-                    self.rename_group(editing, draft.clone());
-                    self.group_rename = None;
-                }
-                if ui::link_button(ui, p, Icon::Close, t.key_cancel).clicked() {
-                    self.group_rename = None;
-                }
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut draft)
-                        .hint_text(t.pin_group_name_hint)
-                        .desired_width(200.0),
-                );
-                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    self.rename_group(editing, draft.clone());
-                    self.group_rename = None;
-                }
-                // Keep the in-progress text across frames unless the rename
-                // finished above (then the branch is left with None set).
-                if self.group_rename.is_some() {
-                    self.group_rename = Some((editing, draft));
-                }
-            });
-        } else {
-            ui::field_row(ui, p, t.pin_group_move, |ui| {
-                // Right-to-left row: the action buttons come first so they end
-                // up rightmost, the selector fills the space to their left.
-                if ui::link_button(ui, p, Icon::Trash, t.pin_group_delete).clicked() {
-                    self.delete_group(self.active_group);
-                    self.toast(self.tr.tr.pin_group_deleted, false);
-                }
-                let hidden = self
-                    .config
-                    .pin_groups
-                    .iter()
-                    .find(|g| g.id == self.active_group)
-                    .map(|g| g.hidden)
-                    .unwrap_or(false);
-                if ui::link_button(
-                    ui,
-                    p,
-                    if hidden { Icon::Eye } else { Icon::EyeOff },
-                    if hidden {
-                        t.pin_group_show
-                    } else {
-                        t.pin_group_hide
-                    },
-                )
-                .clicked()
-                {
-                    self.set_group_hidden(self.active_group, !hidden);
-                }
-                if ui::link_button(ui, p, Icon::Type, t.pin_group_rename).clicked() {
-                    let name = self
-                        .config
-                        .pin_groups
-                        .iter()
-                        .find(|g| g.id == self.active_group)
-                        .map(|g| g.name.clone())
-                        .unwrap_or_default();
-                    self.group_rename = Some((self.active_group, name));
-                }
-                if ui::link_button(ui, p, Icon::Layers, t.pin_group_new).clicked() {
-                    self.create_group();
-                    self.toast(self.tr.tr.pin_group_created, false);
-                }
-
-                let mut picked = None;
-                egui::ComboBox::from_id_salt("pinsight-pin-group")
-                    .selected_text(self.group_name(self.active_group))
-                    .width(200.0)
-                    .show_ui(ui, |ui| {
-                        for group in self.config.pin_groups.clone() {
-                            let label = format!(
-                                "{} ({})",
-                                self.group_name(group.id),
-                                self.group_count(group.id)
-                            );
-                            if ui
-                                .selectable_label(group.id == self.active_group, label)
-                                .clicked()
-                            {
-                                picked = Some(group.id);
-                            }
-                        }
-                    });
-                if let Some(id) = picked {
-                    self.active_group = id;
-                }
-            });
-            ui.add_space(2.0);
-            // Per-group global hotkey with the same click-to-record UX as the
-            // main table: press Record, then the combination (Esc cancels).
-            ui::field_row(ui, p, t.hk_group_hotkey, |ui| {
-                let target = HotkeyTarget::Group(self.active_group);
-                let current = self
-                    .config
-                    .pin_groups
-                    .iter()
-                    .find(|g| g.id == self.active_group)
-                    .map(|g| g.hotkey.clone())
-                    .unwrap_or_default();
-                let recording = self.recording_hotkey == Some(target);
-                if recording {
-                    let (rect, _) =
-                        ui.allocate_exact_size(egui::vec2(150.0, 22.0), egui::Sense::click());
-                    ui.painter().rect_filled(rect, 6.0, p.accent_soft);
-                    ui.painter().rect_stroke(
-                        rect,
-                        6.0,
-                        egui::Stroke::new(1.5, p.accent),
-                        egui::StrokeKind::Inside,
-                    );
-                    let galley = ui.painter().layout_no_wrap(
-                        t.hk_press_prompt.to_owned(),
-                        egui::FontId::proportional(11.0),
-                        p.accent,
-                    );
-                    ui.painter().galley(
-                        egui::pos2(
-                            rect.center().x - galley.size().x * 0.5,
-                            rect.center().y - galley.size().y * 0.5,
-                        ),
-                        galley,
-                        p.accent,
-                    );
-                } else {
-                    let mut shown = current.clone();
-                    ui.add(
-                        egui::TextEdit::singleline(&mut shown)
-                            .desired_width(140.0)
-                            .font(egui::TextStyle::Monospace),
-                    );
-                }
-                ui.add_space(4.0);
-                if ui::link_button(ui, p, Icon::Keyboard, t.hk_press).clicked() {
-                    self.recording_hotkey = Some(target);
-                }
-                if !current.is_empty()
-                    && ui::link_button(ui, p, Icon::Close, t.key_cancel).clicked()
-                {
-                    if let Some(group) = self
-                        .config
-                        .pin_groups
-                        .iter_mut()
-                        .find(|g| g.id == self.active_group)
-                    {
-                        group.hotkey.clear();
-                    }
-                    let _ = self.config.save();
-                    self.apply_hotkey_state();
-                }
-            });
-            ui.add_space(2.0);
-            ui.label(
-                egui::RichText::new(t.pin_group_hint)
-                    .size(11.0)
-                    .color(p.text_weak),
-            );
-            ui.label(
-                egui::RichText::new(t.pin_group_active)
-                    .size(11.0)
-                    .color(p.text_weak),
-            );
-        }
+        self.group_card(ui, p);
         ui.add_space(10.0);
 
         let gap = 12.0;
@@ -6443,6 +6280,179 @@ impl PinSightApp {
         let texture = ctx.load_texture(key.to_owned(), color, egui::TextureOptions::LINEAR);
         self.textures.insert(key.to_owned(), texture.clone());
         texture
+    }
+    /// Group management card shared by the empty state and the populated
+    /// pin list, so the hotkey recorder is reachable before the first pin.
+    fn group_card(&mut self, ui: &mut egui::Ui, p: &Palette) {
+        let t = self.tr.tr;
+        // ---- groups -------------------------------------------------------
+        // Renaming takes over the row so the user can type in place.
+        if let Some((editing, mut draft)) = self.group_rename.clone() {
+            ui::field_row(ui, p, t.pin_group_rename, |ui| {
+                if ui::link_button(ui, p, Icon::Check, t.ok).clicked() {
+                    self.rename_group(editing, draft.clone());
+                    self.group_rename = None;
+                }
+                if ui::link_button(ui, p, Icon::Close, t.key_cancel).clicked() {
+                    self.group_rename = None;
+                }
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut draft)
+                        .hint_text(t.pin_group_name_hint)
+                        .desired_width(200.0),
+                );
+                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    self.rename_group(editing, draft.clone());
+                    self.group_rename = None;
+                }
+                // Keep the in-progress text across frames unless the rename
+                // finished above (then the branch is left with None set).
+                if self.group_rename.is_some() {
+                    self.group_rename = Some((editing, draft));
+                }
+            });
+        } else {
+            ui::field_row(ui, p, t.pin_group_move, |ui| {
+                // Right-to-left row: the action buttons come first so they end
+                // up rightmost, the selector fills the space to their left.
+                if ui::link_button(ui, p, Icon::Trash, t.pin_group_delete).clicked() {
+                    self.delete_group(self.active_group);
+                    self.toast(self.tr.tr.pin_group_deleted, false);
+                }
+                let hidden = self
+                    .config
+                    .pin_groups
+                    .iter()
+                    .find(|g| g.id == self.active_group)
+                    .map(|g| g.hidden)
+                    .unwrap_or(false);
+                if ui::link_button(
+                    ui,
+                    p,
+                    if hidden { Icon::Eye } else { Icon::EyeOff },
+                    if hidden {
+                        t.pin_group_show
+                    } else {
+                        t.pin_group_hide
+                    },
+                )
+                .clicked()
+                {
+                    self.set_group_hidden(self.active_group, !hidden);
+                }
+                if ui::link_button(ui, p, Icon::Type, t.pin_group_rename).clicked() {
+                    let name = self
+                        .config
+                        .pin_groups
+                        .iter()
+                        .find(|g| g.id == self.active_group)
+                        .map(|g| g.name.clone())
+                        .unwrap_or_default();
+                    self.group_rename = Some((self.active_group, name));
+                }
+                if ui::link_button(ui, p, Icon::Layers, t.pin_group_new).clicked() {
+                    self.create_group();
+                    self.toast(self.tr.tr.pin_group_created, false);
+                }
+
+                let mut picked = None;
+                egui::ComboBox::from_id_salt("pinsight-pin-group")
+                    .selected_text(self.group_name(self.active_group))
+                    .width(200.0)
+                    .show_ui(ui, |ui| {
+                        for group in self.config.pin_groups.clone() {
+                            let label = format!(
+                                "{} ({})",
+                                self.group_name(group.id),
+                                self.group_count(group.id)
+                            );
+                            if ui
+                                .selectable_label(group.id == self.active_group, label)
+                                .clicked()
+                            {
+                                picked = Some(group.id);
+                            }
+                        }
+                    });
+                if let Some(id) = picked {
+                    self.active_group = id;
+                }
+            });
+            ui.add_space(2.0);
+            // Per-group global hotkey with the same click-to-record UX as the
+            // main table: press Record, then the combination (Esc cancels).
+            ui::field_row(ui, p, t.hk_group_hotkey, |ui| {
+                let target = HotkeyTarget::Group(self.active_group);
+                let current = self
+                    .config
+                    .pin_groups
+                    .iter()
+                    .find(|g| g.id == self.active_group)
+                    .map(|g| g.hotkey.clone())
+                    .unwrap_or_default();
+                let recording = self.recording_hotkey == Some(target);
+                if recording {
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(150.0, 22.0), egui::Sense::click());
+                    ui.painter().rect_filled(rect, 6.0, p.accent_soft);
+                    ui.painter().rect_stroke(
+                        rect,
+                        6.0,
+                        egui::Stroke::new(1.5, p.accent),
+                        egui::StrokeKind::Inside,
+                    );
+                    let galley = ui.painter().layout_no_wrap(
+                        t.hk_press_prompt.to_owned(),
+                        egui::FontId::proportional(11.0),
+                        p.accent,
+                    );
+                    ui.painter().galley(
+                        egui::pos2(
+                            rect.center().x - galley.size().x * 0.5,
+                            rect.center().y - galley.size().y * 0.5,
+                        ),
+                        galley,
+                        p.accent,
+                    );
+                } else {
+                    let mut shown = current.clone();
+                    ui.add(
+                        egui::TextEdit::singleline(&mut shown)
+                            .desired_width(140.0)
+                            .font(egui::TextStyle::Monospace),
+                    );
+                }
+                ui.add_space(4.0);
+                if ui::link_button(ui, p, Icon::Keyboard, t.hk_press).clicked() {
+                    self.recording_hotkey = Some(target);
+                }
+                if !current.is_empty()
+                    && ui::link_button(ui, p, Icon::Close, t.key_cancel).clicked()
+                {
+                    if let Some(group) = self
+                        .config
+                        .pin_groups
+                        .iter_mut()
+                        .find(|g| g.id == self.active_group)
+                    {
+                        group.hotkey.clear();
+                    }
+                    let _ = self.config.save();
+                    self.apply_hotkey_state();
+                }
+            });
+            ui.add_space(2.0);
+            ui.label(
+                egui::RichText::new(t.pin_group_hint)
+                    .size(11.0)
+                    .color(p.text_weak),
+            );
+            ui.label(
+                egui::RichText::new(t.pin_group_active)
+                    .size(11.0)
+                    .color(p.text_weak),
+            );
+        }
     }
 }
 
