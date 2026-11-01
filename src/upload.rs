@@ -91,7 +91,23 @@ fn upload_http(image: &image::RgbaImage, cfg: &HttpUpload) -> Result<String> {
     };
 
     let status = resp.status();
-    let body = resp.text().context("reading the upload response body")?;
+    // The body only ever carries a link or a short JSON envelope; a hostile
+    // (or broken) server must not be able to balloon memory through it.
+    // `text()` would buffer the whole stream, so copy at most 1 MiB manually.
+    const BODY_LIMIT: usize = 1 << 20;
+    let body = {
+        use std::io::Read;
+        let reader = resp;
+        let mut buf = Vec::new();
+        reader
+            .take((BODY_LIMIT + 1) as u64)
+            .read_to_end(&mut buf)
+            .context("reading the upload response body")?;
+        if buf.len() > BODY_LIMIT {
+            anyhow::bail!("upload response body exceeds 1 MiB");
+        }
+        String::from_utf8_lossy(&buf).into_owned()
+    };
     if !status.is_success() {
         anyhow::bail!("upload failed: HTTP {status}\n{body}");
     }

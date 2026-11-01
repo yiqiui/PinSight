@@ -280,7 +280,12 @@ fn call_tool(
                 .get("monitor_id")
                 .and_then(Value::as_u64)
                 .map(|v| v as u32);
-            let fps = args.get("fps").and_then(Value::as_u64).unwrap_or(12) as u32;
+            // Schema advertises 4..=30 but a misbehaving client may not care.
+            let fps = args
+                .get("fps")
+                .and_then(Value::as_u64)
+                .unwrap_or(12)
+                .clamp(4, 30) as u32;
             let (tx, rx) = std::sync::mpsc::channel();
             ui_tx
                 .send(UiCommand::StartRecording {
@@ -307,10 +312,13 @@ fn call_tool(
         }
         "long_screenshot" => {
             let region = parse_region(args);
+            // Same reasoning as parse_region: cap a hostile client before it
+            // can ask the stitcher for a multi-gigabyte canvas.
             let max_height = args
                 .get("max_height")
                 .and_then(Value::as_u64)
-                .unwrap_or(20000) as u32;
+                .unwrap_or(20000)
+                .clamp(1000, 100_000) as u32;
             let monitor = match args.get("monitor_id").and_then(Value::as_u64) {
                 Some(id) => crate::capture::find_monitor(id as u32).map_err(|e| e.to_string())?,
                 None => crate::capture::monitor_at_cursor().map_err(|e| e.to_string())?,
@@ -411,11 +419,17 @@ fn capture(
 }
 
 fn parse_region(args: &Value) -> Option<PhysRect> {
+    // Clamp aggressively: this comes from an external MCP client over stdio,
+    // and `RgbaImage::new` with a hostile width/height would try to allocate
+    // terabytes before any sanity check could run. 16384 px per side already
+    // covers every real display; anything above is treated as bad input.
+    const MAX_SIDE: i64 = 16_384;
+    let clamp_dim = |v: u64| -> u32 { (v as i64).clamp(1, MAX_SIDE) as u32 };
     Some(PhysRect {
-        x: args.get("x")?.as_i64()? as i32,
-        y: args.get("y")?.as_i64()? as i32,
-        w: args.get("width")?.as_u64()? as u32,
-        h: args.get("height")?.as_u64()? as u32,
+        x: args.get("x")?.as_i64()?.clamp(-1_000_000, 1_000_000) as i32,
+        y: args.get("y")?.as_i64()?.clamp(-1_000_000, 1_000_000) as i32,
+        w: clamp_dim(args.get("width")?.as_u64()?),
+        h: clamp_dim(args.get("height")?.as_u64()?),
     })
 }
 

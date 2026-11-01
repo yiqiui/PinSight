@@ -30,6 +30,15 @@ pub fn load_gif(path: &Path) -> Result<Vec<GifFrame>> {
         .into_frames()
         .collect_frames()
         .context("decoding GIF frames")?;
+    // A hostile or simply enormous GIF (tens of thousands of full-HD frames)
+    // would exhaust memory before any transform runs. 4000 frames at any
+    // plausible size is far beyond interactive use.
+    if frames.len() > 4000 {
+        anyhow::bail!(
+            "GIF has {} frames; the editor accepts at most 4000",
+            frames.len()
+        );
+    }
     let mut out = Vec::with_capacity(frames.len());
     for frame in frames {
         let delay_ms = frame.delay().numer_denom_ms().0;

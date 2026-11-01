@@ -33,8 +33,10 @@ pub fn record(out: &Path, seconds: Option<u32>) -> Result<()> {
             cmd.arg("-i").arg(crate::record::audio_device_spec(&dev));
         }
     }
+    // Cap at one day: the CLI takes this from `--seconds`, and a typo
+    // ("--seconds 99999999") would otherwise keep ffmpeg recording for years.
     if let Some(sec) = seconds {
-        cmd.args(["-t", &sec.to_string()]);
+        cmd.args(["-t", &(sec.clamp(1, 86_400)).to_string()]);
     }
     // Mono 44.1 kHz WAV: small, universal, and plenty for voice memos.
     cmd.args(["-ac", "1", "-ar", "44100"]).arg(out);
