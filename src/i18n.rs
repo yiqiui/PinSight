@@ -336,6 +336,9 @@ strings! {
     hk_record { en: "Record / stop", zh: "录屏 / 停止", tw: "錄影 / 停止", ja: "録画 / 停止", ko: "녹화 / 중지", fr: "Enregistrer / arrêter", de: "Aufzeichnen / Stopp" }
     hk_save_last { en: "Save last", zh: "保存最近", tw: "儲存最近", ja: "直前を保存", ko: "최근 저장", fr: "Enregistrer la dernière", de: "Letzte sichern" }
     hk_toggle_pins { en: "Show / hide pins", zh: "显示 / 隐藏贴图", tw: "顯示 / 隱藏貼圖", ja: "ピン表示切替", ko: "핀 표시 전환", fr: "Afficher / masquer les épingles", de: "Pins ein-/ausblenden" }
+    hk_repeat_capture { en: "Repeat last area", zh: "重复上次区域", tw: "重複上次區域", ja: "前回の範囲を再取得", ko: "마지막 영역 반복", fr: "Répéter la dernière zone", de: "Letzten Bereich wiederholen" }
+    hk_group_hotkey { en: "Group hotkey", zh: "分组热键", tw: "分組熱鍵", ja: "グループ ホットキー", ko: "그룹 단축키", fr: "Raccourci du groupe", de: "Gruppen-Kürzel" }
+    hk_group_hotkey_hint { en: "e.g. Ctrl+Shift+1 (empty = off)", zh: "如 Ctrl+Shift+1（留空关闭）", tw: "如 Ctrl+Shift+1（留空關閉）", ja: "例: Ctrl+Shift+1（空欄で無効）", ko: "예: Ctrl+Shift+1 (빈 칸 = 끄기)", fr: "ex. Ctrl+Shift+1 (vide = désactivé)", de: "z. B. Strg+Umschalt+1 (leer = aus)" }
     version { en: "Version", zh: "版本", tw: "版本", ja: "バージョン", ko: "버전", fr: "Version", de: "Version" }
     mcp_status { en: "MCP server", zh: "MCP 服务", tw: "MCP 服務", ja: "MCP サーバー", ko: "MCP 서버", fr: "Serveur MCP", de: "MCP-Server" }
     mcp_desc_on { en: "Listening on stdio — AI clients can drive PinSight.", zh: "正在 stdio 上监听，AI 客户端可调用 PinSight。", tw: "正在 stdio 上監聽，AI 用戶端可呼叫 PinSight。", ja: "stdio で待機中。AI クライアントから操作できます。", ko: "stdio에서 대기 중. AI 클라이언트가 PinSight를 제어할 수 있습니다.", fr: "En écoute sur stdio — les clients IA peuvent piloter PinSight.", de: "Lauscht auf stdio — KI-Clients können PinSight steuern." }

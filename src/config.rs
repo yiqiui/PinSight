@@ -510,6 +510,9 @@ pub struct PinGroup {
     /// Hides every pin in the group at once.
     #[serde(default)]
     pub hidden: bool,
+    /// Global hotkey that toggles this group's visibility. Empty = unbound.
+    #[serde(default)]
+    pub hotkey: String,
 }
 
 /// Mouse bindings for pin windows.
@@ -666,6 +669,13 @@ pub struct Hotkeys {
     /// Show or hide every open pin (Snipaste-style F3 toggle).
     #[serde(default = "default_toggle_pins_hotkey")]
     pub toggle_pins: String,
+    /// Re-grab the last selection straight to the clipboard.
+    #[serde(default = "default_repeat_capture_hotkey")]
+    pub repeat_capture: String,
+}
+
+fn default_repeat_capture_hotkey() -> String {
+    "Ctrl+Shift+P".into()
 }
 
 fn default_toggle_pins_hotkey() -> String {
@@ -684,11 +694,15 @@ impl Hotkeys {
             Action::Record => &self.record,
             Action::SaveLast => &self.save_last,
             Action::TogglePins => &self.toggle_pins,
+            Action::RepeatCapture => &self.repeat_capture,
+            // Group hotkeys live on the groups, not here; the status readout
+            // never needs their text.
+            Action::ToggleGroup(_) => "",
         }
     }
 
     /// Every binding in settings-row order, for conflict checks.
-    pub fn all(&self) -> [&str; 7] {
+    pub fn all(&self) -> [&str; 8] {
         [
             &self.capture_area,
             &self.capture_full,
@@ -697,6 +711,7 @@ impl Hotkeys {
             &self.record,
             &self.save_last,
             &self.toggle_pins,
+            &self.repeat_capture,
         ]
     }
 }
@@ -793,6 +808,7 @@ impl Default for Config {
                 id: 1,
                 name: String::new(),
                 hidden: false,
+                hotkey: String::new(),
             }],
             hotkeys_enabled: true,
             update_on_start: true,
@@ -819,6 +835,7 @@ impl Default for Hotkeys {
             record: "Ctrl+Shift+R".into(),
             save_last: "Ctrl+Shift+S".into(),
             toggle_pins: default_toggle_pins_hotkey(),
+            repeat_capture: default_repeat_capture_hotkey(),
         }
     }
 }

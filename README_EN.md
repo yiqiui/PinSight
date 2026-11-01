@@ -65,13 +65,14 @@ PinSight is still iterating quickly: edge cases of scrolling long capture (fixed
 | Fullscreen capture | ✅ | Grabs the monitor under the cursor and copies it |
 | Annotation | ✅ | Rectangle, ellipse, arrow, pen, highlighter, mosaic, numbered steps, text; colour and stroke width adjustable, `Ctrl+Z`/`Ctrl+Y` undo/redo |
 | Pin to screen | ✅ | Native always-on-top borderless window on Windows, egui viewport elsewhere; drag, wheel zoom, `Ctrl+wheel` opacity, click-through, middle/Esc to close; a **context menu** offers copy / save as / zoom presets / topmost / click-through / close / destroy |
+| Pin groups | ✅ | Group management (create/rename/delete/hide as a whole), each group can bind its **own global hotkey** to toggle visibility; plus a global show/hide toggle |
 | Pin from clipboard | ✅ | Pin whatever image is on the clipboard in one keystroke |
 | Long capture | 🧪 | Automatic scrolling + frame stitching after selection; best on static pages without sticky headers |
 | Screen recording | ✅ | Frame-by-frame capture of a region; MP4 when `ffmpeg` is installed, GIF otherwise |
 | Offline OCR | ✅ | Windows uses the built-in `Windows.Media.Ocr`, macOS uses Vision, Linux uses Tesseract; one-click region OCR in the toolbar; CLI `pinsight shot --ocr` for full screen |
 | Image upload | ✅ | Toolbar upload button + CLI `--upload`; defaults to a local backend writing into `<save dir>/uploaded/`, switchable to HTTP (POST/PUT, form or JSON responses) |
 | Voice notes | 🧪 | Record screen notes with an audio track; click-to-play not closed yet (audio playback library pending) |
-| Global hotkeys | ✅ | All 7 actions can be re-recorded in the settings window (press Record, then the combo; Esc cancels), effective instantly; conflicts are flagged in red with the reason |
+| Global hotkeys | ✅ | All 8 actions can be re-recorded in the settings window (press Record, then the combo; Esc cancels), effective instantly; conflicts are flagged in red with the reason |
 | Command line | ✅ | Headless subcommands (scrot/maim style): `shot` capture, `pdf` bundle PDF, `gif` edit animated GIFs, `voice` voice notes — see below |
 | Single instance | ✅ | Launching twice wakes the running instance instead of registering a second hotkey set (named mutex on Windows, lock file + PID check elsewhere) |
 | Tray menu | ✅ | Taskbar icon with a localised context menu (hotkey hints included); re-registers itself after an Explorer restart |
@@ -241,11 +242,12 @@ Defaults (all editable in the config file):
 | `Ctrl+Shift+L` | Long capture (press again to cancel) |
 | `Ctrl+Shift+R` | Start / stop region recording |
 | `Ctrl+Shift+H` | Show / hide all pins (Snipaste-style F3 toggle) |
+| `Ctrl+Shift+P` | Repeat the last area capture (straight to clipboard) |
 | `Ctrl+Shift+S` | Save the most recent capture |
 
 > Earlier versions used `Ctrl+Alt+*`, which collided with Snipaste / QQ / WeChat in testing — hence `Ctrl+Shift+*`. If a combo is still taken, the main window lists it at startup.
 
-All 7 combos can be re-recorded in **Settings → Hotkeys**: click `Record` on a row, press the new combo (at least one modifier required; `Esc` cancels). Registration is hot-swapped, no restart; combos taken by other software are flagged in red with the reason.
+All 8 combos can be re-recorded in **Settings → Hotkeys**: click `Record` on a row, press the new combo (at least one modifier required; `Esc` cancels). Registration is hot-swapped, no restart; combos taken by other software are flagged in red with the reason.
 
 ### Overlay hotkeys
 

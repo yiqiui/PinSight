@@ -20,6 +20,10 @@ pub enum Action {
     SaveLast,
     /// Show or hide every open pin (the Snipaste-style F3 toggle).
     TogglePins,
+    /// Re-grab the last selection straight to the clipboard.
+    RepeatCapture,
+    /// Toggle one pin group's visibility; the payload is the group id.
+    ToggleGroup(u32),
 }
 
 /// Why a binding could not be installed. The UI turns these into localised
@@ -51,7 +55,7 @@ impl Hotkeys {
         }
     }
 
-    pub fn register(config: &HotkeyConfig) -> Self {
+    pub fn register(config: &HotkeyConfig, groups: &[crate::config::PinGroup]) -> Self {
         let manager = match GlobalHotKeyManager::new() {
             Ok(manager) => manager,
             Err(err) => {
@@ -65,7 +69,7 @@ impl Hotkeys {
             bindings: Vec::new(),
             failures: Vec::new(),
         };
-        hotkeys.apply(config);
+        hotkeys.apply(config, groups);
         hotkeys
     }
 
@@ -77,16 +81,16 @@ impl Hotkeys {
     /// *we* still hold. Releasing the old set on the live manager sidesteps
     /// that, and keeps us from tearing down and rebuilding a window on every
     /// rebind.
-    pub fn rebind(&mut self, config: &HotkeyConfig) {
+    pub fn rebind(&mut self, config: &HotkeyConfig, groups: &[crate::config::PinGroup]) {
         if self._manager.is_none() {
-            *self = Self::register(config);
+            *self = Self::register(config, groups);
             return;
         }
-        self.apply(config);
+        self.apply(config, groups);
     }
 
     /// Release everything currently bound, then install `config`'s set.
-    fn apply(&mut self, config: &HotkeyConfig) {
+    fn apply(&mut self, config: &HotkeyConfig, groups: &[crate::config::PinGroup]) {
         let Some(manager) = self._manager.as_ref() else {
             return;
         };
@@ -107,9 +111,19 @@ impl Hotkeys {
             (&config.record, Action::Record),
             (&config.save_last, Action::SaveLast),
             (&config.toggle_pins, Action::TogglePins),
+            (&config.repeat_capture, Action::RepeatCapture),
         ];
+        // Per-group visibility toggles: one action per bound group, carrying
+        // the group id so the handler knows which set of pins to flip.
+        let group_specs: Vec<(String, Action)> = groups
+            .iter()
+            .filter(|g| !g.hotkey.trim().is_empty())
+            .map(|g| (g.hotkey.trim().to_string(), Action::ToggleGroup(g.id)))
+            .collect();
 
-        for (text, action) in specs {
+        let mut all_specs: Vec<(&String, Action)> = specs.iter().map(|(t, a)| (*t, *a)).collect();
+        all_specs.extend(group_specs.iter().map(|(t, a)| (t, *a)));
+        for (text, action) in all_specs {
             match parse_hotkey(text) {
                 Ok(hotkey) => match manager.register(hotkey) {
                     Ok(()) => self.bindings.push((hotkey, action)),

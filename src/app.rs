@@ -52,6 +52,9 @@ struct Toast {
 enum AreaJob {
     Overlay(Intent),
     FullCopy,
+    /// Grab the last overlay selection again, straight to the clipboard —
+    /// no re-selecting (Snipaste's "repeat last area").
+    Repeat,
 }
 
 struct PendingArea {
@@ -250,6 +253,9 @@ pub struct PinSightApp {
     name_template_draft: String,
     font_path_draft: String,
     last_capture_at: Option<Instant>,
+    /// Monitor id + physical rectangle of the last overlay selection, for
+    /// "repeat last capture" (grab the same area without re-selecting).
+    last_region: Option<(u32, crate::util::PhysRect)>,
     /// Decoded + blurred custom wallpaper, when the user picked one.
     background: Option<Background>,
     settings_tab: SettingsTab,
@@ -306,7 +312,7 @@ impl PinSightApp {
         if let Err(err) = config.ensure_save_dir() {
             tracing::warn!(%err, "could not create output folder");
         }
-        let mut hotkeys = Hotkeys::register(&config.hotkeys);
+        let mut hotkeys = Hotkeys::register(&config.hotkeys, &config.pin_groups);
         // Honour "hotkeys disabled" from the last session: registering above
         // succeeds regardless, so release them again when the user turned the
         // feature off.
@@ -376,6 +382,7 @@ impl PinSightApp {
             textures: HashMap::new(),
             font_report,
             last_capture_at: None,
+            last_region: None,
             background: None,
             settings_tab,
             recording_hotkey: None,
@@ -730,6 +737,20 @@ impl PinSightApp {
         self.start_pending(AreaJob::FullCopy, ctx);
     }
 
+    /// Re-grab the last overlay selection straight to the clipboard. Falls
+    /// back to a normal region capture when nothing has been selected yet.
+    fn repeat_capture(&mut self, ctx: &egui::Context) {
+        if self.busy_with_capture() {
+            self.toast(self.tr.tr.capture_in_progress, true);
+            return;
+        }
+        if self.last_region.is_some() {
+            self.start_pending(AreaJob::Repeat, ctx);
+        } else {
+            self.begin_area(Intent::Copy, ctx);
+        }
+    }
+
     fn process_pending(&mut self, ctx: &egui::Context) {
         const PARK_DELAY: Duration = Duration::from_millis(140);
 
@@ -841,6 +862,42 @@ impl PinSightApp {
                     self.restore_root(ctx);
                     match result {
                         Ok((_monitor, image)) => {
+                            let image = Arc::new(image);
+                            match copy_to_clipboard(&self.config, &image) {
+                                Ok(()) => {
+                                    if self.config.clipboard_mode != config::ClipboardMode::Disabled
+                                    {
+                                        self.toast(self.tr.tr.copied, false);
+                                    }
+                                }
+                                Err(err) => self
+                                    .toast(format!("{}: {err}", self.tr.tr.clipboard_error), true),
+                            }
+                            self.last_capture_at = Some(Instant::now());
+                            self.last_image = Some(image);
+                        }
+                        Err(err) => {
+                            self.toast(format!("{}: {err}", self.tr.tr.capture_failed), true)
+                        }
+                    }
+                }
+                AreaJob::Repeat => {
+                    let Some((monitor_id, rect)) = self.last_region else {
+                        self.restore_root(ctx);
+                        return;
+                    };
+                    let pointer = self.config.capture_pointer;
+                    let result = capture::find_monitor(monitor_id)
+                        .and_then(|_| capture::grab_physical_rect(rect))
+                        .map(|mut image| {
+                            if pointer {
+                                capture::composite_cursor(&mut image, (rect.x, rect.y));
+                            }
+                            image
+                        });
+                    self.restore_root(ctx);
+                    match result {
+                        Ok(image) => {
                             let image = Arc::new(image);
                             match copy_to_clipboard(&self.config, &image) {
                                 Ok(()) => {
@@ -1193,6 +1250,8 @@ impl PinSightApp {
                 }
                 Action::SaveLast => self.save_last(),
                 Action::TogglePins => self.toggle_all_pins(),
+                Action::RepeatCapture => self.repeat_capture(ctx),
+                Action::ToggleGroup(id) => self.toggle_group(id),
             }
             ctx.request_repaint();
         }
@@ -1692,6 +1751,7 @@ impl PinSightApp {
             id: next,
             name: String::new(),
             hidden: false,
+            hotkey: String::new(),
         });
         self.active_group = next;
         let _ = self.config.save();
@@ -1739,6 +1799,34 @@ impl PinSightApp {
             pin.set_visible(!hidden);
         }
         let _ = self.config.save();
+    }
+
+    /// Flip one group's visibility (the per-group global hotkey path).
+    fn toggle_group(&mut self, id: u32) {
+        let id = self.resolve_group(id);
+        if !self.config.pin_groups.iter().any(|g| g.id == id) {
+            return;
+        }
+        let hidden = !self
+            .config
+            .pin_groups
+            .iter()
+            .find(|g| g.id == id)
+            .map(|g| g.hidden)
+            .unwrap_or(false);
+        self.set_group_hidden(id, hidden);
+        let name = self.group_name(id);
+        if hidden {
+            self.toast(
+                format!("{}: {}", self.tr.tr.tray_pins_hidden_toast, name),
+                false,
+            );
+        } else {
+            self.toast(
+                format!("{}: {}", self.tr.tr.tray_pins_shown_toast, name),
+                false,
+            );
+        }
     }
 
     /// Move one pin into another group.
@@ -2511,6 +2599,20 @@ impl PinSightApp {
             )
         });
 
+        // Remember the region (monitor + physical rectangle) so "repeat last
+        // capture" can grab the exact same area without re-selecting.
+        if let Some(sel) = session.selection {
+            self.last_region = Some((
+                session.monitor.id,
+                crate::util::PhysRect {
+                    x: session.monitor.rect.x + sel.x.round() as i32,
+                    y: session.monitor.rect.y + sel.y.round() as i32,
+                    w: sel.w.round().max(2.0) as u32,
+                    h: sel.h.round().max(2.0) as u32,
+                },
+            ));
+        }
+
         let viewport_id = egui::ViewportId::from_hash_of(("pinsight-overlay", session.monitor.id));
         let builder = session.viewport_builder();
         let mut outcome = None;
@@ -2736,7 +2838,8 @@ impl PinSightApp {
     /// [`Config::hotkeys_enabled`].
     fn apply_hotkey_state(&mut self) {
         if self.config.hotkeys_enabled {
-            self.hotkeys.rebind(&self.config.hotkeys);
+            self.hotkeys
+                .rebind(&self.config.hotkeys, &self.config.pin_groups);
         } else {
             self.hotkeys.unbind_all();
         }
@@ -3523,6 +3626,38 @@ impl PinSightApp {
                     });
                 if let Some(id) = picked {
                     self.active_group = id;
+                }
+            });
+            ui.add_space(2.0);
+            // Per-group global hotkey: type a combination like Ctrl+Shift+1;
+            // empty = unbound. Applied on focus loss.
+            ui::field_row(ui, p, t.hk_group_hotkey, |ui| {
+                let mut current = self
+                    .config
+                    .pin_groups
+                    .iter()
+                    .find(|g| g.id == self.active_group)
+                    .map(|g| g.hotkey.clone())
+                    .unwrap_or_default();
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut current)
+                        .hint_text(t.hk_group_hotkey_hint)
+                        .desired_width(200.0),
+                );
+                if response.lost_focus() {
+                    let trimmed = current.trim().to_string();
+                    if let Some(group) = self
+                        .config
+                        .pin_groups
+                        .iter_mut()
+                        .find(|g| g.id == self.active_group)
+                    {
+                        if group.hotkey != trimmed {
+                            group.hotkey = trimmed;
+                            let _ = self.config.save();
+                            self.apply_hotkey_state();
+                        }
+                    }
                 }
             });
             ui.add_space(2.0);
@@ -5850,8 +5985,9 @@ impl PinSightApp {
                 self.hotkeys.failure_for(Action::Record),
                 self.hotkeys.failure_for(Action::SaveLast),
                 self.hotkeys.failure_for(Action::TogglePins),
+                self.hotkeys.failure_for(Action::RepeatCapture),
             ];
-            let fields: [(&mut String, &str); 7] = [
+            let fields: [(&mut String, &str); 8] = [
                 (&mut self.hotkey_draft.capture_area, t.hk_capture_area),
                 (&mut self.hotkey_draft.capture_full, t.hk_capture_full),
                 (&mut self.hotkey_draft.pin_clipboard, t.hk_pin_clipboard),
@@ -5859,6 +5995,7 @@ impl PinSightApp {
                 (&mut self.hotkey_draft.record, t.hk_record),
                 (&mut self.hotkey_draft.save_last, t.hk_save_last),
                 (&mut self.hotkey_draft.toggle_pins, t.hk_toggle_pins),
+                (&mut self.hotkey_draft.repeat_capture, t.hk_repeat_capture),
             ];
 
             for (i, (value, label)) in fields.into_iter().enumerate() {
@@ -5931,7 +6068,8 @@ impl PinSightApp {
                 if ui::link_button(ui, p, Icon::Check, t.apply).clicked() {
                     self.config.hotkeys = self.hotkey_draft.clone();
                     let _ = self.config.save();
-                    self.hotkeys.rebind(&self.config.hotkeys);
+                    self.hotkeys
+                        .rebind(&self.config.hotkeys, &self.config.pin_groups);
                     self.recording_hotkey = None;
                     if self.hotkeys.failures.is_empty() {
                         self.toast(self.tr.tr.hotkeys_applied, false);
@@ -5944,7 +6082,8 @@ impl PinSightApp {
                     self.hotkey_draft = HotkeyConfig::default();
                     self.config.hotkeys = self.hotkey_draft.clone();
                     let _ = self.config.save();
-                    self.hotkeys.rebind(&self.config.hotkeys);
+                    self.hotkeys
+                        .rebind(&self.config.hotkeys, &self.config.pin_groups);
                     self.recording_hotkey = None;
                 }
             });
@@ -6034,7 +6173,8 @@ impl PinSightApp {
         // button is two steps where one is expected.
         self.config.hotkeys = self.hotkey_draft.clone();
         let _ = self.config.save();
-        self.hotkeys.rebind(&self.config.hotkeys);
+        self.hotkeys
+            .rebind(&self.config.hotkeys, &self.config.pin_groups);
         if self.hotkeys.failures.is_empty() {
             self.toast(self.tr.tr.hotkeys_applied, false);
         } else {
