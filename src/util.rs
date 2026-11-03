@@ -252,6 +252,34 @@ pub fn open_path(path: &Path) {
     }
 }
 
+/// Open a URL in the default browser.
+///
+/// This bypasses `egui::Context::open_url`: eframe is built with
+/// `default-features = false` here, so egui-winit's `webbrowser` feature is off
+/// and `open_url` is a silent no-op (it only logs). Shelling out to the OS
+/// opener always works.
+pub fn open_url(url: &str) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        // `start` treats the first quoted arg as the window title, so pass an
+        // empty title before the URL.
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(url).spawn();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+    }
+}
+
 /// A rough "is this a virtual/remote monitor" check is unnecessary; we simply
 /// pick the monitor whose rectangle contains the point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

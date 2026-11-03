@@ -2955,10 +2955,10 @@ impl PinSightApp {
                     self.page = Page::Settings;
                 }
                 TrayCommand::Help => {
-                    ctx.open_url(egui::OpenUrl::new_tab(format!(
+                    util::open_url(&format!(
                         "https://github.com/{}/#readme",
                         crate::update::REPO
-                    )));
+                    ));
                 }
                 TrayCommand::ShowWindow => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
@@ -6420,109 +6420,85 @@ impl PinSightApp {
                             .color(p.text_weak),
                     );
                     ui.add_space(8.0);
-                    egui::ScrollArea::vertical()
-                        .id_salt("pinsight-changelog")
-                        .max_height(380.0)
-                        .auto_shrink([false, true])
-                        .show(ui, |ui| {
-                            for (i, rel) in report.releases.iter().enumerate() {
-                                let date = if rel.published_at.len() >= 10 {
-                                    &rel.published_at[..10]
-                                } else {
-                                    rel.published_at.as_str()
-                                };
-                                let is_new = i == 0 && report.available().is_some();
-                                // One card per release: a header row (version,
-                                // NEW, date) with an expand triangle, and a
-                                // bounded, scrollable body for long notes.
-                                egui::Frame::NONE
-                                    .fill(p.card)
-                                    .stroke(egui::Stroke::new(1.0, p.stroke))
-                                    .corner_radius(10)
-                                    .inner_margin(egui::Margin::symmetric(10, 6))
-                                    .show(ui, |ui| {
-                                        let id =
-                                            ui.make_persistent_id(("rel", rel.version.as_str()));
-                                        egui::collapsing_header::CollapsingState::load_with_default_open(
-                                            ui.ctx(),
-                                            id,
-                                            i == 0,
-                                        )
-                                        .show_header(ui, |ui| {
-                                            ui.label(
-                                                egui::RichText::new(format!("v{}", rel.version))
-                                                    .monospace()
-                                                    .size(12.5)
-                                                    .strong()
-                                                    .color(p.text),
-                                            );
-                                            if is_new {
-                                                let (r, _) = ui.allocate_exact_size(
-                                                    egui::vec2(32.0, 16.0),
-                                                    egui::Sense::hover(),
-                                                );
-                                                ui.painter().rect_filled(r, 8.0, p.accent);
-                                                ui.painter().text(
-                                                    r.center(),
-                                                    egui::Align2::CENTER_CENTER,
-                                                    "NEW",
-                                                    egui::FontId::proportional(9.5),
-                                                    p.on_accent,
-                                                );
-                                            }
-                                            if rel.prerelease {
-                                                ui.label(
-                                                    egui::RichText::new("beta")
-                                                        .size(10.0)
-                                                        .color(p.warn),
-                                                );
-                                            }
-                                            ui.label(
-                                                egui::RichText::new(date)
-                                                    .size(11.0)
-                                                    .color(p.text_weak),
-                                            );
-                                        })
-                                        .body(|ui| {
-                                            if rel.notes.trim().is_empty() {
-                                                ui.label(
-                                                    egui::RichText::new(t.upd_no_notes)
-                                                        .size(11.5)
-                                                        .color(p.text_weak),
-                                                );
-                                            } else {
-                                                egui::ScrollArea::vertical()
-                                                    .id_salt(("notes", rel.version.as_str()))
-                                                    .max_height(180.0)
-                                                    .auto_shrink([false, true])
-                                                    .show(ui, |ui| {
-                                                        ui.label(
-                                                            egui::RichText::new(
-                                                                rel.notes.as_str(),
-                                                            )
-                                                            .size(11.5)
-                                                            .color(p.text),
-                                                        );
-                                                    });
-                                            }
-                                            ui.add_space(4.0);
-                                            if ui::link_button(
-                                                ui,
-                                                p,
-                                                Icon::Globe,
-                                                t.upd_github_release,
-                                            )
-                                            .clicked()
-                                            {
-                                                ui.ctx().open_url(egui::OpenUrl::new_tab(
-                                                    rel.html_url.clone(),
-                                                ));
-                                            }
-                                        });
-                                    });
-                                ui.add_space(6.0);
-                            }
-                        });
+                    // No nested scroll areas: the settings page already scrolls,
+                    // so the cards flow naturally and nothing gets clipped. The
+                    // body is unindented so it does not get the vertical guide
+                    // line that looked odd next to a card.
+                    for (i, rel) in report.releases.iter().enumerate() {
+                        let date = if rel.published_at.len() >= 10 {
+                            &rel.published_at[..10]
+                        } else {
+                            rel.published_at.as_str()
+                        };
+                        let is_new = i == 0 && report.available().is_some();
+                        egui::Frame::NONE
+                            .fill(p.card)
+                            .stroke(egui::Stroke::new(1.0, p.stroke))
+                            .corner_radius(10)
+                            .inner_margin(egui::Margin::symmetric(12, 8))
+                            .show(ui, |ui| {
+                                let id = ui.make_persistent_id(("rel", rel.version.as_str()));
+                                egui::collapsing_header::CollapsingState::load_with_default_open(
+                                    ui.ctx(),
+                                    id,
+                                    i == 0,
+                                )
+                                .show_header(ui, |ui| {
+                                    ui.label(
+                                        egui::RichText::new(format!("v{}", rel.version))
+                                            .monospace()
+                                            .size(12.5)
+                                            .strong()
+                                            .color(p.text),
+                                    );
+                                    if is_new {
+                                        let (r, _) = ui.allocate_exact_size(
+                                            egui::vec2(32.0, 16.0),
+                                            egui::Sense::hover(),
+                                        );
+                                        ui.painter().rect_filled(r, 8.0, p.accent);
+                                        ui.painter().text(
+                                            r.center(),
+                                            egui::Align2::CENTER_CENTER,
+                                            "NEW",
+                                            egui::FontId::proportional(9.5),
+                                            p.on_accent,
+                                        );
+                                    }
+                                    if rel.prerelease {
+                                        ui.label(
+                                            egui::RichText::new("beta").size(10.0).color(p.warn),
+                                        );
+                                    }
+                                    ui.label(
+                                        egui::RichText::new(date).size(11.0).color(p.text_weak),
+                                    );
+                                })
+                                .body_unindented(|ui| {
+                                    ui.add_space(4.0);
+                                    if rel.notes.trim().is_empty() {
+                                        ui.label(
+                                            egui::RichText::new(t.upd_no_notes)
+                                                .size(11.5)
+                                                .color(p.text_weak),
+                                        );
+                                    } else {
+                                        ui.label(
+                                            egui::RichText::new(rel.notes.as_str())
+                                                .size(11.5)
+                                                .color(p.text),
+                                        );
+                                    }
+                                    ui.add_space(6.0);
+                                    if ui::link_button(ui, p, Icon::Globe, t.upd_github_release)
+                                        .clicked()
+                                    {
+                                        util::open_url(&rel.html_url);
+                                    }
+                                });
+                            });
+                        ui.add_space(6.0);
+                    }
                 }
             }
 
@@ -6543,7 +6519,7 @@ impl PinSightApp {
                 .and_then(|r| r.available().or_else(|| r.newest()))
                 .map(|rel| rel.html_url.clone())
                 .unwrap_or_else(|| crate::update::RELEASES_URL.to_string());
-            ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+            util::open_url(&url);
         }
         if cancel_dl {
             if let Some(job) = &self.update_dl {
