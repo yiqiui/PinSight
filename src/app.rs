@@ -242,6 +242,10 @@ pub struct PinSightApp {
     history_scan: Option<(Instant, Vec<HistoryFile>)>,
     /// Gallery items the user ticked for batch export to PDF.
     history_selection: std::collections::HashSet<PathBuf>,
+    /// Two-step guard for deleting the ticked gallery items: the first press
+    /// arms it, the second (within the same selection) actually deletes. Reset
+    /// whenever the selection changes so it can never delete stale ticks.
+    history_delete_armed: bool,
     pending_mcp: Option<PendingMcpCapture>,
     long_job: Option<LongShotJob>,
     record_job: Option<RecordJob>,
@@ -386,6 +390,7 @@ impl PinSightApp {
             window_picker: None,
             history_scan: None,
             history_selection: Default::default(),
+            history_delete_armed: false,
             pending_mcp: None,
             long_job: None,
             record_job: None,
@@ -676,10 +681,14 @@ impl PinSightApp {
                 Some(crate::hud::RecordHudAction::Annotate) => self.open_mark_layer(ctx),
                 None => {}
             }
-        } else if self.mark_layer.is_some() {
-            // The recording ended under the layer (limit reached, or stopped
-            // from the tray / MCP): the layer goes with the job.
-            self.mark_layer = None;
+        } else {
+            // No job: retire the deferred HUD viewport and any annotation layer
+            // left over from a recording that ended another way (limit reached,
+            // tray, MCP).
+            crate::hud::close_record(ctx);
+            if self.mark_layer.is_some() {
+                self.mark_layer = None;
+            }
         }
 
         if let Some(job) = self.long_job.as_ref() {
@@ -1220,13 +1229,19 @@ impl PinSightApp {
                     return;
                 }
                 self.park_root(ctx);
+                // The settings own fps, but an explicit MCP/CLI request wins so
+                // automation can pick a rate per job.
+                let mut ropts = self.record_options();
+                if fps > 0 {
+                    ropts.fps = fps.clamp(4, 60);
+                }
                 let job = record::start(
                     monitor.id,
                     relative,
                     &self.config.save_dir,
                     &self.save_options(),
                     self.config.record_max_seconds,
-                    self.record_options(),
+                    ropts,
                 );
                 let path = job.path.display().to_string();
                 self.record_job = Some(job);
@@ -1450,6 +1465,8 @@ impl PinSightApp {
                 None
             },
             countdown: c.record_countdown,
+            // The watermark is shared with screenshots: one switch covers both.
+            watermark: c.decorations.watermark.clone(),
         }
     }
 
@@ -3199,12 +3216,15 @@ impl PinSightApp {
         }
 
         let sel_count = self.history_selection.len();
+        let armed = self.history_delete_armed;
         let mut to_pin: Option<PathBuf> = None;
         let mut to_delete: Option<PathBuf> = None;
         let mut to_toggle: Option<PathBuf> = None;
         let mut select_all = false;
         let mut clear_sel = false;
         let mut export = false;
+        let mut arm_delete = false;
+        let mut delete_selected = false;
 
         // Toolbar: batch actions over the ticked items.
         ui.horizontal(|ui| {
@@ -3220,6 +3240,29 @@ impl PinSightApp {
                     .clicked()
                 {
                     export = true;
+                }
+                // Delete the ticked captures. The first press only arms the
+                // action (and turns the label red) so a misclick can never wipe
+                // a large selection; the second press performs it.
+                let del_label = if armed {
+                    format!("{} {}?", t.history_delete_sel, sel_count)
+                } else {
+                    format!("{} ({})", t.history_delete_sel, sel_count)
+                };
+                let del = ui::button(ui, p, &del_label);
+                if del.clicked() {
+                    if armed {
+                        delete_selected = true;
+                    } else {
+                        arm_delete = true;
+                    }
+                }
+                if armed {
+                    ui.label(
+                        egui::RichText::new(t.history_delete_confirm)
+                            .size(11.5)
+                            .color(p.danger),
+                    );
                 }
                 ui.label(
                     egui::RichText::new(format!("{} {}", sel_count, t.history_selected))
@@ -3276,17 +3319,53 @@ impl PinSightApp {
 
         if select_all {
             self.history_selection = files.iter().map(|f| f.path.clone()).collect();
+            self.history_delete_armed = false;
         }
         if clear_sel {
             self.history_selection.clear();
+            self.history_delete_armed = false;
         }
         if let Some(path) = to_toggle {
             if !self.history_selection.remove(&path) {
                 self.history_selection.insert(path);
             }
+            // Any change to what is ticked invalidates a pending confirm.
+            self.history_delete_armed = false;
         }
         if let Some(path) = to_pin {
             self.pin_history_file(&path);
+        }
+        if arm_delete {
+            self.history_delete_armed = true;
+        }
+        if delete_selected {
+            let paths: Vec<PathBuf> = self.history_selection.iter().cloned().collect();
+            let mut removed = 0usize;
+            let mut failed = 0usize;
+            for path in &paths {
+                match std::fs::remove_file(path) {
+                    Ok(()) => {
+                        self.textures.remove(&format!("hist-{}", path.display()));
+                        removed += 1;
+                    }
+                    Err(_) => failed += 1,
+                }
+            }
+            self.history_selection.clear();
+            self.history_delete_armed = false;
+            // Drop the cached listing so the grid reflects the deletion at once.
+            self.history_scan = None;
+            if failed == 0 {
+                self.toast(format!("{} {}", removed, t.history_deleted), false);
+            } else {
+                self.toast(
+                    format!(
+                        "{} {} · {} {}",
+                        removed, t.history_deleted, failed, t.history_delete_failed
+                    ),
+                    true,
+                );
+            }
         }
         if let Some(path) = to_delete {
             if let Err(err) = std::fs::remove_file(&path) {
@@ -3294,6 +3373,8 @@ impl PinSightApp {
             } else {
                 self.textures.remove(&format!("hist-{}", path.display()));
                 self.history_selection.remove(&path);
+                self.history_delete_armed = false;
+                self.history_scan = None;
             }
         }
         if export {

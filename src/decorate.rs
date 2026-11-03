@@ -292,80 +292,114 @@ fn stamp_layer(dst: &mut RgbaImage, layer: &RgbaImage, x: i32, y: i32) {
 
 /// Draw the watermark (image and/or text) onto `image` in place.
 fn apply_watermark(image: &mut RgbaImage, wm: &WatermarkDeco) {
-    let (iw, ih) = (image.width() as i32, image.height() as i32);
-    let small = iw.min(ih) as f32;
-    let opacity = wm.opacity.clamp(0, 255) as f32 / 255.0;
-    if opacity <= 0.0 {
-        return;
+    if let Some(stamp) = WatermarkStamp::prepare(wm, image.width(), image.height()) {
+        stamp.stamp(image);
     }
+}
 
-    // Build the mark layers (image layer then text layer, both at full
-    // opacity) and stamp them according to the placement.
-    let mut layers: Vec<RgbaImage> = Vec::new();
-    if let Some(path) = &wm.image_path {
-        if let Ok(loaded) = image::open(path) {
-            let mut img = loaded.to_rgba8();
-            let target = (small * wm.image_scale.clamp(0.02, 1.0)).max(8.0) as u32;
-            let scale = target as f32 / img.width().max(1) as f32;
-            let nw = (img.width() as f32 * scale).max(1.0) as u32;
-            let nh = (img.height() as f32 * scale).max(1.0) as u32;
-            img = image::imageops::resize(&img, nw, nh, image::imageops::FilterType::Lanczos3);
-            layers.push(img);
-        }
-    }
-    if !wm.text.trim().is_empty() {
-        if let Some(text_layer) =
-            render_text_layer(&wm.text, small * wm.text_scale.clamp(0.01, 0.5))
-        {
-            layers.push(text_layer);
-        }
-    }
-    if layers.is_empty() {
-        return;
-    }
+/// A watermark pre-rendered for one fixed canvas size.
+///
+/// The save path only stamps once, but the recorder stamps *every frame* of a
+/// video. Re-loading the image mark and re-rasterising the text 30×/s would be
+/// wasteful, so this type resolves the layers and their placements up front and
+/// then only blends cheap RGBA sprites onto each frame.
+pub struct WatermarkStamp {
+    /// (sprite, x, y) — one entry per placement; `Tile` expands into many.
+    placements: Vec<(RgbaImage, i32, i32)>,
+}
 
-    for layer in &layers {
-        let (lw, lh) = (layer.width() as i32, layer.height() as i32);
-        // Apply global opacity by scaling each layer's alpha.
-        let mut layer = layer.clone();
-        for p in layer.pixels_mut() {
-            p.0[3] = (p.0[3] as f32 * opacity) as u8;
+impl WatermarkStamp {
+    /// Build the stamp for a `w × h` canvas. Returns `None` when the mark has
+    /// neither text nor a readable image, or when its opacity is zero.
+    pub fn prepare(wm: &WatermarkDeco, w: u32, h: u32) -> Option<Self> {
+        let (iw, ih) = (w as i32, h as i32);
+        if iw <= 0 || ih <= 0 {
+            return None;
         }
-        match wm.position {
-            WatermarkPos::Tile => {
-                let gap = (lw as f32 * 0.6).max(8.0) as i32;
-                let step_x = lw + gap;
-                let step_y = lh + gap;
-                let mut y = 0;
-                while y < ih {
-                    let mut x = 0;
-                    while x < iw {
-                        stamp_layer(image, &layer, x, y);
-                        x += step_x;
+        let small = iw.min(ih) as f32;
+        let opacity = wm.opacity.clamp(0, 255) as f32 / 255.0;
+        if opacity <= 0.0 {
+            return None;
+        }
+
+        // Build the mark layers (image layer then text layer, both at full
+        // opacity) and stamp them according to the placement.
+        let mut layers: Vec<RgbaImage> = Vec::new();
+        if let Some(path) = &wm.image_path {
+            if let Ok(loaded) = image::open(path) {
+                let mut img = loaded.to_rgba8();
+                let target = (small * wm.image_scale.clamp(0.02, 1.0)).max(8.0) as u32;
+                let scale = target as f32 / img.width().max(1) as f32;
+                let nw = (img.width() as f32 * scale).max(1.0) as u32;
+                let nh = (img.height() as f32 * scale).max(1.0) as u32;
+                img = image::imageops::resize(&img, nw, nh, image::imageops::FilterType::Lanczos3);
+                layers.push(img);
+            }
+        }
+        if !wm.text.trim().is_empty() {
+            if let Some(text_layer) =
+                render_text_layer(&wm.text, small * wm.text_scale.clamp(0.01, 0.5))
+            {
+                layers.push(text_layer);
+            }
+        }
+        if layers.is_empty() {
+            return None;
+        }
+
+        let mut placements: Vec<(RgbaImage, i32, i32)> = Vec::new();
+        for mut layer in layers {
+            // Apply global opacity by scaling each layer's alpha.
+            for p in layer.pixels_mut() {
+                p.0[3] = (p.0[3] as f32 * opacity) as u8;
+            }
+            let (lw, lh) = (layer.width() as i32, layer.height() as i32);
+            match wm.position {
+                WatermarkPos::Tile => {
+                    let gap = (lw as f32 * 0.6).max(8.0) as i32;
+                    let step_x = lw + gap;
+                    let step_y = lh + gap;
+                    let mut y = 0;
+                    while y < ih {
+                        let mut x = 0;
+                        while x < iw {
+                            placements.push((layer.clone(), x, y));
+                            x += step_x;
+                        }
+                        y += step_y;
                     }
-                    y += step_y;
+                }
+                WatermarkPos::Center => {
+                    placements.push((layer, (iw - lw) / 2, (ih - lh) / 2));
+                }
+                WatermarkPos::TopLeft => {
+                    placements.push((layer, wm.margin as i32, wm.margin as i32));
+                }
+                WatermarkPos::TopRight => {
+                    placements.push((layer, iw - lw - wm.margin as i32, wm.margin as i32));
+                }
+                WatermarkPos::BottomLeft => {
+                    placements.push((layer, wm.margin as i32, ih - lh - wm.margin as i32));
+                }
+                WatermarkPos::BottomRight => {
+                    placements.push((
+                        layer,
+                        iw - lw - wm.margin as i32,
+                        ih - lh - wm.margin as i32,
+                    ));
                 }
             }
-            WatermarkPos::Center => {
-                stamp_layer(image, &layer, (iw - lw) / 2, (ih - lh) / 2);
-            }
-            WatermarkPos::TopLeft => {
-                stamp_layer(image, &layer, wm.margin as i32, wm.margin as i32);
-            }
-            WatermarkPos::TopRight => {
-                stamp_layer(image, &layer, iw - lw - wm.margin as i32, wm.margin as i32);
-            }
-            WatermarkPos::BottomLeft => {
-                stamp_layer(image, &layer, wm.margin as i32, ih - lh - wm.margin as i32);
-            }
-            WatermarkPos::BottomRight => {
-                stamp_layer(
-                    image,
-                    &layer,
-                    iw - lw - wm.margin as i32,
-                    ih - lh - wm.margin as i32,
-                );
-            }
+        }
+        if placements.is_empty() {
+            return None;
+        }
+        Some(Self { placements })
+    }
+
+    /// Blend every prepared placement onto `image` in place.
+    pub fn stamp(&self, image: &mut RgbaImage) {
+        for (layer, x, y) in &self.placements {
+            stamp_layer(image, layer, *x, *y);
         }
     }
 }

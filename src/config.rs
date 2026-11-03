@@ -208,38 +208,30 @@ impl LogLevel {
 
 /// What the recorder captures. Cross-platform: every mode works wherever
 /// PinSight runs (Windows/macOS/Linux), because capture is `xcap`-backed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum RecordMode {
     /// A region the user draws on screen (default).
+    #[default]
     Region,
     /// The entire monitor under the cursor.
     Screen,
     /// The foreground window's rectangle.
     Window,
 }
-impl Default for RecordMode {
-    fn default() -> Self {
-        Self::Region
-    }
-}
 
 /// Output resolution preset for screen recordings (MP4 path only; GIF always
 /// uses the source size).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum RecordResolution {
     /// Keep the captured size.
+    #[default]
     Source,
     /// Scale down to 1920×1080.
     R1080,
     /// Scale down to 1280×720.
     R720,
-}
-impl Default for RecordResolution {
-    fn default() -> Self {
-        Self::Source
-    }
 }
 impl RecordResolution {
     /// The target (width, height) for this preset, or `None` for source.

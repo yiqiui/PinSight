@@ -194,6 +194,9 @@ pub struct RecordOptions {
     pub mic: Option<String>,
     /// Pre-recording countdown seconds.
     pub countdown: u32,
+    /// Optional watermark burned into every frame. Shares the screenshot
+    /// decoration settings, so a user who set one gets it on video too.
+    pub watermark: Option<crate::decorate::WatermarkDeco>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -312,6 +315,11 @@ fn run(
         let _ = tx.send(RecordUpdate::Cancelled);
         return Ok(());
     }
+    // Countdown finished: clear it so the HUD swaps the big number for the
+    // status pill. Without this the last sent value (1) would stick forever.
+    if opts.countdown > 0 {
+        let _ = tx.send(RecordUpdate::Countdown { remaining: 0 });
+    }
 
     let _monitor = capture::find_monitor(monitor_id).map_err(|e| e.to_string())?;
     let rx = region.x.round().max(0.0) as u32;
@@ -429,11 +437,13 @@ enum Sink {
     Gif {
         encoder: gif::Encoder<std::fs::File>,
         rgba: Vec<u8>,
+        watermark: Option<crate::decorate::WatermarkStamp>,
     },
     Mp4 {
         child: Child,
         stdin: Option<ChildStdin>,
         rgba: Vec<u8>,
+        watermark: Option<crate::decorate::WatermarkStamp>,
     },
 }
 
@@ -445,6 +455,13 @@ impl Sink {
         fps: u32,
         opts: &RecordOptions,
     ) -> Result<Self, String> {
+        // Pre-render the watermark once for this frame size. `None` when it is
+        // off or has neither text nor a readable image, so the hot loop pays
+        // nothing in the common case.
+        let watermark = opts
+            .watermark
+            .as_ref()
+            .and_then(|wm| crate::decorate::WatermarkStamp::prepare(wm, w, h));
         if path.extension().and_then(|e| e.to_str()) == Some("mp4") {
             // Input 0 is the raw RGBA screen pipe fed by the recorder thread.
             // A webcam (picture-in-picture) and audio tracks are additional
@@ -516,7 +533,6 @@ impl Sink {
                     args.push("-i".into());
                     args.push(audio_device_spec(&device));
                     audio_idxs.push(next_idx);
-                    next_idx += 1;
                 } else {
                     tracing::warn!(
                         "microphone is on but no audio device could be resolved; recording without it"
@@ -604,6 +620,7 @@ impl Sink {
                 child,
                 stdin: Some(stdin),
                 rgba: Vec::new(),
+                watermark,
             });
         }
 
@@ -618,30 +635,45 @@ impl Sink {
         Ok(Sink::Gif {
             encoder,
             rgba: Vec::new(),
+            watermark,
         })
     }
 
     fn write(&mut self, image: &image::RgbaImage, fps: u32) -> Result<(), String> {
+        // Burn the watermark in first, on a copy: `image` may be the held frame
+        // that a pause re-writes, and stamping it twice would darken the mark.
+        let wm = match self {
+            Sink::Gif { watermark, .. } => watermark.as_ref(),
+            Sink::Mp4 { watermark, .. } => watermark.as_ref(),
+        };
+        let mut stamped: Option<image::RgbaImage> = None;
+        if let Some(wm) = wm {
+            let mut copy = image.clone();
+            wm.stamp(&mut copy);
+            stamped = Some(copy);
+        }
+        let frame = stamped.as_ref().unwrap_or(image);
+
         match self {
-            Sink::Gif { encoder, rgba } => {
+            Sink::Gif { encoder, rgba, .. } => {
                 rgba.clear();
-                rgba.extend_from_slice(image.as_raw());
-                let mut frame = gif::Frame::from_rgba_speed(
-                    image.width() as u16,
-                    image.height() as u16,
+                rgba.extend_from_slice(frame.as_raw());
+                let mut gif_frame = gif::Frame::from_rgba_speed(
+                    frame.width() as u16,
+                    frame.height() as u16,
                     rgba,
                     10,
                 );
                 // GIF delays are expressed in hundredths of a second.
-                frame.delay = (100 / fps.max(1)).max(1) as u16;
-                encoder.write_frame(&frame).map_err(|e| e.to_string())
+                gif_frame.delay = (100 / fps.max(1)).max(1) as u16;
+                encoder.write_frame(&gif_frame).map_err(|e| e.to_string())
             }
             Sink::Mp4 { stdin, rgba, .. } => {
                 let Some(stdin) = stdin.as_mut() else {
                     return Err("ffmpeg stdin closed".into());
                 };
                 rgba.clear();
-                rgba.extend_from_slice(image.as_raw());
+                rgba.extend_from_slice(frame.as_raw());
                 stdin.write_all(rgba).map_err(|e| e.to_string())
             }
         }

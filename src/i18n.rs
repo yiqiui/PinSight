@@ -248,6 +248,10 @@ strings! {
     history_clear_sel { en: "Clear", zh: "清除选择", tw: "清除選擇", ja: "選択を解除", ko: "선택 해제", fr: "Effacer", de: "Auswahl löschen" }
     history_export_pdf { en: "Export PDF", zh: "导出 PDF", tw: "匯出 PDF", ja: "PDF に書き出し", ko: "PDF 내보내기", fr: "Exporter PDF", de: "PDF exportieren" }
     history_selected { en: "selected", zh: "已选", tw: "已選", ja: "選択中", ko: "선택됨", fr: "sélectionnés", de: "ausgewählt" }
+    history_delete_sel { en: "Delete selected", zh: "删除所选", tw: "刪除所選", ja: "選択を削除", ko: "선택 항목 삭제", fr: "Supprimer la sélection", de: "Auswahl löschen" }
+    history_delete_confirm { en: "Press again to delete for good", zh: "再按一次确认删除", tw: "再按一次確認刪除", ja: "もう一度押すと完全に削除", ko: "한 번 더 누르면 완전히 삭제", fr: "Appuyez encore pour supprimer", de: "Erneut drücken zum Löschen" }
+    history_deleted { en: "deleted", zh: "张已删除", tw: "張已刪除", ja: "件を削除しました", ko: "개 삭제됨", fr: "supprimés", de: "gelöscht" }
+    history_delete_failed { en: "failed", zh: "张删除失败", tw: "張刪除失敗", ja: "件削除に失敗", ko: "개 삭제 실패", fr: "échecs", de: "fehlgeschlagen" }
     history_exported { en: "images exported to PDF", zh: "张图片已导出为 PDF", tw: "張圖片已匯出為 PDF", ja: "枚を PDF に書き出し", ko: "개 이미지 PDF 내보냄", fr: "images exportées en PDF", de: "Bilder als PDF exportiert" }
     nav_settings { en: "Settings", zh: "设置", tw: "設定", ja: "設定", ko: "설정", fr: "Réglages", de: "Einstellungen" }
     mcp_on { en: "MCP on", zh: "MCP 已启用", tw: "MCP 已啟用", ja: "MCP 有効", ko: "MCP 켜짐", fr: "MCP actif", de: "MCP aktiv" }
@@ -404,7 +408,6 @@ strings! {
     rec_mic_device { en: "Microphone device", zh: "麦克风设备", tw: "麥克風裝置", ja: "マイクデバイス", ko: "마이크 장치", fr: "Périphérique micro", de: "Mikrofon-Gerät" }
     rec_device_hint { en: "Needs ffmpeg. Blank = default device (auto-detected).", zh: "需要 ffmpeg。留空用默认设备（自动检测）。", tw: "需要 ffmpeg。留空用預設裝置（自動偵測）。", ja: "ffmpeg が必要。空欄は既定デバイス（自動検出）。", ko: "ffmpeg 필요. 비우면 기본 장치(자동 감지).", fr: "Nécessite ffmpeg. Vide = périphérique par défaut (auto).", de: "Benötigt ffmpeg. Leer = Standardgerät (automatisch)." }
     rec_hud_recording { en: "Recording", zh: "录制中", tw: "錄製中", ja: "録画中", ko: "녹화 중", fr: "Enregistrement", de: "Aufnahme" }
-    rec_countdown { en: "Starting in {n}s", zh: "{n} 秒后开始录制", tw: "{n} 秒後開始錄製", ja: "{n} 秒後に録画開始", ko: "{n}초 후 녹화 시작", fr: "Départ dans {n} s", de: "Start in {n} s" }
     rec_countdown_label { en: "Countdown", zh: "录制倒计时", tw: "錄製倒數", ja: "録画カウントダウン", ko: "녹화 카운트다운", fr: "Compte à rebours", de: "Countdown" }
     rec_no_window { en: "No window found to record", zh: "没有找到可录制的窗口", tw: "沒有找到可錄製的視窗", ja: "録画するウィンドウが見つかりません", ko: "녹화할 창을 찾을 수 없습니다", fr: "Aucune fenêtre à enregistrer", de: "Kein aufzunehmendes Fenster gefunden" }
     rec_countdown_off { en: "Off", zh: "关", tw: "關", ja: "オフ", ko: "끄기", fr: "Désactivé", de: "Aus" }
@@ -597,7 +600,7 @@ strings! {
     out_img_format { en: "Image format", zh: "图片格式", tw: "圖片格式", ja: "画像形式", ko: "이미지 형식", fr: "Format d'image", de: "Bildformat" }
     out_img_quality { en: "Quality", zh: "质量", tw: "品質", ja: "品質", ko: "품질", fr: "Qualité", de: "Qualität" }
     out_decorations { en: "Save decorations", zh: "保存后处理", tw: "儲存後處理", ja: "保存時の装飾", ko: "저장 장식", fr: "Décorations d'enregistrement", de: "Speicher-Verzierung" }
-    out_decorations_hint { en: "Applied to every saved capture before it is written.", zh: "保存前自动应用到每张截图。", tw: "儲存前自動套用到每張截圖。", ja: "保存前にすべてのキャプチャへ自動適用します。", ko: "저장 전 모든 캡처에 자동 적용됩니다.", fr: "Appliqué à chaque capture avant l'enregistrement.", de: "Wird vor dem Speichern auf jede Aufnahme angewendet." }
+    out_decorations_hint { en: "Border and shadow apply to saved captures. The watermark is also burned into recordings.", zh: "边框和阴影应用到保存的截图；水印同时会叠加到录屏画面中。", tw: "邊框和陰影套用到儲存的截圖；浮水印同時會疊加到錄屏畫面中。", ja: "枠と影は保存するキャプチャに、透かしは録画にも適用されます。", ko: "테두리와 그림자는 저장된 캡처에, 워터마크는 녹화 영상에도 적용됩니다.", fr: "Bordure et ombre s'appliquent aux captures ; le filigrane est aussi incrusté dans les enregistrements.", de: "Rahmen und Schatten gelten für Aufnahmen; das Wasserzeichen wird auch in Aufzeichnungen eingebrannt." }
     deco_border { en: "Border", zh: "边框", tw: "邊框", ja: "枠線", ko: "테두리", fr: "Bordure", de: "Rahmen" }
     deco_border_width { en: "Thickness", zh: "边框粗细", tw: "邊框粗細", ja: "太さ", ko: "두께", fr: "Épaisseur", de: "Dicke" }
     deco_border_color { en: "Border colour", zh: "边框颜色", tw: "邊框顏色", ja: "枠線の色", ko: "테두리 색", fr: "Couleur de bordure", de: "Rahmenfarbe" }

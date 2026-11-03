@@ -448,19 +448,24 @@ impl CaptureSession {
             }
         }
 
-        if response.drag_started() {
-            if let Some(pos) = pointer {
-                let start = self.press_origin.take().unwrap_or_else(|| to_img(pos));
-                self.begin_drag(start);
+        // While a text field is open the canvas must not start a drag: a stray
+        // press would otherwise clear the annotations and lose the in-flight
+        // text. Clicks are still handled below (they commit the draft).
+        if self.editing.is_none() {
+            if response.drag_started() {
+                if let Some(pos) = pointer {
+                    let start = self.press_origin.take().unwrap_or_else(|| to_img(pos));
+                    self.begin_drag(start);
+                }
+            } else if response.dragged() {
+                if let Some(pos) = pointer {
+                    let img = to_img(pos);
+                    self.update_drag(img, ui);
+                }
+            } else if response.drag_stopped() {
+                self.finish_drag(ui);
+                self.press_origin = None;
             }
-        } else if response.dragged() {
-            if let Some(pos) = pointer {
-                let img = to_img(pos);
-                self.update_drag(img, ui);
-            }
-        } else if response.drag_stopped() {
-            self.finish_drag(ui);
-            self.press_origin = None;
         }
 
         // Double-click and middle-click actions from the settings. Only fire
@@ -491,9 +496,13 @@ impl CaptureSession {
             }
         }
         // The text tool opens an inline editor at the click point; Enter
-        // commits, Escape cancels.
+        // commits, Escape cancels. A click while a field is already open first
+        // commits it (never silently discards what was typed) and only then
+        // opens a fresh field.
         if response.clicked() && self.tool == Tool::Text {
-            if let Some(pos) = pointer {
+            if self.editing.is_some() {
+                self.commit_text();
+            } else if let Some(pos) = pointer {
                 self.editing = Some(TextDraft {
                     at: to_img(pos),
                     buffer: String::new(),
@@ -501,11 +510,15 @@ impl CaptureSession {
             }
         }
 
-        if let Some(pos) = pointer {
-            let img = to_img(pos);
-            self.set_cursor(ui, img);
-        } else {
-            ctx.set_cursor_icon(egui::CursorIcon::Default);
+        // Leave the cursor to the text field while one is open — overriding it
+        // here every frame would fight the TextEdit's I-beam caret.
+        if self.editing.is_none() {
+            if let Some(pos) = pointer {
+                let img = to_img(pos);
+                self.set_cursor(ui, img);
+            } else {
+                ctx.set_cursor_icon(egui::CursorIcon::Default);
+            }
         }
 
         // Toolbar / confirmation.
@@ -592,27 +605,62 @@ impl CaptureSession {
     /// commits on Enter instead.
     fn show_text_editor(&mut self, ui: &mut egui::Ui, screen: egui::Rect, scale: f32) {
         let hint = self.tr.ov_text_hint;
-        let font = egui::FontId::proportional(self.text_size() * scale);
+        // Clamp the on-screen font so a tiny or huge stroke width still yields a
+        // legible, clickable field.
+        let font = egui::FontId::proportional((self.text_size() * scale).clamp(14.0, 44.0));
         let Some(draft) = self.editing.as_mut() else {
             return;
         };
         let pos = screen.min + draft.at.to_vec2() * scale;
+        // Keep the field fully inside the overlay so a click near the bottom or
+        // right edge never puts the editor (and its caret) off-screen.
+        let width = 320.0;
+        let pos = egui::pos2(
+            pos.x
+                .min(screen.right() - width - 12.0)
+                .max(screen.left() + 8.0),
+            pos.y.min(screen.bottom() - 64.0).max(screen.top() + 8.0),
+        );
         let mut commit = false;
         egui::Area::new(egui::Id::new("pinsight-text-editor"))
             .fixed_pos(pos)
-            .order(egui::Order::Foreground)
+            // Tooltip order sits above the toolbar and every other layer, so
+            // the field and its caret are always visible and receive input.
+            .order(egui::Order::Tooltip)
             .show(ui.ctx(), |ui| {
-                ui.visuals_mut().override_text_color = Some(egui::Color32::WHITE);
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut draft.buffer)
+                // A solid dark plate behind the text. Without it, white text on
+                // a light screenshot looked like "nothing was typed" — the
+                // editor was accepting input all along, it was just invisible.
+                let frame = egui::Frame::NONE
+                    .fill(egui::Color32::from_rgb(24, 26, 30))
+                    .stroke(egui::Stroke::new(
+                        1.0,
+                        egui::Color32::from_rgb(96, 104, 116),
+                    ))
+                    .corner_radius(8)
+                    .inner_margin(egui::Margin::symmetric(6, 5))
+                    .shadow(egui::epaint::Shadow {
+                        offset: [0, 4],
+                        blur: 16,
+                        spread: 0,
+                        color: egui::Color32::from_black_alpha(120),
+                    });
+                frame.show(ui, |ui| {
+                    let edit = egui::TextEdit::singleline(&mut draft.buffer)
                         .hint_text(hint)
-                        .desired_width(260.0)
-                        .font(font),
-                );
-                response.request_focus();
-                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    commit = true;
-                }
+                        .desired_width(width)
+                        .font(font)
+                        .text_color(egui::Color32::from_rgb(240, 242, 245))
+                        .background_color(egui::Color32::from_rgb(16, 18, 22))
+                        .margin(egui::Margin::symmetric(6, 4));
+                    let response = ui.add(edit);
+                    // Request focus every frame so the caret keeps blinking and
+                    // keys keep flowing to the field even after a repaint.
+                    response.request_focus();
+                    if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        commit = true;
+                    }
+                });
             });
         if commit {
             self.commit_text();
