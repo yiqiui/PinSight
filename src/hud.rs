@@ -261,9 +261,6 @@ fn draw_record_pill(
     palette: &Palette,
 ) -> Option<RecordHudAction> {
     let mut action = None;
-    // Any interactive control under the pointer this frame; used for the single
-    // deterministic cursor write at the end.
-    let mut hovering = false;
     let paused = snap.paused;
     let pulse = 0.55 + 0.45 * (ui.input(|i| i.time) as f32 * 4.0).sin();
     let frame = Frame::NONE
@@ -326,7 +323,6 @@ fn draw_record_pill(
                     tr.rec_hud_pause
                 },
             );
-            hovering |= pause_resp.hovered();
             if pause_resp.clicked() {
                 action = Some(if paused {
                     RecordHudAction::Resume
@@ -336,12 +332,10 @@ fn draw_record_pill(
             }
             let annotate_resp =
                 ui::icon_button(ui, palette, ui::Icon::Pencil, false, tr.rec_annotate);
-            hovering |= annotate_resp.hovered();
             if annotate_resp.clicked() {
                 action = Some(RecordHudAction::Annotate);
             }
             let stop_resp = stop_button(ui, tr.rec_hud_stop);
-            hovering |= stop_resp.hovered();
             if stop_resp.on_hover_text(tr.rec_hud_hint).clicked() {
                 action = Some(RecordHudAction::Stop);
             }
@@ -354,14 +348,11 @@ fn draw_record_pill(
             );
         }
     });
-    // Exactly one cursor write per frame. Several widgets each writing the
-    // cursor in the same pass can leave the OS oscillating between the arrow
-    // and the hand — the "cursor flickers" symptom.
-    ui.ctx().set_cursor_icon(if hovering {
-        egui::CursorIcon::PointingHand
-    } else {
-        egui::CursorIcon::Default
-    });
+    // Force one stable cursor icon every frame. The pill lives in a transparent
+    // layered window, where a per-widget hover cursor (PointingHand) made the OS
+    // oscillate between the arrow and the hand. A constant Default icon removes
+    // the flicker entirely; the buttons are still clickable.
+    ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
     action
 }
 

@@ -619,13 +619,69 @@ impl MarkLayer {
             egui::ViewportId::from_hash_of(TOOLBAR_ID),
             builder,
             |ui, _| {
+                let palette = self.palette;
+                let sep = |ui: &mut egui::Ui| {
+                    let (r, _) = ui.allocate_exact_size(Vec2::new(1.0, 18.0), egui::Sense::hover());
+                    ui.painter().rect_filled(r, 0.0, palette.stroke);
+                };
                 egui::Frame::NONE
-                    .fill(self.palette.card)
-                    .stroke(egui::Stroke::new(1.0, self.palette.stroke_strong))
+                    .fill(palette.card)
+                    .stroke(egui::Stroke::new(1.0, palette.stroke_strong))
                     .corner_radius(14)
-                    .inner_margin(egui::Margin::symmetric(12, 10))
+                    .inner_margin(egui::Margin::symmetric(12, 8))
+                    .shadow(egui::epaint::Shadow {
+                        offset: [0, 6],
+                        blur: 18,
+                        spread: 0,
+                        color: Color32::from_black_alpha(90),
+                    })
                     .show(ui, |ui| {
                         ui.set_width(TOOLBAR_WIDTH - 24.0);
+
+                        // Header: title on the left, undo / clear / close right.
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new(self.tr.mk_title)
+                                    .size(12.5)
+                                    .strong()
+                                    .color(palette.text),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui::primary_button(ui, &palette, self.tr.mk_close).clicked()
+                                    {
+                                        outcome.close = true;
+                                    }
+                                    if ui::icon_button(
+                                        ui,
+                                        &palette,
+                                        ui::Icon::Trash,
+                                        false,
+                                        self.tr.mk_clear,
+                                    )
+                                    .clicked()
+                                    {
+                                        self.marks.clear();
+                                        outcome.cleared = true;
+                                    }
+                                    if ui::icon_button(
+                                        ui,
+                                        &palette,
+                                        ui::Icon::Undo,
+                                        false,
+                                        self.tr.ov_undo,
+                                    )
+                                    .clicked()
+                                    {
+                                        self.marks.pop();
+                                    }
+                                },
+                            );
+                        });
+                        ui.add_space(6.0);
+
+                        // Tools + colours.
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 6.0;
                             let tools: [(MarkTool, ui::Icon, &str); 6] = [
@@ -637,15 +693,9 @@ impl MarkLayer {
                                 (MarkTool::Emoji, ui::Icon::Palette, self.tr.mk_emoji),
                             ];
                             for (tool, icon, label) in tools {
-                                if ui::icon_button(
-                                    ui,
-                                    &self.palette,
-                                    icon,
-                                    self.tool == tool,
-                                    label,
-                                )
-                                .on_hover_text(label)
-                                .clicked()
+                                if ui::icon_button(ui, &palette, icon, self.tool == tool, label)
+                                    .on_hover_text(label)
+                                    .clicked()
                                 {
                                     if self.tool == tool {
                                         self.tool = MarkTool::None;
@@ -656,8 +706,7 @@ impl MarkLayer {
                                     }
                                 }
                             }
-                            ui.add_space(8.0);
-                            // Colour swatches.
+                            sep(ui);
                             for rgb in COLORS {
                                 let active = self.color == rgb;
                                 let (rect, response) =
@@ -668,7 +717,7 @@ impl MarkLayer {
                                     ui.painter().rect_stroke(
                                         rect,
                                         5.0,
-                                        Stroke::new(2.0, self.palette.accent),
+                                        Stroke::new(2.0, palette.accent),
                                         egui::StrokeKind::Inside,
                                     );
                                 }
@@ -677,76 +726,58 @@ impl MarkLayer {
                                 }
                             }
                         });
-
                         ui.add_space(6.0);
+
+                        // Stroke width, text size, click-through.
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 6.0;
                             ui.label(
-                                egui::RichText::new(self.tr.mk_arrow)
+                                egui::RichText::new(self.tr.mk_width)
                                     .size(11.0)
-                                    .color(self.palette.text_weak),
+                                    .color(palette.text_weak),
                             );
-                            let widths: [(f32, &str); 3] = [(2.0, "细"), (4.0, "中"), (8.0, "粗")];
-                            if let Some(picked) =
-                                ui::segmented(ui, &self.palette, self.width, &widths)
-                            {
+                            if let Some(picked) = ui::segmented(
+                                ui,
+                                &palette,
+                                self.width,
+                                &[(2.0, "S"), (4.0, "M"), (8.0, "L")],
+                            ) {
                                 self.width = picked;
                             }
-                            ui.add_space(8.0);
-                            let sizes: [(f32, &str); 3] =
-                                [(14.0, "小"), (20.0, "中"), (32.0, "大")];
-                            if let Some(picked) =
-                                ui::segmented(ui, &self.palette, self.text_px, &sizes)
-                            {
+                            ui.add_space(10.0);
+                            ui.label(
+                                egui::RichText::new(self.tr.mk_size)
+                                    .size(11.0)
+                                    .color(palette.text_weak),
+                            );
+                            if let Some(picked) = ui::segmented(
+                                ui,
+                                &palette,
+                                self.text_px,
+                                &[(14.0, "S"), (20.0, "M"), (32.0, "L")],
+                            ) {
                                 self.text_px = picked;
                             }
-                            ui.add_space(8.0);
-                            if ui::toggle(ui, &self.palette, &mut self.passthrough).changed() {
-                                // Click-through on: the recording is interactive.
+                            ui.add_space(10.0);
+                            if ui::toggle(ui, &palette, &mut self.passthrough).changed() {
+                                // Click-through toggled.
                             }
                             ui.label(
                                 egui::RichText::new(self.tr.mk_passthrough)
                                     .size(11.0)
-                                    .color(self.palette.text_weak),
+                                    .color(palette.text_weak),
                             );
-                            ui.add_space(4.0);
-                            if ui::icon_button(
-                                ui,
-                                &self.palette,
-                                ui::Icon::Undo,
-                                false,
-                                self.tr.mk_clear,
-                            )
-                            .on_hover_text(self.tr.ov_undo)
-                            .clicked()
-                            {
-                                self.marks.pop();
-                            }
-                            if ui::icon_button(
-                                ui,
-                                &self.palette,
-                                ui::Icon::Trash,
-                                false,
-                                self.tr.mk_clear,
-                            )
-                            .on_hover_text(self.tr.mk_clear)
-                            .clicked()
-                            {
-                                self.marks.clear();
-                                outcome.cleared = true;
-                            }
-                            if ui::primary_button(ui, &self.palette, self.tr.mk_close).clicked() {
-                                outcome.close = true;
-                            }
                         });
-
-                        ui.add_space(4.0);
+                        ui.add_space(3.0);
                         ui.label(
                             egui::RichText::new(self.tr.mk_passthrough_hint)
-                                .size(10.5)
-                                .color(self.palette.text_weak),
+                                .size(10.0)
+                                .color(palette.text_weak),
                         );
                     });
+                // Stable cursor: this is an immediate viewport, where per-widget
+                // hover cursors make the OS oscillate between arrow and hand.
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
             },
         );
         outcome

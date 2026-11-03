@@ -425,6 +425,9 @@ strings! {
     mk_emoji { en: "Emoji", zh: "表情", tw: "表情", ja: "絵文字", ko: "이모지", fr: "Emoji", de: "Emoji" }
     mk_clear { en: "Clear", zh: "清除", tw: "清除", ja: "クリア", ko: "지우기", fr: "Effacer", de: "Löschen" }
     mk_close { en: "Close", zh: "关闭", tw: "關閉", ja: "閉じる", ko: "닫기", fr: "Fermer", de: "Schließen" }
+    mk_title { en: "Recording annotation", zh: "录制标注", tw: "錄製標註", ja: "録画への注釈", ko: "녹화 주석", fr: "Annotation de l'enregistrement", de: "Aufnahme-Anmerkung" }
+    mk_width { en: "Width", zh: "粗细", tw: "粗細", ja: "太さ", ko: "굵기", fr: "Épaisseur", de: "Stärke" }
+    mk_size { en: "Size", zh: "字号", tw: "字號", ja: "サイズ", ko: "크기", fr: "Taille", de: "Größe" }
     mk_passthrough { en: "Click-through", zh: "点击穿透", tw: "點擊穿透", ja: "クリック透過", ko: "클릭 통과", fr: "Clic traversant", de: "Klick-Durchlass" }
     mk_passthrough_hint { en: "While on, clicks reach the window below. Pick a tool to draw on the recording.", zh: "开启时点击会传到下层窗口。选择工具即可在画面上绘制。", tw: "開啟時點擊會傳到下層視窗。選擇工具即可在畫面上繪製。", ja: "オンのあいだクリックは下のウィンドウに届きます。ツールを選ぶと描画できます。", ko: "켜져 있는 동안 클릭은 아래 창으로 전달됩니다. 도구를 선택하면 그릴 수 있습니다.", fr: "Activé, les clics atteignent la fenêtre du dessous. Choisissez un outil pour dessiner.", de: "Ein: Klicks erreichen das Fenster darunter. Werkzeug wählen, um zu zeichnen." }
     mk_text_hint { en: "Type, then press Enter", zh: "输入文字后按 Enter", tw: "輸入文字後按 Enter", ja: "入力して Enter を押す", ko: "입력 후 Enter 를 누르세요", fr: "Saisissez, puis Entrée", de: "Text eingeben, dann Enter" }
@@ -558,6 +561,7 @@ strings! {
     upd_changelog { en: "Changelog", zh: "更新日志", tw: "更新日誌", ja: "更新履歴", ko: "변경 내역", fr: "Journal des modifications", de: "Änderungsprotokoll" }
     upd_changelog_hint { en: "What changed in each version.", zh: "查看各版本的更新内容。", tw: "查看各版本的更新內容。", ja: "各バージョンの変更点。", ko: "각 버전의 변경 내용을 확인하세요.", fr: "Les changements de chaque version.", de: "Was sich in jeder Version geändert hat." }
     upd_github_release { en: "GitHub Release", zh: "GitHub Release", tw: "GitHub Release", ja: "GitHub Release", ko: "GitHub Release", fr: "GitHub Release", de: "GitHub Release" }
+    upd_no_notes { en: "No release notes.", zh: "该版本没有更新说明。", tw: "該版本沒有更新說明。", ja: "このバージョンの更新内容はありません。", ko: "이 버전에는 변경 내역이 없습니다.", fr: "Aucune note de version.", de: "Keine Versionshinweise." }
     cfg_dir_change { en: "Change…", zh: "更改…", tw: "更改…", ja: "変更…", ko: "변경…", fr: "Changer…", de: "Ändern…" }
     cfg_move_title { en: "Change config folder", zh: "更改配置文件夹", tw: "更改設定資料夾", ja: "設定フォルダーを変更", ko: "설정 폴더 변경", fr: "Changer le dossier de configuration", de: "Konfigurationsordner ändern" }
     cfg_move_body { en: "Copy the current configuration (config.json, background images, …) to the new folder?\n\nNew folder:\n{dir}\n\nPinSight will use this folder from the next launch on.", zh: "是否把当前配置（config.json、背景图等）复制到新文件夹？\n\n新文件夹：\n{dir}\n\n下次启动起 PinSight 将使用该文件夹。", tw: "是否把目前設定（config.json、背景圖等）複製到新資料夾？\n\n新資料夾：\n{dir}\n\n下次啟動起 PinSight 將使用該資料夾。", ja: "現在の設定（config.json、背景画像など）を新しいフォルダーにコピーしますか？\n\n新しいフォルダー:\n{dir}\n\n次回起動からこのフォルダーを使用します。", ko: "현재 설정(config.json, 배경 이미지 등)을 새 폴더로 복사할까요?\n\n새 폴더:\n{dir}\n\n다음 실행부터 이 폴더를 사용합니다.", fr: "Copier la configuration actuelle (config.json, images de fond, …) vers le nouveau dossier ?\n\nNouveau dossier :\n{dir}\n\nPinSight utilisera ce dossier au prochain démarrage.", de: "Die aktuelle Konfiguration (config.json, Hintergrundbilder, …) in den neuen Ordner kopieren?\n\nNeuer Ordner:\n{dir}\n\nPinSight verwendet diesen Ordner ab dem nächsten Start." }
