@@ -747,7 +747,83 @@ impl PinSightApp {
             self.toast(self.tr.tr.capture_in_progress, true);
             return;
         }
+        // Full-screen / window recording capture immediately: there is no region
+        // to draw, so skip the overlay and start the encoder straight away.
+        // Region mode still opens the familiar selection overlay.
+        if intent == Intent::Record && self.config.record_mode != config::RecordMode::Region {
+            self.start_direct_record(ctx);
+            return;
+        }
         self.start_pending(AreaJob::Overlay(intent), ctx);
+    }
+
+    /// Start a screen or window recording without the region-selection overlay.
+    /// Used by [`config::RecordMode::Screen`] and [`config::RecordMode::Window`].
+    fn start_direct_record(&mut self, ctx: &egui::Context) {
+        if self.busy_with_capture() {
+            self.toast(self.tr.tr.capture_in_progress, true);
+            return;
+        }
+        if self.record_job.is_some() {
+            self.toast(self.tr.tr.already_recording, true);
+            return;
+        }
+        let (monitor_id, relative) = match self.config.record_mode {
+            config::RecordMode::Region => unreachable!("region mode uses the overlay"),
+            config::RecordMode::Screen => match capture::monitor_at_cursor() {
+                Ok(monitor) => (
+                    monitor.id,
+                    ImgRect::from_min_size(0.0, 0.0, monitor.rect.w as f32, monitor.rect.h as f32),
+                ),
+                Err(err) => {
+                    self.toast(format!("{}", err), true);
+                    return;
+                }
+            },
+            config::RecordMode::Window => match capture::foreground_window() {
+                Some(win) => {
+                    let cx = win.rect.x + win.rect.w as i32 / 2;
+                    let cy = win.rect.y + win.rect.h as i32 / 2;
+                    match capture::monitor_at(cx, cy) {
+                        Ok(monitor) => {
+                            let rel = ImgRect::from_min_size(
+                                (win.rect.x - monitor.rect.x) as f32,
+                                (win.rect.y - monitor.rect.y) as f32,
+                                win.rect.w as f32,
+                                win.rect.h as f32,
+                            )
+                            .clamped(monitor.rect.w, monitor.rect.h);
+                            (monitor.id, rel)
+                        }
+                        Err(err) => {
+                            self.toast(format!("{}", err), true);
+                            return;
+                        }
+                    }
+                }
+                None => {
+                    self.toast(self.tr.tr.rec_no_window, true);
+                    return;
+                }
+            },
+        };
+        self.park_root(ctx);
+        self.warn_if_hdr_monitor(monitor_id);
+        let job = record::start(
+            monitor_id,
+            relative,
+            &self.config.save_dir,
+            &self.save_options(),
+            self.config.record_max_seconds,
+            self.record_options(),
+        );
+        let path = job.path.clone();
+        self.record_job = Some(job);
+        self.toast(
+            format!("{}: {}", self.tr.tr.act_record_title, path.display()),
+            false,
+        );
+        ctx.request_repaint_after(Duration::from_millis(200));
     }
 
     fn begin_full_copy(&mut self, ctx: &egui::Context) {
@@ -1147,13 +1223,10 @@ impl PinSightApp {
                 let job = record::start(
                     monitor.id,
                     relative,
-                    fps,
                     &self.config.save_dir,
                     &self.save_options(),
                     self.config.record_max_seconds,
-                    self.config.record_audio,
-                    self.config.audio_device.clone(),
-                    self.config.record_countdown,
+                    self.record_options(),
                 );
                 let path = job.path.display().to_string();
                 self.record_job = Some(job);
@@ -1351,6 +1424,32 @@ impl PinSightApp {
             format: self.config.image_format,
             title: String::new(),
             decorations: self.config.decorations.clone(),
+        }
+    }
+
+    /// Build the recorder's `RecordOptions` from the current settings. Keeps the
+    /// two `record::start` call sites (overlay + tray) in sync.
+    fn record_options(&self) -> record::RecordOptions {
+        let c = &self.config;
+        record::RecordOptions {
+            fps: c.record_fps,
+            resolution: c.record_resolution.size(),
+            webcam: if c.record_webcam {
+                Some(c.webcam_device.clone())
+            } else {
+                None
+            },
+            system_audio: if c.record_system_audio {
+                Some(c.system_audio_device.clone())
+            } else {
+                None
+            },
+            mic: if c.record_mic {
+                Some(c.mic_device.clone())
+            } else {
+                None
+            },
+            countdown: c.record_countdown,
         }
     }
 
@@ -2850,13 +2949,10 @@ impl PinSightApp {
                 let job = record::start(
                     monitor_id,
                     region,
-                    self.config.gif_fps,
                     &self.config.save_dir,
                     &self.save_options(),
                     self.config.record_max_seconds,
-                    self.config.record_audio,
-                    self.config.audio_device.clone(),
-                    self.config.record_countdown,
+                    self.record_options(),
                 );
                 let path = job.path.clone();
                 self.record_job = Some(job);
@@ -4581,10 +4677,26 @@ impl PinSightApp {
         // ---- recording ----------------------------------------------------
         ui::card(ui, p, |ui| {
             ui::section_header(ui, p, Icon::Record, t.rec_settings);
+
+            // What the recorder captures: a drawn region, the whole screen,
+            // or the foreground window.
+            ui::field_row(ui, p, t.rec_mode, |ui| {
+                let options = [
+                    (config::RecordMode::Region, t.rec_mode_region),
+                    (config::RecordMode::Screen, t.rec_mode_screen),
+                    (config::RecordMode::Window, t.rec_mode_window),
+                ];
+                if let Some(mode) = ui::segmented(ui, p, self.config.record_mode, &options) {
+                    self.config.record_mode = mode;
+                    let _ = self.config.save();
+                }
+            });
+
+            // Frame rate, 4–60 fps.
             ui::field_row(ui, p, t.rec_fps, |ui| {
-                let mut value = self.config.gif_fps as f32;
-                if ui::slider(ui, p, &mut value, 4.0..=30.0, 0, " fps").changed() {
-                    self.config.gif_fps = value.round() as u32;
+                let mut value = self.config.record_fps as f32;
+                if ui::slider(ui, p, &mut value, 4.0..=60.0, 0, " fps").changed() {
+                    self.config.record_fps = value.round().clamp(4.0, 60.0) as u32;
                     let _ = self.config.save();
                 }
             });
@@ -4630,23 +4742,79 @@ impl PinSightApp {
                         .color(p.text_weak),
                 );
             });
-            ui::field_row(ui, p, t.rec_audio, |ui| {
-                if ui::toggle(ui, p, &mut self.config.record_audio).changed() {
+
+            // Output resolution preset (Source keeps the captured size).
+            ui::field_row(ui, p, t.rec_resolution, |ui| {
+                let options = [
+                    (config::RecordResolution::Source, t.rec_res_source),
+                    (config::RecordResolution::R1080, t.rec_res_1080),
+                    (config::RecordResolution::R720, t.rec_res_720),
+                ];
+                if let Some(res) = ui::segmented(ui, p, self.config.record_resolution, &options) {
+                    self.config.record_resolution = res;
                     let _ = self.config.save();
                 }
             });
-            ui::field_row(ui, p, t.rec_audio_device, |ui| {
-                if ui
-                    .text_edit_singleline(&mut self.config.audio_device)
-                    .changed()
-                {
-                    self.config.audio_device = self.config.audio_device.trim().to_string();
+
+            // Webcam picture-in-picture (MP4 path only).
+            ui::field_row(ui, p, t.rec_webcam, |ui| {
+                if ui::toggle(ui, p, &mut self.config.record_webcam).changed() {
                     let _ = self.config.save();
                 }
             });
+            if self.config.record_webcam {
+                ui::field_row(ui, p, t.rec_webcam_device, |ui| {
+                    if ui
+                        .text_edit_singleline(&mut self.config.webcam_device)
+                        .changed()
+                    {
+                        self.config.webcam_device = self.config.webcam_device.trim().to_string();
+                        let _ = self.config.save();
+                    }
+                });
+            }
+
+            // System / desktop audio (WASAPI loopback on Windows, a monitor
+            // device the user has set up on macOS / Linux).
+            ui::field_row(ui, p, t.rec_system_audio, |ui| {
+                if ui::toggle(ui, p, &mut self.config.record_system_audio).changed() {
+                    let _ = self.config.save();
+                }
+            });
+            if self.config.record_system_audio {
+                ui::field_row(ui, p, t.rec_system_audio_device, |ui| {
+                    if ui
+                        .text_edit_singleline(&mut self.config.system_audio_device)
+                        .changed()
+                    {
+                        self.config.system_audio_device =
+                            self.config.system_audio_device.trim().to_string();
+                        let _ = self.config.save();
+                    }
+                });
+            }
+
+            // Microphone.
+            ui::field_row(ui, p, t.rec_mic, |ui| {
+                if ui::toggle(ui, p, &mut self.config.record_mic).changed() {
+                    let _ = self.config.save();
+                }
+            });
+            if self.config.record_mic {
+                ui::field_row(ui, p, t.rec_mic_device, |ui| {
+                    if ui
+                        .text_edit_singleline(&mut self.config.mic_device)
+                        .changed()
+                    {
+                        self.config.mic_device = self.config.mic_device.trim().to_string();
+                        let _ = self.config.save();
+                    }
+                });
+            }
+
             ui.add_space(2.0);
             ui.label(
-                egui::RichText::new(t.rec_audio_hint)
+                egui::RichText::new(t.rec_device_hint)
                     .size(11.0)
                     .color(p.text_weak),
             );

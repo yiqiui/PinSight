@@ -387,13 +387,26 @@ strings! {
     click_save { en: "Save", zh: "保存", tw: "儲存", ja: "保存", ko: "저장", fr: "Enregistrer", de: "Speichern" }
     click_nothing { en: "Do nothing", zh: "不做任何事", tw: "不做任何事", ja: "何もしない", ko: "아무것도 안 함", fr: "Ne rien faire", de: "Nichts tun" }
     rec_max_seconds { en: "Longest recording", zh: "最长录制时长", tw: "最長錄製時長", ja: "最長録画時間", ko: "최대 녹화 시간", fr: "Durée maximale", de: "Maximale Aufnahmedauer" }
-    rec_audio { en: "Record audio", zh: "录制声音", tw: "錄製聲音", ja: "音声を録画", ko: "오디오 녹음", fr: "Enregistrer l'audio", de: "Audio aufnehmen" }
-    rec_audio_device { en: "Audio device", zh: "音频设备", tw: "音訊裝置", ja: "オーディオデバイス", ko: "오디오 장치", fr: "Périphérique audio", de: "Audiogerät" }
-    rec_audio_hint { en: "Needs ffmpeg. Blank = default device (Windows auto-detects).", zh: "需要 ffmpeg。留空用默认设备（Windows 自动检测）。", tw: "需要 ffmpeg。留空用預設裝置（Windows 自動偵測）。", ja: "ffmpeg が必要。空欄は既定デバイス（Windows 自動検出）。", ko: "ffmpeg 필요. 비우면 기본 장치(Windows 자동 감지).", fr: "Nécessite ffmpeg. Vide = périphérique par défaut (détection auto Windows).", de: "Benötigt ffmpeg. Leer = Standardgerät (Windows automatisch)." }
     rec_unlimited { en: "Unlimited", zh: "不限", tw: "不限", ja: "無制限", ko: "제한 없음", fr: "Illimité", de: "Unbegrenzt" }
+    rec_mode { en: "Capture mode", zh: "录制模式", tw: "錄製模式", ja: "録画モード", ko: "녹화 모드", fr: "Mode de capture", de: "Aufnahmemodus" }
+    rec_mode_region { en: "Region", zh: "区域", tw: "區域", ja: "範囲", ko: "영역", fr: "Zone", de: "Bereich" }
+    rec_mode_screen { en: "Full screen", zh: "全屏", tw: "全螢幕", ja: "全画面", ko: "전체 화면", fr: "Plein écran", de: "Ganzer Bildschirm" }
+    rec_mode_window { en: "Window", zh: "窗口", tw: "視窗", ja: "ウィンドウ", ko: "창", fr: "Fenêtre", de: "Fenster" }
+    rec_resolution { en: "Resolution", zh: "分辨率", tw: "解析度", ja: "解像度", ko: "해상도", fr: "Résolution", de: "Auflösung" }
+    rec_res_source { en: "Source", zh: "原始", tw: "原始", ja: "元サイズ", ko: "원본", fr: "Source", de: "Quelle" }
+    rec_res_1080 { en: "1080p", zh: "1080p", tw: "1080p", ja: "1080p", ko: "1080p", fr: "1080p", de: "1080p" }
+    rec_res_720 { en: "720p", zh: "720p", tw: "720p", ja: "720p", ko: "720p", fr: "720p", de: "720p" }
+    rec_webcam { en: "Webcam (picture-in-picture)", zh: "摄像头画中画", tw: "攝影機子母畫面", ja: "ウェブカメラ (子画面)", ko: "웹캠 (화면 속 화면)", fr: "Webcam (incrustation)", de: "Webcam (Bild-in-Bild)" }
+    rec_webcam_device { en: "Webcam device", zh: "摄像头设备", tw: "攝影機裝置", ja: "ウェブカメラデバイス", ko: "웹캠 장치", fr: "Périphérique webcam", de: "Webcam-Gerät" }
+    rec_system_audio { en: "System audio", zh: "系统声音", tw: "系統聲音", ja: "システム音声", ko: "시스템 오디오", fr: "Audio système", de: "Systemaudio" }
+    rec_system_audio_device { en: "System audio device", zh: "系统声音设备", tw: "系統聲音裝置", ja: "システム音声デバイス", ko: "시스템 오디오 장치", fr: "Périphérique audio système", de: "Systemaudio-Gerät" }
+    rec_mic { en: "Microphone", zh: "麦克风", tw: "麥克風", ja: "マイク", ko: "마이크", fr: "Microphone", de: "Mikrofon" }
+    rec_mic_device { en: "Microphone device", zh: "麦克风设备", tw: "麥克風裝置", ja: "マイクデバイス", ko: "마이크 장치", fr: "Périphérique micro", de: "Mikrofon-Gerät" }
+    rec_device_hint { en: "Needs ffmpeg. Blank = default device (auto-detected).", zh: "需要 ffmpeg。留空用默认设备（自动检测）。", tw: "需要 ffmpeg。留空用預設裝置（自動偵測）。", ja: "ffmpeg が必要。空欄は既定デバイス（自動検出）。", ko: "ffmpeg 필요. 비우면 기본 장치(자동 감지).", fr: "Nécessite ffmpeg. Vide = périphérique par défaut (auto).", de: "Benötigt ffmpeg. Leer = Standardgerät (automatisch)." }
     rec_hud_recording { en: "Recording", zh: "录制中", tw: "錄製中", ja: "録画中", ko: "녹화 중", fr: "Enregistrement", de: "Aufnahme" }
     rec_countdown { en: "Starting in {n}s", zh: "{n} 秒后开始录制", tw: "{n} 秒後開始錄製", ja: "{n} 秒後に録画開始", ko: "{n}초 후 녹화 시작", fr: "Départ dans {n} s", de: "Start in {n} s" }
     rec_countdown_label { en: "Countdown", zh: "录制倒计时", tw: "錄製倒數", ja: "録画カウントダウン", ko: "녹화 카운트다운", fr: "Compte à rebours", de: "Countdown" }
+    rec_no_window { en: "No window found to record", zh: "没有找到可录制的窗口", tw: "沒有找到可錄製的視窗", ja: "録画するウィンドウが見つかりません", ko: "녹화할 창을 찾을 수 없습니다", fr: "Aucune fenêtre à enregistrer", de: "Kein aufzunehmendes Fenster gefunden" }
     rec_countdown_off { en: "Off", zh: "关", tw: "關", ja: "オフ", ko: "끄기", fr: "Désactivé", de: "Aus" }
     rec_hud_paused { en: "Paused", zh: "已暂停", tw: "已暫停", ja: "一時停止", ko: "일시 정지", fr: "En pause", de: "Pausiert" }
     rec_hud_pause { en: "Pause", zh: "暂停", tw: "暫停", ja: "一時停止", ko: "일시 정지", fr: "Pause", de: "Pause" }

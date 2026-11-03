@@ -206,6 +206,52 @@ impl LogLevel {
     }
 }
 
+/// What the recorder captures. Cross-platform: every mode works wherever
+/// PinSight runs (Windows/macOS/Linux), because capture is `xcap`-backed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecordMode {
+    /// A region the user draws on screen (default).
+    Region,
+    /// The entire monitor under the cursor.
+    Screen,
+    /// The foreground window's rectangle.
+    Window,
+}
+impl Default for RecordMode {
+    fn default() -> Self {
+        Self::Region
+    }
+}
+
+/// Output resolution preset for screen recordings (MP4 path only; GIF always
+/// uses the source size).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecordResolution {
+    /// Keep the captured size.
+    Source,
+    /// Scale down to 1920×1080.
+    R1080,
+    /// Scale down to 1280×720.
+    R720,
+}
+impl Default for RecordResolution {
+    fn default() -> Self {
+        Self::Source
+    }
+}
+impl RecordResolution {
+    /// The target (width, height) for this preset, or `None` for source.
+    pub fn size(self) -> Option<(u32, u32)> {
+        match self {
+            Self::Source => None,
+            Self::R1080 => Some((1920, 1080)),
+            Self::R720 => Some((1280, 720)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -232,11 +278,37 @@ pub struct Config {
     pub record_countdown: u32,
     /// Record desktop/microphone audio together with the screen capture.
     /// Requires `ffmpeg` (the recorder already shells out to it for MP4).
+    /// Legacy single-toggle; superseded by `record_mic` / `record_system_audio`.
     pub record_audio: bool,
     /// Audio input device for screen recording. Empty = platform default
     /// (Windows: first DirectShow capture device, discovered at runtime).
     /// Device names are machine-specific, so users may need to set this.
+    /// Legacy; superseded by `mic_device` / `system_audio_device`.
     pub audio_device: String,
+    /// Recording frame rate, in frames per second (4–60).
+    pub record_fps: u32,
+    /// What the recorder captures: a drawn region, the whole screen, or the
+    /// foreground window.
+    pub record_mode: RecordMode,
+    /// Output resolution preset. `Source` keeps the captured size; the others
+    /// scale the frame down via ffmpeg (MP4 path only; GIF uses source).
+    pub record_resolution: RecordResolution,
+    /// Overlay the webcam as a picture-in-picture bubble (MP4 path only).
+    pub record_webcam: bool,
+    /// Webcam device name for the platform capture API
+    /// (Windows/Linux: dshow `video="Name"`; macOS: avfoundation device index
+    /// or name). Empty = first available.
+    pub webcam_device: String,
+    /// Capture desktop/system audio (Windows: WASAPI loopback; macOS/Linux: a
+    /// monitor/loopback device the user has set up). Requires `ffmpeg`.
+    pub record_system_audio: bool,
+    /// System audio device for the platform capture API. Empty = default
+    /// playback/monitor device.
+    pub system_audio_device: String,
+    /// Capture the microphone. Requires `ffmpeg`.
+    pub record_mic: bool,
+    /// Microphone device name. Empty = platform default input device.
+    pub mic_device: String,
     /// Duration (seconds) of a voice-note recording triggered from the tray.
     pub voice_seconds: u32,
     pub long_capture_max_height: u32,
@@ -730,6 +802,15 @@ impl Default for Config {
             record_countdown: 3,
             record_audio: false,
             audio_device: String::new(),
+            record_fps: 30,
+            record_mode: RecordMode::Region,
+            record_resolution: RecordResolution::Source,
+            record_webcam: false,
+            webcam_device: String::new(),
+            record_system_audio: false,
+            system_audio_device: String::new(),
+            record_mic: false,
+            mic_device: String::new(),
             voice_seconds: 10,
             long_capture_max_height: 20_000,
             long_scroll_ticks: 4,
@@ -995,7 +1076,7 @@ impl Config {
 
     pub fn load() -> Self {
         let path = Self::path();
-        match std::fs::read_to_string(&path) {
+        let mut config = match std::fs::read_to_string(&path) {
             Ok(text) => serde_json::from_str(&text).unwrap_or_else(|err| {
                 tracing::warn!(?path, %err, "failed to parse config, using defaults");
                 Self::default()
@@ -1007,7 +1088,18 @@ impl Config {
                 }
                 config
             }
+        };
+        // Migrate the legacy single audio toggle into the new microphone field
+        // so existing users keep recording audio without reconfiguring. The
+        // legacy default capture device (Windows dshow) is a microphone, so the
+        // natural home is `record_mic`.
+        if !config.record_mic && config.record_audio {
+            config.record_mic = true;
+            if config.mic_device.is_empty() {
+                config.mic_device = config.audio_device.clone();
+            }
         }
+        config
     }
 
     pub fn save(&self) -> std::io::Result<()> {

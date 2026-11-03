@@ -151,6 +151,79 @@ pub fn list_windows() -> Vec<WindowInfo> {
     out
 }
 
+/// The window Window-recording mode should capture: the frontmost capturable
+/// window that is not one of PinSight's own (the overlay, the HUD pills).
+///
+/// On Windows we take the OS foreground window directly (filtered against our
+/// own titles); on macOS / Linux `xcap` exposes no z-order, so we fall back to
+/// the largest non-PinSight window, which is the right pick in the vast
+/// majority of cases. Recording only needs the window's rectangle and the
+/// monitor it lives on, so we do not bother resolving an `xcap` id here.
+pub fn foreground_window() -> Option<WindowInfo> {
+    let keep = |w: &WindowInfo| !is_own_window(&w.title, &w.app);
+    #[cfg(windows)]
+    {
+        if let Some(w) = windows_foreground_window().filter(keep) {
+            return Some(w);
+        }
+    }
+    list_windows().into_iter().find(keep)
+}
+
+/// Exclude PinSight's own top-level windows so we never try to record the app
+/// itself (the overlay viewport, the always-on-top HUD pills).
+fn is_own_window(title: &str, app: &str) -> bool {
+    let t = title.to_ascii_lowercase();
+    let a = app.to_ascii_lowercase();
+    t.contains("pinsight") || a.contains("pinsight")
+}
+
+#[cfg(windows)]
+fn windows_foreground_window() -> Option<WindowInfo> {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, IsWindowVisible,
+    };
+
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_invalid() || !IsWindowVisible(hwnd).as_bool() {
+            return None;
+        }
+        // Skip our own windows so a record action launched from inside the app
+        // does not capture the app itself.
+        let len = GetWindowTextLengthW(hwnd).max(0) as usize;
+        let mut buf = vec![0u16; len + 1];
+        GetWindowTextW(hwnd, &mut buf);
+        let title = String::from_utf16_lossy(&buf)
+            .trim_end_matches('\0')
+            .trim()
+            .to_string();
+        if is_own_window(&title, "") {
+            return None;
+        }
+        let mut rect = RECT::default();
+        if GetWindowRect(hwnd, &mut rect).is_ok() {
+            let w = (rect.right - rect.left).max(0) as u32;
+            let h = (rect.bottom - rect.top).max(0) as u32;
+            if w >= 16 && h >= 16 {
+                return Some(WindowInfo {
+                    id: 0,
+                    title,
+                    app: String::new(),
+                    rect: PhysRect {
+                        x: rect.left,
+                        y: rect.top,
+                        w,
+                        h,
+                    },
+                });
+            }
+        }
+        None
+    }
+}
+
 /// Capture a single window by its `xcap` id.
 pub fn grab_window(id: u32) -> Result<RgbaImage> {
     let windows = xcap::Window::all().context("listing windows")?;

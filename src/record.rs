@@ -173,24 +173,44 @@ impl RecordJob {
     }
 }
 
+/// Everything the recorder needs beyond the capture geometry. Aggregated so the
+/// call signature does not grow without bound as we add camera / audio tracks.
+///
+/// Every field is cross-platform: capture is `xcap`-backed and the audio/video
+/// device resolution picks the right ffmpeg input format per operating system.
+#[derive(Clone, Debug, Default)]
+pub struct RecordOptions {
+    /// Frames per second (4–60).
+    pub fps: u32,
+    /// Output resolution; `None` keeps the captured size.
+    pub resolution: Option<(u32, u32)>,
+    /// Picture-in-picture webcam. `None` = off; `Some("")` = default device,
+    /// `Some("Name")` = a specific device.
+    pub webcam: Option<String>,
+    /// System/desktop audio (Windows: WASAPI loopback; macOS/Linux: a
+    /// monitor/loopback device the user has set up). `None` = off.
+    pub system_audio: Option<String>,
+    /// Microphone. `None` = off.
+    pub mic: Option<String>,
+    /// Pre-recording countdown seconds.
+    pub countdown: u32,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn start(
     monitor_id: u32,
     region: ImgRect,
-    fps: u32,
     dir: &std::path::Path,
     options: &util::SaveOptions,
     max_seconds: u32,
-    record_audio: bool,
-    audio_device: String,
-    countdown: u32,
+    record_options: RecordOptions,
 ) -> RecordJob {
     let stop = Arc::new(AtomicBool::new(false));
     let pause = Arc::new(AtomicBool::new(false));
     let done = Arc::new(AtomicBool::new(false));
     let (tx, rx) = std::sync::mpsc::channel();
     let stop_thread = stop.clone();
-    let fps = fps.clamp(4, 30);
+    let fps = record_options.fps.clamp(4, 60);
     let pause_thread = pause.clone();
     // Esc ends the recording from anywhere, even while the recorded window has
     // focus and the status pill is not the active window.
@@ -227,6 +247,7 @@ pub fn start(
         h: region.h.round().max(2.0) as u32,
     };
 
+    let countdown = record_options.countdown.clamp(0, 10);
     std::thread::Builder::new()
         .name("pinsight-recorder".into())
         .spawn(move || {
@@ -239,9 +260,7 @@ pub fn start(
                 &stop_thread,
                 &pause_thread,
                 max_seconds,
-                record_audio,
-                &audio_device,
-                countdown,
+                &record_options,
             ) {
                 let _ = tx.send(RecordUpdate::Failed(err));
             }
@@ -260,7 +279,7 @@ pub fn start(
         active: Duration::ZERO,
         last_tick: Instant::now(),
         was_paused: false,
-        countdown: countdown.clamp(0, 10),
+        countdown,
         region: abs_region,
         monitor: monitor_rect,
         scale,
@@ -277,13 +296,11 @@ fn run(
     stop: &AtomicBool,
     pause: &AtomicBool,
     max_seconds: u32,
-    record_audio: bool,
-    audio_device: &str,
-    countdown: u32,
+    opts: &RecordOptions,
 ) -> Result<(), String> {
     // Pre-recording countdown: one update per second, abortable via stop
     // (Esc or the pill) at any point before frame 0.
-    for remaining in (1..=countdown.clamp(0, 10)).rev() {
+    for remaining in (1..=opts.countdown.clamp(0, 10)).rev() {
         if stop.load(Ordering::Relaxed) {
             let _ = tx.send(RecordUpdate::Cancelled);
             return Ok(());
@@ -316,7 +333,7 @@ fn run(
     #[cfg(windows)]
     let _ = crate::capture::set_capture_exclusion(crate::hud::RECORD_WINDOW_TITLE);
 
-    let mut sink = Sink::create(path, rw, rh, fps, record_audio, audio_device)?;
+    let mut sink = Sink::create(path, rw, rh, fps, opts)?;
     let frame_time = Duration::from_secs_f64(1.0 / fps as f64);
     let start = Instant::now();
     // The cap comes from the settings page (0 = no limit) and is clamped so a
@@ -426,13 +443,12 @@ impl Sink {
         w: u32,
         h: u32,
         fps: u32,
-        record_audio: bool,
-        audio_device: &str,
+        opts: &RecordOptions,
     ) -> Result<Self, String> {
         if path.extension().and_then(|e| e.to_str()) == Some("mp4") {
-            // Video input comes from the raw RGBA pipe. Audio is an optional
-            // second input discovered from a configured device (or the platform
-            // default on Windows).
+            // Input 0 is the raw RGBA screen pipe fed by the recorder thread.
+            // A webcam (picture-in-picture) and audio tracks are additional
+            // ffmpeg inputs; everything is composited/muxed in filter_complex.
             let mut args: Vec<String> = vec![
                 "-hide_banner".into(),
                 "-loglevel".into(),
@@ -449,47 +465,128 @@ impl Sink {
                 "-i".into(),
                 "-".into(),
             ];
-            let mut has_audio = false;
-            if record_audio {
-                if let Some(device) = resolve_audio_device(audio_device) {
+
+            // Extra inputs: webcam (video), then system + mic audio.
+            let mut next_idx = 1u32;
+            let mut cam_idx: Option<u32> = None;
+            if let Some(cam) = &opts.webcam {
+                match camera_input(cam) {
+                    Some((fmt, spec)) => {
+                        // Live device inputs need a larger demuxer queue or
+                        // ffmpeg blocks/drops frames while the screen pipe is
+                        // being written at full speed.
+                        args.push("-thread_queue_size".into());
+                        args.push("1024".into());
+                        args.push("-f".into());
+                        args.push(fmt);
+                        args.push("-i".into());
+                        args.push(spec);
+                        cam_idx = Some(next_idx);
+                        next_idx += 1;
+                    }
+                    None => tracing::warn!(
+                        "webcam is on but no camera device could be resolved; recording screen only"
+                    ),
+                }
+            }
+            let mut audio_idxs: Vec<u32> = Vec::new();
+            if let Some(sys) = &opts.system_audio {
+                if let Some((fmt, spec)) = system_audio_input(sys) {
+                    args.push("-thread_queue_size".into());
+                    args.push("1024".into());
+                    args.push("-f".into());
+                    args.push(fmt);
+                    args.push("-i".into());
+                    args.push(spec);
+                    audio_idxs.push(next_idx);
+                    next_idx += 1;
+                } else {
+                    tracing::warn!(
+                        "system audio is on but no loopback device could be resolved \
+                         (macOS/Linux need a BlackHole/monitor device); recording without it"
+                    );
+                }
+            }
+            if let Some(mic) = &opts.mic {
+                if let Some(device) = resolve_audio_device(mic) {
+                    args.push("-thread_queue_size".into());
+                    args.push("1024".into());
                     args.push("-f".into());
                     args.push(audio_format_flag().into());
                     args.push("-i".into());
                     args.push(audio_device_spec(&device));
-                    has_audio = true;
+                    audio_idxs.push(next_idx);
+                    next_idx += 1;
                 } else {
                     tracing::warn!(
-                        "record_audio is on but no audio device could be resolved; \
-                         recording video only (set config.audio_device or install ffmpeg)"
+                        "microphone is on but no audio device could be resolved; recording without it"
                     );
                 }
             }
-            if has_audio {
+
+            // ---- filter_complex: optional scale, camera overlay, audio mix ----
+            let uses_filter =
+                opts.resolution.is_some() || cam_idx.is_some() || audio_idxs.len() >= 2;
+            let mut fc = String::new();
+            if uses_filter {
+                if let Some((rw, rh)) = opts.resolution {
+                    fc.push_str(&format!("[0:v]scale={rw}:{rh}[base];"));
+                } else {
+                    fc.push_str("[0:v]copy[base];");
+                }
+            }
+            let video_label: String = if let Some(ci) = cam_idx {
+                fc.push_str(&format!("[{ci}:v]scale=320:-1[cam];"));
+                // Drop the bubble in the bottom-right corner; W/H are the main
+                // (screen) input's dimensions inside the overlay filter.
+                fc.push_str("[base][cam]overlay=W-330:H-190[camv];");
+                "[camv]".to_string()
+            } else if uses_filter {
+                "[base]".to_string()
+            } else {
+                "0:v:0".to_string()
+            };
+            let audio_label: Option<String> = if audio_idxs.len() >= 2 {
+                fc.push_str(&format!(
+                    "[{}:a][{}:a]amix=inputs=2:normalize=0[a];",
+                    audio_idxs[0], audio_idxs[1]
+                ));
+                Some("[a]".to_string())
+            } else {
+                None
+            };
+            if !fc.is_empty() {
+                args.push("-filter_complex".into());
+                args.push(fc);
+            }
+
+            // Maps + codecs.
+            args.push("-map".into());
+            args.push(video_label);
+            if let Some(al) = &audio_label {
                 args.push("-map".into());
-                args.push("0:v:0".into());
-                args.push("-map".into());
-                args.push("1:a:0".into());
+                args.push(al.clone());
                 args.push("-c:a".into());
                 args.push("aac".into());
-                args.push("-c:v".into());
-                args.push("libx264".into());
-                args.push("-preset".into());
-                args.push("veryfast".into());
-                args.push("-pix_fmt".into());
-                args.push("yuv420p".into());
-                args.push("-movflags".into());
-                args.push("+faststart".into());
+            } else if audio_idxs.len() == 1 {
+                args.push("-map".into());
+                args.push(format!("{}:a:0", audio_idxs[0]));
+                args.push("-c:a".into());
+                args.push("aac".into());
             } else {
                 args.push("-an".into());
-                args.push("-c:v".into());
-                args.push("libx264".into());
-                args.push("-preset".into());
-                args.push("veryfast".into());
-                args.push("-pix_fmt".into());
-                args.push("yuv420p".into());
-                args.push("-movflags".into());
-                args.push("+faststart".into());
             }
+            args.push("-c:v".into());
+            args.push("libx264".into());
+            args.push("-preset".into());
+            args.push("veryfast".into());
+            args.push("-pix_fmt".into());
+            args.push("yuv420p".into());
+            args.push("-movflags".into());
+            args.push("+faststart".into());
+            // End as soon as the screen pipe (the shortest input) reaches EOF so
+            // persistent device inputs do not keep ffmpeg alive after we stop.
+            args.push("-shortest".into());
             args.push(path.to_string_lossy().into_owned());
 
             let mut child = Command::new("ffmpeg")
@@ -510,7 +607,8 @@ impl Sink {
             });
         }
 
-        // GIF fallback.
+        // GIF fallback: silent, source-sized, no camera (the gif encoder writes
+        // raw frames from the screen pipe only).
         let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
         let mut encoder =
             gif::Encoder::new(file, w as u16, h as u16, &[]).map_err(|e| e.to_string())?;
@@ -642,6 +740,111 @@ fn windows_default_dshow_audio_device() -> Option<String> {
                 let rest = &line[start + 1..];
                 if let Some(end) = rest.find('"') {
                     return Some(rest[..end].to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Build the ffmpeg `-f`/`-i` pair for a webcam device, picking the right input
+/// format per OS and resolving a default device when the name is empty.
+/// Returns `None` only if a default cannot be discovered (rare on Windows).
+fn camera_input(device: &str) -> Option<(String, String)> {
+    match std::env::consts::OS {
+        "windows" => {
+            let name = if device.is_empty() {
+                windows_default_dshow_video_device()?
+            } else {
+                device.to_string()
+            };
+            Some(("dshow".into(), format!("video=\"{name}\"")))
+        }
+        "macos" => {
+            let name = if device.is_empty() {
+                "0".to_string()
+            } else {
+                device.to_string()
+            };
+            Some(("avfoundation".into(), name))
+        }
+        "linux" => {
+            let name = if device.is_empty() {
+                "/dev/video0".to_string()
+            } else {
+                device.to_string()
+            };
+            Some(("v4l2".into(), name))
+        }
+        _ => None,
+    }
+}
+
+/// Build the ffmpeg `-f`/`-i` pair for a system/desktop audio loopback device.
+///
+/// On Windows this is WASAPI, which captures the default output device when the
+/// name is empty (no extra driver needed). On macOS/Linux a loopback device
+/// (BlackHole / a Pulse monitor) must be named explicitly, so an empty name
+/// returns `None` and the caller skips system audio with a warning.
+fn system_audio_input(device: &str) -> Option<(String, String)> {
+    match std::env::consts::OS {
+        "windows" => {
+            let spec = if device.is_empty() {
+                String::new() // WASAPI default = default output (loopback)
+            } else {
+                format!("\"{device}\"")
+            };
+            Some(("wasapi".into(), spec))
+        }
+        "macos" => {
+            if device.is_empty() {
+                None
+            } else {
+                Some(("avfoundation".into(), format!(":{device}")))
+            }
+        }
+        "linux" => {
+            if device.is_empty() {
+                None
+            } else {
+                Some(("pulse".into(), device.to_string()))
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Ask ffmpeg to enumerate DirectShow devices and return the first video one.
+fn windows_default_dshow_video_device() -> Option<String> {
+    let out = Command::new("ffmpeg")
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "info",
+            "-list_devices",
+            "true",
+            "-f",
+            "dshow",
+            "-i",
+            "dummy",
+        ])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stderr);
+    let mut in_video = false;
+    for line in text.lines() {
+        if line.contains("DirectShow video devices") {
+            in_video = true;
+            continue;
+        }
+        if in_video {
+            if let Some(start) = line.find('"') {
+                let rest = &line[start + 1..];
+                if let Some(end) = rest.find('"') {
+                    let name = rest[..end].to_string();
+                    if !name.is_empty() {
+                        return Some(name);
+                    }
                 }
             }
         }

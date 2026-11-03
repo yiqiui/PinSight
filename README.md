@@ -77,7 +77,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | 贴图分组 | ✅ | 分组管理（新建/重命名/删除/整体显隐），每组可绑定**独立全局热键**切换显隐；另有总开关热键 |
 | 剪贴板贴图 | ✅ | 一键把剪贴板图片钉在屏幕上 |
 | 长截图 | 🧪 | 选区后自动滚轮+逐帧捕获+重叠区拼接；适合静态、无固定表头的内容 |
-| 录屏 | ✅ | 选区逐帧捕获；安装 `ffmpeg` 时输出 MP4，否则输出 GIF |
+| 录屏 | ✅ | 三种模式（选区 / 全屏 / 前台窗口）；4–60 fps；分辨率预设（原始 / 1080p / 720p）；可选摄像头画中画、系统声音与麦克风（双音轨混音）；安装 `ffmpeg` 时输出 MP4，否则回退 GIF |
 | 离线 OCR | ✅ | 离线识别：Windows 用内置 `Windows.Media.Ocr`，macOS 用 Vision，Linux 用 Tesseract；工具栏一键选取区域识别；CLI `pinsight shot --ocr` 整屏识别 |
 | 图片上传 | ✅ | 编辑器上传按钮 + CLI `--upload`；默认本地后端落盘到 `<截图目录>/uploaded/`，可切 HTTP（POST/PUT、表单或 JSON 响应） |
 | 语音便签 | 🧪 | 可录制带音轨的录屏便签；点击播放尚未闭环（待接入音频播放库） |
@@ -400,7 +400,16 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
   "gif_fps": 12,
   "record_max_seconds": 0,
-  "record_countdown": 0,
+  "record_countdown": 3,
+  "record_fps": 30,
+  "record_mode": "region",
+  "record_resolution": "source",
+  "record_webcam": false,
+  "webcam_device": "",
+  "record_system_audio": false,
+  "system_audio_device": "",
+  "record_mic": false,
+  "mic_device": "",
   "long_capture_max_height": 20000,
   "long_scroll_ticks": 4,
   "long_scroll_delay_ms": 420,
@@ -447,8 +456,13 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
 }
 ```
 
-- `gif_fps`：录屏帧率（4–30）。
+- `record_fps`：录屏帧率（4–60），MP4 与 GIF 共用；`gif_fps` 为旧字段，已不再参与录制。
 - `record_countdown`：录屏开始前的倒计时秒数（0 / 3 / 5，最长 10），留出摆好窗口的时间。
+- `record_mode`：`region`（选区，弹出选择层）/ `screen`（全屏，光标所在显示器）/ `window`（前台窗口）。
+- `record_resolution`：`source`（原始）/ `r1080`（1920×1080）/ `r720`（1280×720）；仅 MP4 路径缩放，GIF 用原始尺寸。
+- `record_webcam` + `webcam_device`：摄像头画中画（右下角气泡），留空设备名用默认摄像头；仅 MP4。
+- `record_system_audio` + `system_audio_device`：系统声音（Windows 用 WASAPI 回环；macOS/Linux 需显式指定 BlackHole/监听设备）。
+- `record_mic` + `mic_device`：麦克风；留空用平台默认输入设备。系统声音与麦克风同时开启时用 `amix` 混成一条音轨。
 - `long_capture_max_height`：长截图最大高度，防止内存失控。
 - `mcp_enabled`：保留字段；是否启动 MCP 由 `--mcp` 决定。
 - `theme`：`system` / `light` / `dark`。
@@ -656,7 +670,9 @@ python scripts\measure.py 6
 - **平台差异**：贴图在 Windows 用原生 Win32 窗口，macOS / Linux 自动切换为 egui 视口实现，
   交互一致但系统级行为（如真点击穿透）以平台能力为准；托盘图标目前仅 Windows。
 - **长截图**：不适合含固定侧栏/表头、无限滚动、强动画的页面；默认最多 400 帧 / 20000px。
-- **录屏**：帧率受捕获速度限制；GIF 体积较大；MP4 需要 `ffmpeg`。
+- **录屏**：帧率受捕获速度限制（4–60 fps 为目标值）；GIF 体积较大；MP4 / 摄像头 / 音频均需要 `ffmpeg`。
+  摄像头与音频设备不可用时自动降级为纯屏幕录制；设备名填错或被占用会让该次录制失败。
+  系统声音在 Windows 直接可用（WASAPI 回环），macOS / Linux 需先安装并指定 BlackHole / PulseAudio 监听设备。
 - **标注**：矩形 / 椭圆 / 箭头 / 画笔 / 高亮 / 马赛克 / 序号 / 文字均支持 `Ctrl+Z` / `Ctrl+Y` 撤销重做（快照式历史）。
 - **混合 DPI 多显示器**：覆盖层用显示器逻辑坐标定位，极端缩放组合下可能需要微调。
 - **热键冲突**：`global-hotkey` 注册失败时，设置页会把该组合标红并写明"已被其他程序占用"，
