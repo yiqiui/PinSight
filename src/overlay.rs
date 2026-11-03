@@ -1202,8 +1202,8 @@ impl CaptureSession {
                     // left dark text on a dark panel once light mode was on.
                     .fill(p.card)
                     .stroke(egui::Stroke::new(1.0, p.stroke))
-                    .corner_radius(12)
-                    .inner_margin(egui::Margin::symmetric(8, 7))
+                    .corner_radius(14)
+                    .inner_margin(egui::Margin::symmetric(10, 8))
                     .shadow(egui::epaint::Shadow {
                         offset: [0, 6],
                         blur: 18,
@@ -1211,9 +1211,13 @@ impl CaptureSession {
                         color: egui::Color32::from_black_alpha(90),
                     })
                     .show(ui, |ui| {
-                        ui.spacing_mut().item_spacing = egui::vec2(3.0, 0.0);
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 3.0;
+                        ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
+                        // Keep the bar from running off a narrow screen: cap its
+                        // width to the viewport and let the row wrap when the
+                        // tools + colours + actions would not fit on one line.
+                        ui.set_max_width((screen.width() - 48.0).max(320.0));
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                             for tool in Tool::ALL {
                                 let selected = self.tool == tool;
                                 let label =
