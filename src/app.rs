@@ -249,6 +249,11 @@ pub struct PinSightApp {
     pending_mcp: Option<PendingMcpCapture>,
     long_job: Option<LongShotJob>,
     record_job: Option<RecordJob>,
+    /// Frames since a HUD job started. `set_capture_exclusion` is re-asserted
+    /// for the first second so a freshly created pill window is covered, then
+    /// stopped: calling `SetWindowDisplayAffinity` every frame made the pill
+    /// jitter and the hovered cursor flicker.
+    hud_exclude_frames: u32,
     /// Annotation layer over the running recording, open while the user draws.
     mark_layer: Option<crate::marklayer::MarkLayer>,
     toast: Option<Toast>,
@@ -394,6 +399,7 @@ impl PinSightApp {
             pending_mcp: None,
             long_job: None,
             record_job: None,
+            hud_exclude_frames: 0,
             mark_layer: None,
             toast: None,
             last_image: None,
@@ -667,8 +673,20 @@ impl PinSightApp {
         // screenshot, GIF or recorded frame, and there is no hide/show flicker.
         // The call is idempotent, so re-applying it every frame is harmless and
         // also re-covers a pill whose window was recreated.
-        crate::capture::set_capture_exclusion(crate::hud::RECORD_WINDOW_TITLE);
-        crate::capture::set_capture_exclusion(crate::hud::LONG_WINDOW_TITLE);
+        // Re-assert the WGC exclusion for the first ~1 s of a job, so a pill
+        // window created on the first frame is covered, then stop. Doing this
+        // every frame made the pill jitter and the hovered cursor flicker;
+        // a deferred viewport keeps the same HWND, so the affinity persists.
+        let any_job = self.record_job.is_some() || self.long_job.is_some();
+        if any_job {
+            if self.hud_exclude_frames < 90 {
+                crate::capture::set_capture_exclusion(crate::hud::RECORD_WINDOW_TITLE);
+                crate::capture::set_capture_exclusion(crate::hud::LONG_WINDOW_TITLE);
+                self.hud_exclude_frames += 1;
+            }
+        } else {
+            self.hud_exclude_frames = 0;
+        }
 
         if let Some(job) = self.record_job.as_mut() {
             match crate::hud::show_record(ctx, job, self.tr.tr, p, Some(toast.as_str())) {

@@ -166,6 +166,9 @@ pub struct CaptureSession {
     history: History,
     /// In-flight text annotation: the click anchor plus the buffer being typed.
     editing: Option<TextDraft>,
+    /// Whether OS input-method (IME) is currently enabled for this window.
+    /// Tracked so the `IMEAllowed` command is only sent on transitions.
+    ime_on: bool,
     /// Measured size of the toolbar from the previous frame, so the panel can be
     /// kept inside the screen when it is docked near an edge.
     toolbar_size: Option<egui::Vec2>,
@@ -216,6 +219,7 @@ impl CaptureSession {
             annotations: Vec::new(),
             history: History::default(),
             editing: None,
+            ime_on: false,
             toolbar_size: None,
             active: None,
             drag: None,
@@ -300,6 +304,18 @@ impl CaptureSession {
         // Captured before handling: committing on Enter clears `editing`, but
         // that same Enter must not also confirm the whole capture.
         let editing_text = self.editing.is_some();
+
+        // Enable the OS input method (IME) while a text field is open. Without
+        // this the overlay window never receives composition events, so a
+        // Chinese/Japanese IME swallows letters and symbols — only digits (which
+        // bypass composition) ever reach the field. That was the "only numbers
+        // can be typed" bug. Turned off again when the field closes so plain
+        // single-key tool shortcuts keep working.
+        if editing_text != self.ime_on {
+            ctx.send_viewport_cmd(egui::ViewportCommand::IMEAllowed(editing_text));
+            self.ime_on = editing_text;
+        }
+
         self.handle_keyboard(ui);
         if !editing_text {
             if let Some(action) = self.keyboard_action(ui) {

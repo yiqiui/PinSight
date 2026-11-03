@@ -54,7 +54,12 @@ fn pill_position(monitor: &crate::util::PhysRect, scale: f32, width: f32) -> egu
     let left = monitor.x as f32 / scale;
     let top = monitor.y as f32 / scale;
     let w = monitor.w as f32 / scale;
-    egui::pos2(left + (w - width).max(0.0) / 2.0, top + 14.0)
+    // Whole pixels: a fractional position is re-rounded by the OS on every
+    // frame, which makes the window jitter and the hovered cursor flicker.
+    egui::pos2(
+        (left + (w - width).max(0.0) / 2.0).round(),
+        (top + 14.0).round(),
+    )
 }
 
 /// A small always-on-top window holding `add_contents` on a rounded card, so
@@ -165,7 +170,11 @@ fn pill_pos(monitor: &crate::util::PhysRect, scale: f32, w: f32) -> egui::Pos2 {
     let left = monitor.x as f32 / scale;
     let top = monitor.y as f32 / scale;
     let mw = monitor.w as f32 / scale;
-    egui::pos2(left + (mw - w).max(0.0) / 2.0, top + 12.0)
+    // Whole pixels — see the note in `pill_position`.
+    egui::pos2(
+        (left + (mw - w).max(0.0) / 2.0).round(),
+        (top + 12.0).round(),
+    )
 }
 
 /// Centre of `region` for a square countdown window, in logical points.
@@ -175,7 +184,11 @@ fn center_pos(region: &crate::util::PhysRect, scale: f32, size: f32) -> egui::Po
     let top = region.y as f32 / scale;
     let rw = region.w as f32 / scale;
     let rh = region.h as f32 / scale;
-    egui::pos2(left + (rw - size) / 2.0, top + (rh - size) / 2.0)
+    // Whole pixels — see the note in `pill_position`.
+    egui::pos2(
+        (left + (rw - size) / 2.0).round(),
+        (top + (rh - size) / 2.0).round(),
+    )
 }
 
 /// A filled red "Stop" pill, the one action that must never be missed.
