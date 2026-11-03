@@ -155,6 +155,13 @@ static RECORD_ACTION: OnceLock<Arc<Mutex<Option<RecordHudAction>>>> = OnceLock::
 /// Whether the deferred recording viewport is currently open, so it can be
 /// closed the moment the job ends (a deferred viewport outlives the frame).
 static RECORD_OPEN: AtomicBool = AtomicBool::new(false);
+/// Last geometry (w, h, x, y) applied to the deferred recording viewport, so
+/// the builder only carries a position/size when it actually changes.
+static HUD_GEOM: OnceLock<Mutex<Option<(u32, u32, i32, i32)>>> = OnceLock::new();
+
+fn hud_geom() -> &'static Mutex<Option<(u32, u32, i32, i32)>> {
+    HUD_GEOM.get_or_init(|| Mutex::new(None))
+}
 
 fn record_snap() -> &'static Arc<Mutex<RecordSnap>> {
     RECORD_SNAP.get_or_init(|| Arc::new(Mutex::new(RecordSnap::blank())))
@@ -254,6 +261,9 @@ fn draw_record_pill(
     palette: &Palette,
 ) -> Option<RecordHudAction> {
     let mut action = None;
+    // Any interactive control under the pointer this frame; used for the single
+    // deterministic cursor write at the end.
+    let mut hovering = false;
     let paused = snap.paused;
     let pulse = 0.55 + 0.45 * (ui.input(|i| i.time) as f32 * 4.0).sin();
     let frame = Frame::NONE
@@ -301,7 +311,7 @@ fn draw_record_pill(
                 .allocate_exact_size(Vec2::new(1.0, 18.0), egui::Sense::hover())
                 .0;
             ui.painter().rect_filled(sep, 0.0, palette.stroke);
-            if ui::icon_button(
+            let pause_resp = ui::icon_button(
                 ui,
                 palette,
                 if paused {
@@ -315,22 +325,24 @@ fn draw_record_pill(
                 } else {
                     tr.rec_hud_pause
                 },
-            )
-            .clicked()
-            {
+            );
+            hovering |= pause_resp.hovered();
+            if pause_resp.clicked() {
                 action = Some(if paused {
                     RecordHudAction::Resume
                 } else {
                     RecordHudAction::Pause
                 });
             }
-            if ui::icon_button(ui, palette, ui::Icon::Pencil, false, tr.rec_annotate).clicked() {
+            let annotate_resp =
+                ui::icon_button(ui, palette, ui::Icon::Pencil, false, tr.rec_annotate);
+            hovering |= annotate_resp.hovered();
+            if annotate_resp.clicked() {
                 action = Some(RecordHudAction::Annotate);
             }
-            if stop_button(ui, tr.rec_hud_stop)
-                .on_hover_text(tr.rec_hud_hint)
-                .clicked()
-            {
+            let stop_resp = stop_button(ui, tr.rec_hud_stop);
+            hovering |= stop_resp.hovered();
+            if stop_resp.on_hover_text(tr.rec_hud_hint).clicked() {
                 action = Some(RecordHudAction::Stop);
             }
         });
@@ -341,6 +353,14 @@ fn draw_record_pill(
                     .color(palette.text_weak),
             );
         }
+    });
+    // Exactly one cursor write per frame. Several widgets each writing the
+    // cursor in the same pass can leave the OS oscillating between the arrow
+    // and the hand — the "cursor flickers" symptom.
+    ui.ctx().set_cursor_icon(if hovering {
+        egui::CursorIcon::PointingHand
+    } else {
+        egui::CursorIcon::Default
     });
     action
 }
@@ -397,7 +417,7 @@ pub fn show_record(
         (PILL_W, h, pill_pos(&snap.monitor, snap.scale, PILL_W))
     };
 
-    let builder = egui::ViewportBuilder::default()
+    let mut builder = egui::ViewportBuilder::default()
         .with_title(RECORD_WINDOW_TITLE)
         .with_decorations(false)
         .with_transparent(true)
@@ -405,9 +425,23 @@ pub fn show_record(
         .with_resizable(false)
         .with_taskbar(false)
         // The countdown is click-through; the pill needs its buttons.
-        .with_mouse_passthrough(counting)
-        .with_inner_size(Vec2::new(w, h))
-        .with_position(pos);
+        .with_mouse_passthrough(counting);
+    // Only re-apply the geometry when it changes. Re-sending the same position
+    // and size every frame makes the OS re-round it, which nudges the window by
+    // a pixel and makes the hovered cursor flicker.
+    let geom = (
+        w.round() as u32,
+        h.round() as u32,
+        pos.x.round() as i32,
+        pos.y.round() as i32,
+    );
+    let changed = hud_geom().lock().map(|g| *g != Some(geom)).unwrap_or(true);
+    if changed {
+        builder = builder.with_inner_size(Vec2::new(w, h)).with_position(pos);
+        if let Ok(mut g) = hud_geom().lock() {
+            *g = Some(geom);
+        }
+    }
 
     let state = Arc::clone(record_snap());
     let action_slot = Arc::clone(record_action());
@@ -450,6 +484,11 @@ pub fn close_record(ctx: &egui::Context) {
             egui::ViewportId::from_hash_of(RECORD_HUD_ID),
             egui::ViewportCommand::Close,
         );
+        // Forget the geometry so the next recording starts from a clean slate
+        // (the window is recreated at a possibly different size).
+        if let Ok(mut g) = hud_geom().lock() {
+            *g = None;
+        }
     }
 }
 

@@ -616,37 +616,75 @@ impl CaptureSession {
         10.0 + self.width * 2.5
     }
 
-    /// Float the inline text editor at the click anchor. A single-line edit is
-    /// used so Enter does not insert a newline — the overlay's keyboard handler
-    /// commits on Enter instead.
+    /// Float a custom inline text field at the click anchor.
+    ///
+    /// This deliberately does *not* use `egui::TextEdit`. On an immediate
+    /// viewport the TextEdit's IME request never reliably reaches the overlay
+    /// window, so a Chinese IME swallowed every letter and symbol (only digits,
+    /// which bypass composition, got through). Handling `Event::Ime` ourselves
+    /// puts the committed composition straight into the buffer regardless of
+    /// that plumbing, and a paste button is a guaranteed fallback.
     fn show_text_editor(&mut self, ui: &mut egui::Ui, screen: egui::Rect, scale: f32) {
         let hint = self.tr.ov_text_hint;
-        // Clamp the on-screen font so a tiny or huge stroke width still yields a
-        // legible, clickable field.
-        let font = egui::FontId::proportional((self.text_size() * scale).clamp(14.0, 44.0));
+        let paste_label = self.tr.ov_paste;
+        let palette = self.palette;
+        let font = egui::FontId::proportional((self.text_size() * scale).clamp(14.0, 40.0));
         let Some(draft) = self.editing.as_mut() else {
             return;
         };
+        let width = 360.0_f32;
         let pos = screen.min + draft.at.to_vec2() * scale;
-        // Keep the field fully inside the overlay so a click near the bottom or
-        // right edge never puts the editor (and its caret) off-screen.
-        let width = 320.0;
+        // Keep the field fully inside the overlay.
         let pos = egui::pos2(
             pos.x
                 .min(screen.right() - width - 12.0)
                 .max(screen.left() + 8.0),
-            pos.y.min(screen.bottom() - 64.0).max(screen.top() + 8.0),
+            pos.y.min(screen.bottom() - 92.0).max(screen.top() + 8.0),
         );
+
+        // Read this frame's text input ourselves. Reading events does not
+        // consume them, and no other widget is focused while editing, so there
+        // is no double insertion.
+        let mut preedit = String::new();
         let mut commit = false;
+        let mut cancel = false;
+        ui.input(|i| {
+            for ev in &i.events {
+                match ev {
+                    egui::Event::Text(t) => draft.buffer.push_str(t),
+                    egui::Event::Ime(egui::ImeEvent::Commit(t)) => draft.buffer.push_str(t),
+                    egui::Event::Ime(egui::ImeEvent::Preedit { text, .. }) => {
+                        preedit = text.clone();
+                    }
+                    egui::Event::Paste(t) => draft.buffer.push_str(t),
+                    egui::Event::Key {
+                        key, pressed: true, ..
+                    } => match *key {
+                        egui::Key::Backspace => {
+                            draft.buffer.pop();
+                        }
+                        egui::Key::Enter => commit = true,
+                        egui::Key::Escape => cancel = true,
+                        _ => {}
+                    },
+                    _ => {}
+                }
+            }
+        });
+        // Fallback for integrations that don't emit `Event::Paste` without a
+        // focused TextEdit: read the clipboard directly on Ctrl/Cmd+V.
+        if ui.input(|i| i.key_pressed(egui::Key::V) && (i.modifiers.ctrl || i.modifiers.command)) {
+            if let Ok(mut cb) = arboard::Clipboard::new() {
+                if let Ok(text) = cb.get_text() {
+                    draft.buffer.push_str(&text);
+                }
+            }
+        }
+
         egui::Area::new(egui::Id::new("pinsight-text-editor"))
             .fixed_pos(pos)
-            // Tooltip order sits above the toolbar and every other layer, so
-            // the field and its caret are always visible and receive input.
             .order(egui::Order::Tooltip)
             .show(ui.ctx(), |ui| {
-                // A solid dark plate behind the text. Without it, white text on
-                // a light screenshot looked like "nothing was typed" — the
-                // editor was accepting input all along, it was just invisible.
                 let frame = egui::Frame::NONE
                     .fill(egui::Color32::from_rgb(24, 26, 30))
                     .stroke(egui::Stroke::new(
@@ -654,7 +692,7 @@ impl CaptureSession {
                         egui::Color32::from_rgb(96, 104, 116),
                     ))
                     .corner_radius(8)
-                    .inner_margin(egui::Margin::symmetric(6, 5))
+                    .inner_margin(egui::Margin::symmetric(8, 6))
                     .shadow(egui::epaint::Shadow {
                         offset: [0, 4],
                         blur: 16,
@@ -662,23 +700,94 @@ impl CaptureSession {
                         color: egui::Color32::from_black_alpha(120),
                     });
                 frame.show(ui, |ui| {
-                    let edit = egui::TextEdit::singleline(&mut draft.buffer)
-                        .hint_text(hint)
-                        .desired_width(width)
-                        .font(font)
-                        .text_color(egui::Color32::from_rgb(240, 242, 245))
-                        .background_color(egui::Color32::from_rgb(16, 18, 22))
-                        .margin(egui::Margin::symmetric(6, 4));
-                    let response = ui.add(edit);
-                    // Request focus every frame so the caret keeps blinking and
-                    // keys keep flowing to the field even after a repaint.
-                    response.request_focus();
-                    if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        commit = true;
+                    ui.set_width(width);
+                    let row_h = font.size * 1.5 + 8.0;
+                    let (rect, _resp) =
+                        ui.allocate_exact_size(egui::vec2(width, row_h), egui::Sense::click());
+                    let painter = ui.painter();
+                    painter.rect_filled(rect, 6.0, egui::Color32::from_rgb(16, 18, 22));
+
+                    let empty = draft.buffer.is_empty() && preedit.is_empty();
+                    let shown = if empty {
+                        hint.to_string()
+                    } else {
+                        format!("{}{}", draft.buffer, preedit)
+                    };
+                    let color = if empty {
+                        egui::Color32::from_gray(150)
+                    } else {
+                        egui::Color32::from_rgb(240, 242, 245)
+                    };
+                    let galley = painter.layout_no_wrap(shown, font.clone(), color);
+                    let text_left = rect.left() + 8.0;
+                    painter.galley(
+                        egui::pos2(text_left, rect.center().y - galley.size().y * 0.5),
+                        galley,
+                        color,
+                    );
+
+                    // Underline the in-progress composition.
+                    if !preedit.is_empty() {
+                        let committed =
+                            painter.layout_no_wrap(draft.buffer.clone(), font.clone(), color);
+                        let start = text_left + committed.size().x;
+                        let pre = painter.layout_no_wrap(preedit.clone(), font.clone(), color);
+                        painter.rect_filled(
+                            egui::Rect::from_min_size(
+                                egui::pos2(start, rect.center().y + font.size * 0.5),
+                                egui::vec2(pre.size().x.max(2.0), 1.5),
+                            ),
+                            0.0,
+                            egui::Color32::from_rgb(120, 180, 255),
+                        );
                     }
+
+                    // Caret x at the end of the buffer (also the IME anchor).
+                    let before = painter.layout_no_wrap(draft.buffer.clone(), font.clone(), color);
+                    let caret_x = text_left + before.size().x;
+                    if (ui.input(|i| i.time) * 2.0) as i64 % 2 == 0 {
+                        painter.rect_filled(
+                            egui::Rect::from_min_size(
+                                egui::pos2(caret_x, rect.top() + 5.0),
+                                egui::vec2(1.5, rect.height() - 10.0),
+                            ),
+                            0.0,
+                            egui::Color32::WHITE,
+                        );
+                    }
+                    // Keep the OS IME attached to this viewport and place the
+                    // candidate window at the caret. Without an `ime` request in
+                    // the platform output the window's IME is toggled off every
+                    // frame, so composition never survives — the real reason a
+                    // Chinese IME swallowed letters and symbols.
+                    ui.output_mut(|o| {
+                        o.ime = Some(egui::output::IMEOutput {
+                            purpose: egui::IMEPurpose::Normal,
+                            rect,
+                            cursor_rect: egui::Rect::from_min_size(
+                                egui::pos2(caret_x, rect.top() + 4.0),
+                                egui::vec2(2.0, rect.height() - 8.0),
+                            ),
+                            should_interrupt_composition: false,
+                        });
+                    });
+
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        if ui::link_button(ui, &palette, Icon::Copy, paste_label).clicked() {
+                            if let Ok(mut cb) = arboard::Clipboard::new() {
+                                if let Ok(text) = cb.get_text() {
+                                    draft.buffer.push_str(&text);
+                                }
+                            }
+                        }
+                    });
                 });
             });
-        if commit {
+
+        if cancel {
+            self.editing = None;
+        } else if commit {
             self.commit_text();
         }
     }

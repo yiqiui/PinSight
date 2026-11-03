@@ -716,7 +716,7 @@ impl PinSightApp {
         // a deferred viewport keeps the same HWND, so the affinity persists.
         let any_job = self.record_job.is_some() || self.long_job.is_some();
         if any_job {
-            if self.hud_exclude_frames < 90 {
+            if self.hud_exclude_frames < 30 {
                 crate::capture::set_capture_exclusion(crate::hud::RECORD_WINDOW_TITLE);
                 crate::capture::set_capture_exclusion(crate::hud::LONG_WINDOW_TITLE);
                 self.hud_exclude_frames += 1;

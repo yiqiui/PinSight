@@ -810,6 +810,7 @@ strings! {
     tool_numbered { en: "Numbered", zh: "序号标注", tw: "序號標註", ja: "連番", ko: "번호 표시", fr: "Numérotation", de: "Nummerierung" }
     tool_text { en: "Text", zh: "文字", tw: "文字", ja: "テキスト", ko: "텍스트", fr: "Texte", de: "Text" }
     ov_text_hint { en: "Type, Enter to place", zh: "输入文字，回车放置", tw: "輸入文字，Enter 放置", ja: "入力して Enter で確定", ko: "입력 후 Enter로 배치", fr: "Tapez, Entrée pour valider", de: "Tippen, Enter zum Bestätigen" }
+    ov_paste { en: "Paste", zh: "粘贴", tw: "貼上", ja: "貼り付け", ko: "붙여넣기", fr: "Coller", de: "Einfügen" }
     ov_clear { en: "Clear", zh: "清空", tw: "清空", ja: "クリア", ko: "지우기", fr: "Effacer", de: "Leeren" }
     ov_undo { en: "Undo", zh: "撤销", tw: "還原", ja: "元に戻す", ko: "실행 취소", fr: "Annuler", de: "Rückgängig" }
     ov_redo { en: "Redo", zh: "重做", tw: "重做", ja: "やり直す", ko: "다시 실행", fr: "Rétablir", de: "Wiederholen" }
