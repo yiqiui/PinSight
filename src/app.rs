@@ -198,6 +198,18 @@ impl Default for GifEditorState {
     }
 }
 
+/// State machine for the Updates tab.
+enum UpdateUi {
+    Idle,
+    Checking,
+    /// Current version, plus the latest published release (for re-download).
+    UpToDate(String, Option<Box<crate::update::Release>>),
+    Available(Box<crate::update::Release>),
+    Downloading,
+    Downloaded(PathBuf),
+    Error(String),
+}
+
 pub struct PinSightApp {
     pub(crate) config: Config,
     pub(crate) hotkeys: Hotkeys,
@@ -254,6 +266,14 @@ pub struct PinSightApp {
     /// stopped: calling `SetWindowDisplayAffinity` every frame made the pill
     /// jitter and the hovered cursor flicker.
     hud_exclude_frames: u32,
+    /// Updates tab state machine.
+    update_state: UpdateUi,
+    /// Pending GitHub release check (runs on a worker thread).
+    update_check_rx: Option<std::sync::mpsc::Receiver<Result<crate::update::Outcome, String>>>,
+    /// In-flight download.
+    update_dl: Option<crate::update::DownloadJob>,
+    /// Whether the one-shot startup check already ran.
+    update_startup_checked: bool,
     /// Annotation layer over the running recording, open while the user draws.
     mark_layer: Option<crate::marklayer::MarkLayer>,
     toast: Option<Toast>,
@@ -400,6 +420,10 @@ impl PinSightApp {
             long_job: None,
             record_job: None,
             hud_exclude_frames: 0,
+            update_state: UpdateUi::Idle,
+            update_check_rx: None,
+            update_dl: None,
+            update_startup_checked: false,
             mark_layer: None,
             toast: None,
             last_image: None,
@@ -1376,6 +1400,84 @@ impl PinSightApp {
                     ctx.request_repaint_after(Duration::from_millis(250));
                 }
             }
+        }
+    }
+
+    /// Kick off a GitHub release check on a worker thread.
+    fn begin_update_check(&mut self) {
+        if self.update_check_rx.is_some() {
+            return;
+        }
+        self.update_state = UpdateUi::Checking;
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.update_check_rx = Some(rx);
+        let cfg = self.config.clone();
+        std::thread::Builder::new()
+            .name("pinsight-update-check".into())
+            .spawn(move || {
+                let _ = tx.send(crate::update::check(&cfg));
+            })
+            .ok();
+    }
+
+    /// Drain the update check / download workers and run the startup check.
+    fn poll_update(&mut self, ctx: &egui::Context) {
+        use std::sync::mpsc::TryRecvError;
+
+        if let Some(rx) = &self.update_check_rx {
+            match rx.try_recv() {
+                Ok(Ok(crate::update::Outcome::UpToDate { current, latest })) => {
+                    self.update_state = UpdateUi::UpToDate(current, latest);
+                    self.update_check_rx = None;
+                }
+                Ok(Ok(crate::update::Outcome::Available(rel))) => {
+                    let v = rel.version.clone();
+                    self.update_state = UpdateUi::Available(rel);
+                    self.update_check_rx = None;
+                    self.toast(format!("{} v{v}", self.tr.tr.upd_available_toast), false);
+                }
+                Ok(Err(err)) => {
+                    self.update_state = UpdateUi::Error(err);
+                    self.update_check_rx = None;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.update_state = UpdateUi::Error(self.tr.tr.upd_check_failed.to_string());
+                    self.update_check_rx = None;
+                }
+                Err(TryRecvError::Empty) => {
+                    ctx.request_repaint_after(Duration::from_millis(200));
+                }
+            }
+        }
+
+        if let Some(job) = &self.update_dl {
+            match job.rx.try_recv() {
+                Ok(Ok(path)) => {
+                    self.update_state = UpdateUi::Downloaded(path);
+                    self.update_dl = None;
+                    self.toast(self.tr.tr.upd_downloaded, false);
+                }
+                Ok(Err(err)) => {
+                    self.update_state = UpdateUi::Error(err);
+                    self.update_dl = None;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.update_state = UpdateUi::Error(self.tr.tr.upd_download_failed.to_string());
+                    self.update_dl = None;
+                }
+                Err(TryRecvError::Empty) => {
+                    ctx.request_repaint_after(Duration::from_millis(120));
+                }
+            }
+        }
+
+        // One-shot startup check, a few seconds in so the window is already up.
+        if self.config.update_on_start
+            && !self.update_startup_checked
+            && self.started.elapsed() > Duration::from_secs(4)
+        {
+            self.update_startup_checked = true;
+            self.begin_update_check();
         }
     }
 
@@ -2731,9 +2833,8 @@ impl PinSightApp {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                     self.page = Page::Settings;
                     self.settings_tab = SettingsTab::Updates;
-                    ctx.open_url(egui::OpenUrl::new_tab(
-                        "https://github.com/xiu-k/pinsight/releases",
-                    ));
+                    // Run a real check instead of just opening a web page.
+                    self.begin_update_check();
                 }
                 TrayCommand::Restart => {
                     self.toast(self.tr.tr.tray_restarting_toast, false);
@@ -2745,9 +2846,10 @@ impl PinSightApp {
                     self.page = Page::Settings;
                 }
                 TrayCommand::Help => {
-                    ctx.open_url(egui::OpenUrl::new_tab(
-                        "https://github.com/xiu-k/pinsight#readme",
-                    ));
+                    ctx.open_url(egui::OpenUrl::new_tab(format!(
+                        "https://github.com/{}/#readme",
+                        crate::update::REPO
+                    )));
                 }
                 TrayCommand::ShowWindow => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
@@ -6034,6 +6136,13 @@ impl PinSightApp {
     /// opens the releases page instead of pretending to poll an endpoint.
     fn updates_tab(&mut self, ui: &mut egui::Ui, p: &Palette) {
         let t = self.tr.tr;
+        let mut check_now = false;
+        let mut open_page = false;
+        let mut start_download = false;
+        let mut cancel_dl = false;
+        let mut open_folder = false;
+        let mut install = false;
+
         ui::card(ui, p, |ui| {
             ui::section_header(ui, p, Icon::Reset, t.sec_updates);
             ui.add_space(8.0);
@@ -6064,13 +6173,217 @@ impl PinSightApp {
                     .size(12.0)
                     .color(p.text_weak),
             );
-            ui.add_space(8.0);
+            ui.add_space(10.0);
+
+            // Live status for the check / download, then the actions.
+            match &self.update_state {
+                UpdateUi::Idle => {
+                    ui.label(
+                        egui::RichText::new(t.upd_idle)
+                            .size(12.0)
+                            .color(p.text_weak),
+                    );
+                }
+                UpdateUi::Checking => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(egui::RichText::new(t.upd_checking).size(12.5).color(p.text));
+                    });
+                }
+                UpdateUi::UpToDate(current, latest) => {
+                    ui.label(
+                        egui::RichText::new(format!("{} ({})", t.upd_uptodate, current))
+                            .size(12.5)
+                            .color(p.success),
+                    );
+                    // Still let the user (re)download the latest build — useful
+                    // for a clean reinstall and for verifying the updater.
+                    if let Some(rel) = latest {
+                        if let Some(asset) = &rel.asset {
+                            ui.add_space(6.0);
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} · {}",
+                                    asset.name,
+                                    crate::update::human_size(asset.size)
+                                ))
+                                .size(11.5)
+                                .monospace()
+                                .color(p.text_weak),
+                            );
+                            ui.add_space(8.0);
+                            ui.horizontal(|ui| {
+                                if ui::button(ui, p, t.upd_download).clicked() {
+                                    start_download = true;
+                                }
+                                if ui::button(ui, p, t.upd_open_page).clicked() {
+                                    open_page = true;
+                                }
+                            });
+                        }
+                    }
+                }
+                UpdateUi::Available(rel) => {
+                    ui.label(
+                        egui::RichText::new(format!("{} v{}", t.upd_available, rel.version))
+                            .size(13.5)
+                            .strong()
+                            .color(p.accent),
+                    );
+                    if let Some(asset) = &rel.asset {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} · {}",
+                                asset.name,
+                                crate::update::human_size(asset.size)
+                            ))
+                            .size(11.5)
+                            .monospace()
+                            .color(p.text_weak),
+                        );
+                    } else {
+                        ui.label(
+                            egui::RichText::new(t.upd_no_asset)
+                                .size(11.5)
+                                .color(p.danger),
+                        );
+                    }
+                    if !rel.notes.trim().is_empty() {
+                        ui.add_space(4.0);
+                        egui::ScrollArea::vertical()
+                            .max_height(120.0)
+                            .auto_shrink([false, true])
+                            .show(ui, |ui| {
+                                ui.label(
+                                    egui::RichText::new(rel.notes.as_str())
+                                        .size(11.5)
+                                        .color(p.text_weak),
+                                );
+                            });
+                    }
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if rel.asset.is_some()
+                            && ui::primary_button(ui, p, t.upd_download).clicked()
+                        {
+                            start_download = true;
+                        }
+                        if ui::button(ui, p, t.upd_open_page).clicked() {
+                            open_page = true;
+                        }
+                    });
+                }
+                UpdateUi::Downloading => {
+                    let (done, total) = match &self.update_dl {
+                        Some(job) => (job.done(), job.total),
+                        None => (0, 0),
+                    };
+                    let frac = if total > 0 {
+                        (done as f32 / total as f32).clamp(0.0, 1.0)
+                    } else {
+                        0.0
+                    };
+                    let text = format!(
+                        "{} / {}",
+                        crate::update::human_size(done),
+                        if total > 0 {
+                            crate::update::human_size(total)
+                        } else {
+                            "?".to_string()
+                        }
+                    );
+                    ui.add(egui::ProgressBar::new(frac).text(text).desired_width(340.0));
+                    ui.add_space(6.0);
+                    if ui::button(ui, p, t.upd_cancel).clicked() {
+                        cancel_dl = true;
+                    }
+                }
+                UpdateUi::Downloaded(path) => {
+                    ui.label(
+                        egui::RichText::new(format!("{} {}", t.upd_downloaded, path.display()))
+                            .size(11.5)
+                            .color(p.success),
+                    );
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if ui::button(ui, p, t.upd_open_folder).clicked() {
+                            open_folder = true;
+                        }
+                        #[cfg(windows)]
+                        if ui::primary_button(ui, p, t.upd_install).clicked() {
+                            install = true;
+                        }
+                    });
+                }
+                UpdateUi::Error(err) => {
+                    ui.label(egui::RichText::new(err.as_str()).size(12.0).color(p.danger));
+                }
+            }
+
+            ui.add_space(10.0);
             if ui::link_button(ui, p, Icon::Reset, t.upd_check_now).clicked() {
-                ui.ctx().open_url(egui::OpenUrl::new_tab(
-                    "https://github.com/xiu-k/pinsight/releases",
-                ));
+                check_now = true;
             }
         });
+
+        // ---- apply the actions (borrow ends with the card) ----------------
+        if check_now {
+            self.begin_update_check();
+        }
+        if open_page {
+            let url = match &self.update_state {
+                UpdateUi::Available(rel) => rel.html_url.clone(),
+                _ => crate::update::RELEASES_URL.to_string(),
+            };
+            ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+        }
+        if cancel_dl {
+            if let Some(job) = &self.update_dl {
+                job.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        if start_download {
+            // Clone the asset out first so the borrow of `update_state` ends
+            // before we overwrite it.
+            let asset = match &self.update_state {
+                UpdateUi::Available(rel) => rel.asset.clone(),
+                UpdateUi::UpToDate(_, Some(rel)) => rel.asset.clone(),
+                _ => None,
+            };
+            if let Some(asset) = asset {
+                let cfg = self.config.clone();
+                self.update_dl = Some(crate::update::start_download(
+                    cfg,
+                    asset,
+                    crate::update::download_dir(),
+                ));
+                self.update_state = UpdateUi::Downloading;
+            }
+        }
+        if open_folder {
+            if let UpdateUi::Downloaded(path) = &self.update_state {
+                crate::update::reveal(path);
+            }
+        }
+        if install {
+            let downloaded = match &self.update_state {
+                UpdateUi::Downloaded(path) => Some(path.clone()),
+                _ => None,
+            };
+            if let Some(path) = downloaded {
+                let dest = crate::update::download_dir().join("extracted");
+                match crate::update::extract(&path, &dest) {
+                    Ok(src) => match crate::update::install_and_restart(&src) {
+                        Ok(()) => {
+                            self.quitting = true;
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                        Err(err) => self.toast(err, true),
+                    },
+                    Err(err) => self.toast(err, true),
+                }
+            }
+        }
 
         // ---- update proxy -------------------------------------------------
         ui::card(ui, p, |ui| {
@@ -6752,6 +7065,7 @@ impl eframe::App for PinSightApp {
         self.poll_upload();
         self.poll_gif();
         self.poll_voice();
+        self.poll_update(&ctx);
         self.show_overlay(&ctx);
         self.show_pins(&ctx);
         self.sync_background(&ctx);

@@ -46,6 +46,13 @@ OPTIONS:
 NOTE:
     --ocr uses the offline engine built into Windows 10/11; the recognised
     text is printed to stdout and the saved image path (if any) to stderr.
+
+OTHER COMMANDS:
+    pinsight pdf <imgs...> --out book.pdf   images → one PDF
+    pinsight gif                            GIF editor CLI
+    pinsight voice                          record a voice note
+    pinsight update-check [--download]      check GitHub Releases for a build
+                                            matching this machine
 ";
 
 /// Returns true when the arguments asked for the CLI and it ran.
@@ -56,12 +63,61 @@ pub fn maybe_run(args: &[String]) -> Option<Result<()>> {
         "pdf" | "export-pdf" => Some(run_pdf(rest)),
         "gif" => Some(run_gif(rest)),
         "voice" => Some(run_voice(rest)),
+        "update-check" | "update" => Some(run_update_check(rest)),
         "help" if args.len() == 1 => {
             print!("{USAGE}");
             Some(Ok(()))
         }
         _ => None,
     }
+}
+
+/// `pinsight update-check [--download]` — run the same GitHub release check the
+/// GUI uses and print the result, so the updater can be verified (and used from
+/// scripts) without opening the window.
+fn run_update_check(args: &[String]) -> Result<()> {
+    let download = args.iter().any(|a| a == "--download" || a == "-d");
+    let cfg = crate::config::Config::load();
+    let outcome = crate::update::check(&cfg).map_err(|e| anyhow!("{e}"))?;
+    let asset = match &outcome {
+        crate::update::Outcome::Available(rel) => {
+            println!(
+                "new version {} (current {})",
+                rel.version,
+                env!("CARGO_PKG_VERSION")
+            );
+            println!("page: {}", rel.html_url);
+            rel.asset.clone()
+        }
+        crate::update::Outcome::UpToDate { current, latest } => {
+            println!("up to date (current {current})");
+            match latest {
+                Some(rel) => {
+                    println!("latest release: {}", rel.version);
+                    rel.asset.clone()
+                }
+                None => None,
+            }
+        }
+    };
+    match &asset {
+        Some(a) => println!("asset: {} ({})", a.name, crate::update::human_size(a.size)),
+        None => println!("asset: none for {}", crate::update::platform_key()),
+    }
+
+    if download {
+        let Some(asset) = asset else {
+            return Err(anyhow!("no downloadable asset for this platform"));
+        };
+        println!("downloading…");
+        let job = crate::update::start_download(cfg, asset, crate::update::download_dir());
+        match job.rx.recv() {
+            Ok(Ok(path)) => println!("downloaded: {}", path.display()),
+            Ok(Err(e)) => return Err(anyhow!("{e}")),
+            Err(e) => return Err(anyhow!("{e}")),
+        }
+    }
+    Ok(())
 }
 
 fn run(args: &[String]) -> Result<()> {

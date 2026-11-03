@@ -57,6 +57,7 @@ mod tray;
 #[path = "tray_stub.rs"]
 mod tray;
 mod ui;
+mod update;
 mod upload;
 mod util;
 mod voice;

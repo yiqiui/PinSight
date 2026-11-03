@@ -540,7 +540,21 @@ strings! {
     upd_hours { en: "Interval (hours)", zh: "检查间隔（小时）", tw: "檢查間隔（小時）", ja: "間隔（時間）", ko: "간격(시간)", fr: "Intervalle (heures)", de: "Intervall (Stunden)" }
     upd_beta { en: "Include beta builds", zh: "包含 beta 版本", tw: "包含 beta 版本", ja: "ベータ版を含める", ko: "베타 포함", fr: "Inclure les bêtas", de: "Beta einbeziehen" }
     upd_check_now { en: "Check now", zh: "立即检查", tw: "立即檢查", ja: "今すぐ確認", ko: "지금 확인", fr: "Vérifier", de: "Jetzt prüfen" }
-    upd_note { en: "PinSight has no update server of its own; this opens the releases page.", zh: "PinSight 没有自建更新服务器，这里会打开 Releases 页面。", tw: "PinSight 沒有自建更新伺服器，這裡會開啟 Releases 頁面。", ja: "独自の更新サーバーはありません。Releases ページを開きます。", ko: "자체 업데이트 서버가 없어 Releases 페이지를 엽니다.", fr: "Pas de serveur de mise à jour : ouvre la page des versions.", de: "Kein eigener Update-Server; öffnet die Releases-Seite." }
+    upd_note { en: "Checks GitHub Releases and downloads the build that matches this computer.", zh: "从 GitHub Releases 检查更新，并下载适配本机的版本。", tw: "從 GitHub Releases 檢查更新，並下載符合本機的版本。", ja: "GitHub Releases を確認し、この PC に合ったビルドをダウンロードします。", ko: "GitHub Releases를 확인하고 이 PC에 맞는 빌드를 다운로드합니다.", fr: "Vérifie les versions GitHub et télécharge le build adapté à cet ordinateur.", de: "Prüft GitHub-Releases und lädt den passenden Build für diesen Computer." }
+    upd_idle { en: "Click check to look for a newer version.", zh: "点击「立即检查」查找新版本。", tw: "點擊「立即檢查」尋找新版本。", ja: "「今すぐ確認」で新しいバージョンを探します。", ko: "지금 확인을 눌러 새 버전을 찾으세요.", fr: "Cliquez sur Vérifier pour chercher une nouvelle version.", de: "Auf „Jetzt prüfen“ klicken, um nach einer neueren Version zu suchen." }
+    upd_checking { en: "Checking for updates…", zh: "正在检查更新…", tw: "正在檢查更新…", ja: "更新を確認しています…", ko: "업데이트 확인 중…", fr: "Recherche de mises à jour…", de: "Suche nach Updates…" }
+    upd_uptodate { en: "You are up to date", zh: "已是最新版本", tw: "已是最新版本", ja: "最新です", ko: "최신 버전입니다", fr: "Vous êtes à jour", de: "Sie sind auf dem neuesten Stand" }
+    upd_available { en: "New version available", zh: "发现新版本", tw: "發現新版本", ja: "新しいバージョンがあります", ko: "새 버전이 있습니다", fr: "Nouvelle version disponible", de: "Neue Version verfügbar" }
+    upd_available_toast { en: "New version available", zh: "发现新版本", tw: "發現新版本", ja: "新しいバージョンがあります", ko: "새 버전이 있습니다", fr: "Nouvelle version disponible", de: "Neue Version verfügbar" }
+    upd_download { en: "Download", zh: "下载", tw: "下載", ja: "ダウンロード", ko: "다운로드", fr: "Télécharger", de: "Herunterladen" }
+    upd_cancel { en: "Cancel", zh: "取消", tw: "取消", ja: "キャンセル", ko: "취소", fr: "Annuler", de: "Abbrechen" }
+    upd_downloaded { en: "Downloaded to", zh: "已下载到", tw: "已下載到", ja: "ダウンロード先", ko: "다운로드 위치", fr: "Téléchargé dans", de: "Heruntergeladen nach" }
+    upd_open_folder { en: "Show in folder", zh: "打开所在文件夹", tw: "開啟所在資料夾", ja: "フォルダーを開く", ko: "폴더 열기", fr: "Afficher dans le dossier", de: "Im Ordner anzeigen" }
+    upd_install { en: "Install and restart", zh: "安装并重启", tw: "安裝並重新啟動", ja: "インストールして再起動", ko: "설치 후 재시작", fr: "Installer et redémarrer", de: "Installieren und neu starten" }
+    upd_open_page { en: "Releases page", zh: "打开 Releases 页面", tw: "開啟 Releases 頁面", ja: "Releases ページ", ko: "Releases 페이지", fr: "Page des versions", de: "Releases-Seite" }
+    upd_no_asset { en: "This release has no build for your platform.", zh: "该版本没有适配本机的安装包。", tw: "該版本沒有符合本機的安裝包。", ja: "このリリースにはこの環境向けのビルドがありません。", ko: "이 릴리스에는 이 플랫폼용 빌드가 없습니다.", fr: "Cette version n'a pas de build pour votre plateforme.", de: "Diese Version hat keinen Build für Ihre Plattform." }
+    upd_check_failed { en: "Update check failed", zh: "检查更新失败", tw: "檢查更新失敗", ja: "更新の確認に失敗しました", ko: "업데이트 확인 실패", fr: "Échec de la vérification", de: "Update-Prüfung fehlgeschlagen" }
+    upd_download_failed { en: "Download failed", zh: "下载失败", tw: "下載失敗", ja: "ダウンロードに失敗しました", ko: "다운로드 실패", fr: "Échec du téléchargement", de: "Download fehlgeschlagen" }
     gen_config { en: "Configuration file", zh: "配置文件位置", tw: "設定檔位置", ja: "設定ファイル", ko: "설정 파일", fr: "Fichier de configuration", de: "Konfigurationsdatei" }
     gen_autostart_saved { en: "Startup entry updated", zh: "开机启动已更新", tw: "開機啟動已更新", ja: "スタートアップを更新しました", ko: "시작 프로그램이 업데이트되었습니다", fr: "Démarrage automatique mis à jour", de: "Autostart aktualisiert" }
     gen_open_folder { en: "Open folder", zh: "打开所在文件夹", tw: "開啟資料夾", ja: "フォルダーを開く", ko: "폴더 열기", fr: "Ouvrir le dossier", de: "Ordner öffnen" }
@@ -692,7 +706,7 @@ strings! {
     upd_proxy_user { en: "User name", zh: "用户名", tw: "使用者名稱", ja: "ユーザー名", ko: "사용자 이름", fr: "Nom d'utilisateur", de: "Benutzername" }
     upd_proxy_port { en: "Port", zh: "端口", tw: "連接埠", ja: "ポート", ko: "포트", fr: "Port", de: "Port" }
     upd_proxy_pass { en: "Password", zh: "密码", tw: "密碼", ja: "パスワード", ko: "비밀번호", fr: "Mot de passe", de: "Passwort" }
-    upd_proxy_note { en: "PinSight opens the releases page directly (no auto-download yet); this proxy is stored for a future updater.", zh: "PinSight 直接打开 Releases 页面（暂不支持自动下载），此代理为将来的更新器预留。", tw: "PinSight 直接開啟 Releases 頁面（尚不支援自動下載），此代理為未來的更新器預留。", ja: "PinSight は Releases ページを直接開きます（自動ダウンロードなし）。このプロキシは将来の更新機能のためです。", ko: "PinSight은 릴리스 페이지를 직접 엽니다(자동 다운로드 없음). 이 프록시는 향후 업데이터를 위한 것입니다.", fr: "PinSight ouvre la page des versions (pas de téléchargement auto) ; ce proxy est réservé à un futur updater.", de: "PinSight öffnet die Releases-Seite direkt (kein Auto-Download); dieser Proxy ist für einen künftigen Updater." }
+    upd_proxy_note { en: "Used for the update check and download.", zh: "用于检查更新和下载安装包。", tw: "用於檢查更新與下載安裝包。", ja: "更新の確認とダウンロードに使用します。", ko: "업데이트 확인 및 다운로드에 사용됩니다.", fr: "Utilisé pour la vérification et le téléchargement des mises à jour.", de: "Wird für Update-Prüfung und -Download verwendet." }
 
     // ---- tray -------------------------------------------------------------
     tray_show { en: "Open PinSight", zh: "打开 PinSight", tw: "開啟 PinSight", ja: "PinSight を開く", ko: "PinSight 열기", fr: "Ouvrir PinSight", de: "PinSight öffnen" }
