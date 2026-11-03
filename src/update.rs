@@ -39,19 +39,33 @@ pub struct Release {
     pub version: String,
     pub notes: String,
     pub html_url: String,
+    /// ISO-8601 publish timestamp as returned by GitHub (may be empty).
+    pub published_at: String,
+    pub prerelease: bool,
     /// The asset matching this OS/architecture, if the release shipped one.
     pub asset: Option<Asset>,
 }
 
+/// Everything one check returns: the running version plus every published
+/// release (newest first), which the Updates tab renders as a changelog.
 #[derive(Debug, Clone)]
-pub enum Outcome {
-    /// No newer version. `latest` is the newest published release anyway, so
-    /// the UI can still offer to (re)download the current build.
-    UpToDate {
-        current: String,
-        latest: Option<Box<Release>>,
-    },
-    Available(Box<Release>),
+pub struct Report {
+    pub current: String,
+    pub releases: Vec<Release>,
+}
+
+impl Report {
+    /// The newest release, if any.
+    pub fn newest(&self) -> Option<&Release> {
+        self.releases.first()
+    }
+
+    /// The newest release that is strictly newer than the running build.
+    pub fn available(&self) -> Option<&Release> {
+        self.releases
+            .iter()
+            .find(|r| is_newer(&r.version, &self.current))
+    }
 }
 
 #[derive(Deserialize, Clone)]
@@ -66,6 +80,8 @@ struct ApiRelease {
     prerelease: bool,
     #[serde(default)]
     draft: bool,
+    #[serde(default)]
+    published_at: Option<String>,
     #[serde(default)]
     assets: Vec<ApiAsset>,
 }
@@ -244,8 +260,8 @@ fn pick_asset(assets: &[ApiAsset]) -> Option<Asset> {
         })
 }
 
-/// Query GitHub and compare against the running build.
-pub fn check(cfg: &Config) -> Result<Outcome, String> {
+/// Fetch every published release (newest first) plus the running version.
+pub fn fetch(cfg: &Config) -> Result<Report, String> {
     let url = format!("https://api.github.com/repos/{REPO}/releases?per_page=20");
     let resp = client(cfg, Some(Duration::from_secs(30)))
         .get(&url)
@@ -257,56 +273,64 @@ pub fn check(cfg: &Config) -> Result<Outcome, String> {
     }
     let list: Vec<ApiRelease> = resp.json().map_err(|e| format!("bad response: {e}"))?;
 
-    let current = env!("CARGO_PKG_VERSION").to_string();
-    let mut best_new: Option<ApiRelease> = None;
-    let mut latest: Option<ApiRelease> = None;
-    for r in list {
-        if r.draft {
-            continue;
+    let mut releases: Vec<Release> = list
+        .iter()
+        .filter(|r| !r.draft)
+        .filter(|r| !r.prerelease || cfg.update_beta)
+        .map(to_release)
+        .collect();
+    // Newest first (the API already sorts this way, but be explicit).
+    releases.sort_by(|a, b| {
+        if is_newer(&a.version, &b.version) {
+            std::cmp::Ordering::Less
+        } else if is_newer(&b.version, &a.version) {
+            std::cmp::Ordering::Greater
+        } else {
+            std::cmp::Ordering::Equal
         }
-        if r.prerelease && !cfg.update_beta {
-            continue;
-        }
-        // Highest published version overall (for the "download anyway" path).
-        if latest
-            .as_ref()
-            .map(|l| is_newer(&r.tag_name, &l.tag_name))
-            .unwrap_or(true)
-        {
-            latest = Some(r.clone());
-        }
-        if !is_newer(&r.tag_name, &current) {
-            continue;
-        }
-        let better = best_new
-            .as_ref()
-            .map(|b| is_newer(&r.tag_name, &b.tag_name))
-            .unwrap_or(true);
-        if better {
-            best_new = Some(r);
-        }
-    }
+    });
 
-    match best_new {
-        Some(r) => Ok(Outcome::Available(Box::new(to_release(&r)))),
-        None => Ok(Outcome::UpToDate {
-            current,
-            latest: latest.as_ref().map(|r| Box::new(to_release(r))),
-        }),
-    }
+    Ok(Report {
+        current: env!("CARGO_PKG_VERSION").to_string(),
+        releases,
+    })
 }
 
 fn to_release(r: &ApiRelease) -> Release {
     Release {
         version: r.tag_name.trim_start_matches('v').to_string(),
-        notes: if r.body.trim().is_empty() {
-            r.name.clone()
+        notes: clean_notes(if r.body.trim().is_empty() {
+            &r.name
         } else {
-            r.body.clone()
-        },
+            &r.body
+        }),
         html_url: r.html_url.clone(),
+        published_at: r.published_at.clone().unwrap_or_default(),
+        prerelease: r.prerelease,
         asset: pick_asset(&r.assets),
     }
+}
+
+/// Strip the most common Markdown markers so release notes read cleanly in a
+/// plain label (the UI has no Markdown renderer).
+pub fn clean_notes(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    for line in body.lines() {
+        let trimmed = line.trim_end();
+        let without_hashes = trimmed.trim_start_matches('#').trim_start();
+        let without_bullet = without_hashes
+            .strip_prefix("- ")
+            .or_else(|| without_hashes.strip_prefix("* "))
+            .or_else(|| without_hashes.strip_prefix("+ "))
+            .unwrap_or(without_hashes);
+        let cleaned = without_bullet
+            .replace("**", "")
+            .replace("__", "")
+            .replace('`', "");
+        out.push_str(&cleaned);
+        out.push('\n');
+    }
+    out.trim_end().to_string()
 }
 
 /// A download running on a worker thread.
@@ -563,6 +587,50 @@ mod tests {
         let picked = pick_asset(&assets).expect("an asset");
         assert_eq!(picked.url, "https://example.com/mine");
         assert_eq!(picked.size, 42);
+    }
+
+    fn rel(version: &str) -> Release {
+        Release {
+            version: version.into(),
+            notes: String::new(),
+            html_url: String::new(),
+            published_at: String::new(),
+            prerelease: false,
+            asset: None,
+        }
+    }
+
+    #[test]
+    fn report_finds_newer_and_newest() {
+        let report = Report {
+            current: "1.0.0".into(),
+            releases: vec![rel("1.2.0"), rel("1.0.0"), rel("0.9.0")],
+        };
+        assert_eq!(report.newest().map(|r| r.version.as_str()), Some("1.2.0"));
+        assert_eq!(
+            report.available().map(|r| r.version.as_str()),
+            Some("1.2.0")
+        );
+    }
+
+    #[test]
+    fn report_without_newer_is_up_to_date() {
+        let report = Report {
+            current: "1.2.0".into(),
+            releases: vec![rel("1.2.0"), rel("1.0.0")],
+        };
+        assert!(report.available().is_none());
+        assert_eq!(report.newest().map(|r| r.version.as_str()), Some("1.2.0"));
+    }
+
+    #[test]
+    fn clean_notes_strips_markdown_markers() {
+        let out = clean_notes("## New\n- **Add** `thing`\n* Fix bug");
+        assert!(!out.contains('#'));
+        assert!(!out.contains("**"));
+        assert!(!out.contains('`'));
+        assert!(out.contains("Add thing"));
+        assert!(out.contains("Fix bug"));
     }
 
     #[test]

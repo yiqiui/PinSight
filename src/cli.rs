@@ -78,28 +78,20 @@ pub fn maybe_run(args: &[String]) -> Option<Result<()>> {
 fn run_update_check(args: &[String]) -> Result<()> {
     let download = args.iter().any(|a| a == "--download" || a == "-d");
     let cfg = crate::config::Config::load();
-    let outcome = crate::update::check(&cfg).map_err(|e| anyhow!("{e}"))?;
-    let asset = match &outcome {
-        crate::update::Outcome::Available(rel) => {
-            println!(
-                "new version {} (current {})",
-                rel.version,
-                env!("CARGO_PKG_VERSION")
-            );
+    let report = crate::update::fetch(&cfg).map_err(|e| anyhow!("{e}"))?;
+    let target = report.available().or_else(|| report.newest());
+    match &target {
+        Some(rel) if report.available().is_some() => {
+            println!("new version {} (current {})", rel.version, report.current);
             println!("page: {}", rel.html_url);
-            rel.asset.clone()
         }
-        crate::update::Outcome::UpToDate { current, latest } => {
-            println!("up to date (current {current})");
-            match latest {
-                Some(rel) => {
-                    println!("latest release: {}", rel.version);
-                    rel.asset.clone()
-                }
-                None => None,
-            }
-        }
-    };
+        Some(rel) => println!(
+            "up to date (current {}); latest release {}",
+            report.current, rel.version
+        ),
+        None => println!("up to date (current {}); no releases found", report.current),
+    }
+    let asset = target.and_then(|rel| rel.asset.clone());
     match &asset {
         Some(a) => println!("asset: {} ({})", a.name, crate::update::human_size(a.size)),
         None => println!("asset: none for {}", crate::update::platform_key()),

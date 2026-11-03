@@ -1,6 +1,6 @@
 //! User configuration, stored as JSON in the platform config directory.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
@@ -952,15 +952,83 @@ impl Paths {
             };
         }
 
-        let root = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(APP_DIR);
+        // A user-chosen folder (GUI) or `PINSIGHT_CONFIG_DIR` wins over the
+        // default `%APPDATA%\PinSight`.
+        let root = custom_root().unwrap_or_else(default_root);
         Self {
             config: root.join("config.json"),
             data_dir: root,
             portable: false,
         }
     }
+}
+
+/// File in the default folder that points at a user-chosen config folder.
+const DIR_POINTER: &str = "config_dir.txt";
+
+/// The default config folder: `%APPDATA%\PinSight` (or the platform equivalent).
+fn default_root() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(APP_DIR)
+}
+
+/// A user-chosen config folder, from the env var or the pointer file.
+fn custom_root() -> Option<PathBuf> {
+    if let Some(v) = std::env::var_os("PINSIGHT_CONFIG_DIR") {
+        let p = PathBuf::from(v);
+        if !p.as_os_str().is_empty() {
+            return Some(p);
+        }
+    }
+    let pointer = default_root().join(DIR_POINTER);
+    let text = std::fs::read_to_string(pointer).ok()?;
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(trimmed))
+    }
+}
+
+/// Recursively copy `src` into `dst`, returning how many files were copied.
+fn copy_dir_contents(src: &Path, dst: &Path) -> std::io::Result<usize> {
+    let mut count = 0;
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if name == DIR_POINTER {
+            continue;
+        }
+        let path = entry.path();
+        let target = dst.join(&name);
+        if path.is_dir() {
+            count += copy_dir_contents(&path, &target)?;
+        } else {
+            std::fs::copy(&path, &target)?;
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+/// Switch to `new_dir`, optionally copying the current files over first, and
+/// record the choice so the next launch resolves it. Returns the file count
+/// migrated. Takes effect after a restart (paths are resolved once at startup).
+pub fn set_custom_dir(new_dir: &Path, migrate: bool) -> std::io::Result<usize> {
+    let current = paths().data_dir.clone();
+    std::fs::create_dir_all(new_dir)?;
+    let mut copied = 0;
+    if migrate && current != new_dir && current.exists() {
+        copied = copy_dir_contents(&current, new_dir)?;
+    }
+    let pointer = default_root().join(DIR_POINTER);
+    if let Some(parent) = pointer.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(pointer, new_dir.display().to_string())?;
+    Ok(copied)
 }
 
 /// Paths for this process, resolved once.

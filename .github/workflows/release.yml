@@ -133,8 +133,23 @@ jobs:
             (cd dist && tar -czf "PinSight-$version-${{ matrix.platform }}.tar.gz" "pinsight-${{ matrix.platform }}")
           fi
 
-      # Windows produces a zip, macOS/Linux a tar.gz — accept either so the
-      # `if-no-files-found: error` only trips when a build produced nothing.
+      # The portable zip is fine for a USB stick, but a real installer is what
+      # lets the user choose the install directory (DisableDirPage=no in the
+      # .iss). Only the x64 Windows job builds it (the script is x64-only).
+      - name: Build Windows installer
+        if: ${{ matrix.platform == 'windows-x64' }}
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $version = "${{ github.event.inputs.version || github.ref_name }}".TrimStart('v')
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc "/DAppVersion=$version" `
+            "/DPinsightExe=$PWD\target\${{ matrix.target }}\release\pinsight.exe" `
+            "packaging\windows\pinsight.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+
+      # Windows produces a zip (+ installer), macOS/Linux a tar.gz — accept any
+      # so `if-no-files-found: error` only trips when a build produced nothing.
       - name: Upload artefact
         uses: actions/upload-artifact@v4
         with:
@@ -142,5 +157,32 @@ jobs:
           path: |
             dist/*.zip
             dist/*.tar.gz
+            dist/*-setup.exe
           if-no-files-found: error
           overwrite: true
+
+  # Publish every artefact (portable zips, tar.gz, and the Windows installer) on
+  # the tag's GitHub Release, so the in-app updater can find and download them.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Collect artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          # Tags like v0.2.0-beta are published as prereleases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: dist/*

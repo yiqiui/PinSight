@@ -202,12 +202,19 @@ impl Default for GifEditorState {
 enum UpdateUi {
     Idle,
     Checking,
-    /// Current version, plus the latest published release (for re-download).
-    UpToDate(String, Option<Box<crate::update::Release>>),
-    Available(Box<crate::update::Release>),
+    /// A check finished; availability and the changelog live in `update_report`.
+    Ready,
     Downloading,
     Downloaded(PathBuf),
     Error(String),
+}
+
+/// A pending config-directory change, shown as a modal.
+enum ConfigMove {
+    /// Ask whether to copy the existing files to the chosen folder.
+    Confirm { dir: PathBuf },
+    /// Done; offer to restart so the new folder takes effect.
+    Done { dir: PathBuf },
 }
 
 pub struct PinSightApp {
@@ -269,11 +276,15 @@ pub struct PinSightApp {
     /// Updates tab state machine.
     update_state: UpdateUi,
     /// Pending GitHub release check (runs on a worker thread).
-    update_check_rx: Option<std::sync::mpsc::Receiver<Result<crate::update::Outcome, String>>>,
+    update_check_rx: Option<std::sync::mpsc::Receiver<Result<crate::update::Report, String>>>,
+    /// Latest check result: running version + every release for the changelog.
+    update_report: Option<crate::update::Report>,
     /// In-flight download.
     update_dl: Option<crate::update::DownloadJob>,
     /// Whether the one-shot startup check already ran.
     update_startup_checked: bool,
+    /// Pending config-directory change (confirmation, then restart prompt).
+    config_move: Option<ConfigMove>,
     /// Annotation layer over the running recording, open while the user draws.
     mark_layer: Option<crate::marklayer::MarkLayer>,
     toast: Option<Toast>,
@@ -422,8 +433,10 @@ impl PinSightApp {
             hud_exclude_frames: 0,
             update_state: UpdateUi::Idle,
             update_check_rx: None,
+            update_report: None,
             update_dl: None,
             update_startup_checked: false,
+            config_move: None,
             mark_layer: None,
             toast: None,
             last_image: None,
@@ -1415,7 +1428,7 @@ impl PinSightApp {
         std::thread::Builder::new()
             .name("pinsight-update-check".into())
             .spawn(move || {
-                let _ = tx.send(crate::update::check(&cfg));
+                let _ = tx.send(crate::update::fetch(&cfg));
             })
             .ok();
     }
@@ -1426,15 +1439,14 @@ impl PinSightApp {
 
         if let Some(rx) = &self.update_check_rx {
             match rx.try_recv() {
-                Ok(Ok(crate::update::Outcome::UpToDate { current, latest })) => {
-                    self.update_state = UpdateUi::UpToDate(current, latest);
+                Ok(Ok(report)) => {
+                    if let Some(rel) = report.available() {
+                        let v = rel.version.clone();
+                        self.toast(format!("{} v{v}", self.tr.tr.upd_available_toast), false);
+                    }
+                    self.update_report = Some(report);
+                    self.update_state = UpdateUi::Ready;
                     self.update_check_rx = None;
-                }
-                Ok(Ok(crate::update::Outcome::Available(rel))) => {
-                    let v = rel.version.clone();
-                    self.update_state = UpdateUi::Available(rel);
-                    self.update_check_rx = None;
-                    self.toast(format!("{} v{v}", self.tr.tr.upd_available_toast), false);
                 }
                 Ok(Err(err)) => {
                     self.update_state = UpdateUi::Error(err);
@@ -1478,6 +1490,103 @@ impl PinSightApp {
         {
             self.update_startup_checked = true;
             self.begin_update_check();
+        }
+    }
+
+    /// Modal for changing the configuration folder (with an optional migration).
+    fn show_config_move_dialog(&mut self, ctx: &egui::Context, p: &Palette) {
+        #[derive(Clone, Copy)]
+        enum MoveAction {
+            Migrate,
+            Switch,
+            Cancel,
+            Restart,
+            Later,
+        }
+        let t = self.tr.tr;
+        let (done, dir) = match &self.config_move {
+            Some(ConfigMove::Confirm { dir }) => (false, dir.clone()),
+            Some(ConfigMove::Done { dir }) => (true, dir.clone()),
+            None => return,
+        };
+        let mut action: Option<MoveAction> = None;
+        egui::Window::new(if done {
+            t.cfg_move_done_title
+        } else {
+            t.cfg_move_title
+        })
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+        .show(ctx, |ui| {
+            ui.set_max_width(460.0);
+            if done {
+                ui.label(egui::RichText::new(t.cfg_move_done_body).size(12.5));
+            } else {
+                ui.label(
+                    egui::RichText::new(
+                        t.cfg_move_body.replace("{dir}", &dir.display().to_string()),
+                    )
+                    .size(12.5),
+                );
+            }
+            ui.add_space(6.0);
+            ui.label(
+                egui::RichText::new(dir.display().to_string())
+                    .monospace()
+                    .size(11.0)
+                    .color(p.text_weak),
+            );
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                if done {
+                    if ui::primary_button(ui, p, t.cfg_move_restart).clicked() {
+                        action = Some(MoveAction::Restart);
+                    }
+                    if ui::button(ui, p, t.cfg_move_later).clicked() {
+                        action = Some(MoveAction::Later);
+                    }
+                } else {
+                    if ui::primary_button(ui, p, t.cfg_move_migrate).clicked() {
+                        action = Some(MoveAction::Migrate);
+                    }
+                    if ui::button(ui, p, t.cfg_move_switch).clicked() {
+                        action = Some(MoveAction::Switch);
+                    }
+                    if ui::button(ui, p, t.ov_cancel).clicked() {
+                        action = Some(MoveAction::Cancel);
+                    }
+                }
+            });
+        });
+
+        match action {
+            Some(MoveAction::Migrate) | Some(MoveAction::Switch) => {
+                let migrate = matches!(action, Some(MoveAction::Migrate));
+                // Flush unsaved settings to the current folder so the copy
+                // carries the latest values.
+                let _ = self.config.save();
+                match config::set_custom_dir(&dir, migrate) {
+                    Ok(n) => {
+                        if migrate {
+                            self.toast(t.cfg_move_ok.replace("{n}", &n.to_string()), false);
+                        }
+                        self.config_move = Some(ConfigMove::Done { dir });
+                    }
+                    Err(err) => {
+                        self.toast(format!("{}: {err}", t.cfg_move_failed), true);
+                        self.config_move = None;
+                    }
+                }
+            }
+            Some(MoveAction::Cancel) | Some(MoveAction::Later) => {
+                self.config_move = None;
+            }
+            Some(MoveAction::Restart) => {
+                self.config_move = None;
+                self.restart_app(ctx);
+            }
+            None => {}
         }
     }
 
@@ -5290,8 +5399,17 @@ impl PinSightApp {
                     .parent()
                     .map(|d| d.display().to_string())
                     .unwrap_or_else(|| path.display().to_string());
-                // Right-to-left row: the action comes first so it lands on the
-                // right, then the path fills the space to its left.
+                // Right-to-left row: the actions come first so they land on the
+                // right, then the path fills the space to their left.
+                // Portable mode stores everything next to the exe, so a custom
+                // folder would be ignored — don't offer the change there.
+                if !config::is_portable()
+                    && ui::link_button(ui, p, Icon::Folder, t.cfg_dir_change).clicked()
+                {
+                    if let Some(dir) = rfd::FileDialog::new().pick_folder() {
+                        self.config_move = Some(ConfigMove::Confirm { dir });
+                    }
+                }
                 if ui::link_button(ui, p, Icon::Folder, t.gen_open_folder).clicked() {
                     if let Some(dir) = path.parent() {
                         util::open_path(dir);
@@ -6190,18 +6308,27 @@ impl PinSightApp {
                         ui.label(egui::RichText::new(t.upd_checking).size(12.5).color(p.text));
                     });
                 }
-                UpdateUi::UpToDate(current, latest) => {
-                    ui.label(
-                        egui::RichText::new(format!("{} ({})", t.upd_uptodate, current))
-                            .size(12.5)
-                            .color(p.success),
-                    );
-                    // Still let the user (re)download the latest build — useful
-                    // for a clean reinstall and for verifying the updater.
-                    if let Some(rel) = latest {
-                        if let Some(asset) = &rel.asset {
-                            ui.add_space(6.0);
-                            ui.label(
+                UpdateUi::Ready => {
+                    let report = self.update_report.as_ref();
+                    if let Some(rel) = report.and_then(|r| r.available()) {
+                        ui.label(
+                            egui::RichText::new(format!("{} v{}", t.upd_available, rel.version))
+                                .size(13.5)
+                                .strong()
+                                .color(p.accent),
+                        );
+                    } else if let Some(report) = report {
+                        ui.label(
+                            egui::RichText::new(format!("{} ({})", t.upd_uptodate, report.current))
+                                .size(12.5)
+                                .color(p.success),
+                        );
+                    }
+                    // Offer the newest build either way — an upgrade, or a
+                    // clean re-install of the current version.
+                    if let Some(rel) = report.and_then(|r| r.available().or_else(|| r.newest())) {
+                        match &rel.asset {
+                            Some(asset) => ui.label(
                                 egui::RichText::new(format!(
                                     "{} · {}",
                                     asset.name,
@@ -6210,68 +6337,25 @@ impl PinSightApp {
                                 .size(11.5)
                                 .monospace()
                                 .color(p.text_weak),
-                            );
-                            ui.add_space(8.0);
-                            ui.horizontal(|ui| {
-                                if ui::button(ui, p, t.upd_download).clicked() {
-                                    start_download = true;
-                                }
-                                if ui::button(ui, p, t.upd_open_page).clicked() {
-                                    open_page = true;
-                                }
-                            });
-                        }
+                            ),
+                            None => ui.label(
+                                egui::RichText::new(t.upd_no_asset)
+                                    .size(11.5)
+                                    .color(p.danger),
+                            ),
+                        };
+                        ui.add_space(8.0);
+                        ui.horizontal(|ui| {
+                            if rel.asset.is_some()
+                                && ui::primary_button(ui, p, t.upd_download).clicked()
+                            {
+                                start_download = true;
+                            }
+                            if ui::button(ui, p, t.upd_open_page).clicked() {
+                                open_page = true;
+                            }
+                        });
                     }
-                }
-                UpdateUi::Available(rel) => {
-                    ui.label(
-                        egui::RichText::new(format!("{} v{}", t.upd_available, rel.version))
-                            .size(13.5)
-                            .strong()
-                            .color(p.accent),
-                    );
-                    if let Some(asset) = &rel.asset {
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "{} · {}",
-                                asset.name,
-                                crate::update::human_size(asset.size)
-                            ))
-                            .size(11.5)
-                            .monospace()
-                            .color(p.text_weak),
-                        );
-                    } else {
-                        ui.label(
-                            egui::RichText::new(t.upd_no_asset)
-                                .size(11.5)
-                                .color(p.danger),
-                        );
-                    }
-                    if !rel.notes.trim().is_empty() {
-                        ui.add_space(4.0);
-                        egui::ScrollArea::vertical()
-                            .max_height(120.0)
-                            .auto_shrink([false, true])
-                            .show(ui, |ui| {
-                                ui.label(
-                                    egui::RichText::new(rel.notes.as_str())
-                                        .size(11.5)
-                                        .color(p.text_weak),
-                                );
-                            });
-                    }
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        if rel.asset.is_some()
-                            && ui::primary_button(ui, p, t.upd_download).clicked()
-                        {
-                            start_download = true;
-                        }
-                        if ui::button(ui, p, t.upd_open_page).clicked() {
-                            open_page = true;
-                        }
-                    });
                 }
                 UpdateUi::Downloading => {
                     let (done, total) = match &self.update_dl {
@@ -6320,6 +6404,65 @@ impl PinSightApp {
                 }
             }
 
+            // ---- changelog: every published release, newest first ---------
+            if let Some(report) = &self.update_report {
+                if !report.releases.is_empty() {
+                    ui.add_space(14.0);
+                    ui.label(
+                        egui::RichText::new(t.upd_changelog)
+                            .size(12.5)
+                            .strong()
+                            .color(p.text),
+                    );
+                    ui.label(
+                        egui::RichText::new(t.upd_changelog_hint)
+                            .size(11.0)
+                            .color(p.text_weak),
+                    );
+                    ui.add_space(6.0);
+                    egui::ScrollArea::vertical()
+                        .max_height(340.0)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| {
+                            for (i, rel) in report.releases.iter().enumerate() {
+                                let date = if rel.published_at.len() >= 10 {
+                                    &rel.published_at[..10]
+                                } else {
+                                    rel.published_at.as_str()
+                                };
+                                let new_badge = if i == 0 && report.available().is_some() {
+                                    "   NEW"
+                                } else {
+                                    ""
+                                };
+                                let beta = if rel.prerelease { "   beta" } else { "" };
+                                let title =
+                                    format!("v{}{}   ·   {}{}", rel.version, new_badge, date, beta);
+                                egui::CollapsingHeader::new(
+                                    egui::RichText::new(title).size(12.0).monospace(),
+                                )
+                                .id_salt(("rel", &rel.version))
+                                .default_open(i == 0)
+                                .show(ui, |ui| {
+                                    if !rel.notes.trim().is_empty() {
+                                        ui.label(
+                                            egui::RichText::new(rel.notes.as_str())
+                                                .size(11.5)
+                                                .color(p.text),
+                                        );
+                                    }
+                                    if ui::link_button(ui, p, Icon::Globe, t.upd_github_release)
+                                        .clicked()
+                                    {
+                                        ui.ctx()
+                                            .open_url(egui::OpenUrl::new_tab(rel.html_url.clone()));
+                                    }
+                                });
+                            }
+                        });
+                }
+            }
+
             ui.add_space(10.0);
             if ui::link_button(ui, p, Icon::Reset, t.upd_check_now).clicked() {
                 check_now = true;
@@ -6331,10 +6474,12 @@ impl PinSightApp {
             self.begin_update_check();
         }
         if open_page {
-            let url = match &self.update_state {
-                UpdateUi::Available(rel) => rel.html_url.clone(),
-                _ => crate::update::RELEASES_URL.to_string(),
-            };
+            let url = self
+                .update_report
+                .as_ref()
+                .and_then(|r| r.available().or_else(|| r.newest()))
+                .map(|rel| rel.html_url.clone())
+                .unwrap_or_else(|| crate::update::RELEASES_URL.to_string());
             ui.ctx().open_url(egui::OpenUrl::new_tab(url));
         }
         if cancel_dl {
@@ -6343,13 +6488,13 @@ impl PinSightApp {
             }
         }
         if start_download {
-            // Clone the asset out first so the borrow of `update_state` ends
-            // before we overwrite it.
-            let asset = match &self.update_state {
-                UpdateUi::Available(rel) => rel.asset.clone(),
-                UpdateUi::UpToDate(_, Some(rel)) => rel.asset.clone(),
-                _ => None,
-            };
+            // Clone the asset out first so no borrow of the report outlives the
+            // state change below.
+            let asset = self
+                .update_report
+                .as_ref()
+                .and_then(|r| r.available().or_else(|| r.newest()))
+                .and_then(|rel| rel.asset.clone());
             if let Some(asset) = asset {
                 let cfg = self.config.clone();
                 self.update_dl = Some(crate::update::start_download(
@@ -7166,6 +7311,7 @@ impl eframe::App for PinSightApp {
 
         self.show_color_picker(&ctx, &p);
         self.show_job_huds(&ctx, &p);
+        self.show_config_move_dialog(&ctx, &p);
         self.show_window_picker(&ctx, &p);
 
         if let Some(toast) = &self.toast {

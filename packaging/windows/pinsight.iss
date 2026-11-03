@@ -7,9 +7,12 @@
 ; pinsight.portable marker, no registry or %APPDATA% writes).
 
 #define AppName "PinSight"
-#define AppVersion "0.1.0"
+; Overridable from the command line: iscc /DAppVersion=1.2.3 ...
+#ifndef AppVersion
+  #define AppVersion "0.1.0"
+#endif
 #define AppPublisher "PinSight contributors"
-#define AppURL "https://github.com/your-org/PinSight"
+#define AppURL "https://github.com/yiqiui/PinSight"
 
 ; Which exe to bundle. The default is the plain release binary; `package.ps1
 ; -Upx` overrides it with the staged, UPX-compressed copy via
