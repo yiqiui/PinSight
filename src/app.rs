@@ -7293,10 +7293,6 @@ impl eframe::App for PinSightApp {
             }
         }
 
-        // Enforce the configured theme every frame so an explicit Dark/Light
-        // choice can never be silently reverted by anything downstream.
-        ctx.set_theme(self.config.theme.preference());
-
         let mut p = Palette::current(&ctx, self.config.accent, self.config.accent_custom);
 
         // A wallpaper goes down first so every panel below paints over it.
