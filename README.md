@@ -10,114 +10,104 @@
 
 <div align="center">
 
-**原生 Rust 截图 · 标注 · 贴图 · 长截图 · 录屏 · OCR · GIF 编辑 · 上传，内置 MCP 服务，无 WebView。**
-
-Native Rust screenshot · annotation · pin · long-capture · recording tool with MCP, OCR, GIF editing and upload — no WebView.
+**Native Rust screenshot · annotate · pin · long-capture · record · OCR · GIF edit · upload, with a built-in MCP server. No WebView.**
 
 <br />
 
 [![Release](https://img.shields.io/badge/release-v0.1.0-2EA043)](https://github.com/yiqiui/PinSight/releases)
 [![Stars](https://img.shields.io/github/stars/yiqiui/PinSight?style=social)](https://github.com/yiqiui/PinSight/stargazers)
 [![License](https://img.shields.io/badge/license-Apache--2.0-2EA043)](LICENSE)
-[![MCP](https://img.shields.io/badge/MCP-stdio-6B5BFF)](https://github.com/yiqiui/PinSight/blob/main/README.md#mcp-集成)
+[![MCP](https://img.shields.io/badge/MCP-stdio-6B5BFF)](https://github.com/yiqiui/PinSight/blob/main/README.md#mcp-integration)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-000?logo=rust)](https://www.rust-lang.org)
 
 [![Windows](https://img.shields.io/badge/Windows-x64%20%C2%B7%20ARM64-0078D6)](https://github.com/yiqiui/PinSight/releases)
 [![macOS](https://img.shields.io/badge/macOS-Intel%20%C2%B7%20Apple%20Silicon-0078D6)](https://github.com/yiqiui/PinSight/releases)
 [![Linux](https://img.shields.io/badge/Linux-x64%20%C2%B7%20ARM64-2EA043)](https://github.com/yiqiui/PinSight/releases)
 
-[快速开始](#快速开始) · [界面](#界面) · [MCP](#mcp-集成) · [架构](#架构) · [Roadmap](#roadmap)
+[Quick start](#quick-start) · [UI](#user-interface) · [MCP](#mcp-integration) · [Architecture](#architecture) · [Roadmap](#roadmap)
 
-[English](README_EN.md) · 简体中文
+[English](README.md) · [简体中文](README.zh-CN.md)
 
 </div>
 
 <br />
 
 <div align="center">
-  <img src="docs/images/main.png" width="720" alt="PinSight 主界面" />
+  <img src="docs/images/main.png" width="720" alt="PinSight main window" />
 </div>
 
-> **状态：v0.1.0 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
-> 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）、图片上传、
-> 语音便签（可录制，点击播放待完善）、MCP、托盘菜单、自定义背景图与界面内热键录制均已跑通；长截图对固定页眉、
-> 粘性元素与动画仍有一定敏感性。
-> 界面支持深/浅色主题、6 种强调色、7 种语言与字体切换，设置页分多个标签并记住上次打开的位置。
-> 项目使用原生 Win32 窗口与 GDI 绘制，不依赖 Electron、Tauri 或 WebView；
-> 除 Windows 外也可在 macOS 与 Linux 上构建运行（贴图自动切换为 egui 视口实现）。
+> **Status: v0.1.0 / usable.** Capture, annotation (text / numbered steps / undo-redo / mosaic / highlight), pin-to-screen, long capture, GIF/MP4 recording, offline OCR, GIF editing (trim / crop / add text / convert to MP4), image upload, voice notes (recording works; click-to-play pending), MCP, tray menu, custom background and in-app hotkey recording all work. Long capture is still sensitive to sticky headers and animations.
+> The UI ships dark/light themes, 6 accent colours, 7 languages and font switching; the settings window has multiple tabs and remembers where you left off.
+> PinSight draws with native Win32 windows and GDI — no Electron, no Tauri, no WebView. It also builds and runs on macOS and Linux (pins fall back to an egui viewport).
 
 ---
 
-## 为什么是 PinSight
+## Why PinSight
 
-Snipaste 与 PixPin 证明了「截图 + 贴图」是极高频的桌面工作流，但它们的核心实现是闭源的。
-PinSight 想做的是一个**可读、可改、可自动化**的开源实现：
+Snipaste and PixPin proved that "screenshot + pin" is a high-frequency desktop workflow, but their cores are closed source. PinSight aims to be an open implementation that is **readable, hackable and automatable**:
 
-- **纯原生**：UI 用 `egui/eframe`，贴图窗口是 Win32 `WS_POPUP`，位图用 GDI 绘制；没有浏览器内核。
-- **性能优先**：截图走 `xcap`（Windows Graphics Capture / GDI 后端），标注在 Rust 侧用 `tiny-skia` 光栅化，录屏在独立线程逐帧编码。
-- **为长期使用而设计**：主题、强调色、字号、界面语言、字体都可切换，控件与图标全部矢量手绘，不随缩放失真。
-- **对 AI 友好**：内置 MCP stdio 服务，Claude Desktop、Cursor、Continue 等客户端可以直接调用截图、贴图、长截图、录屏能力。
-- **工程透明**：模块边界、线程模型、坐标空间和失败模式都写在 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-- **猫头鹰 logo**：以雕鸮（eagle-owl）为原型的扁平插画——怒目圆睁的橙红大眼，深底圆角板；四角的**取景括号**（左琥珀 / 右青）点出「截图框选」的语义，与选区四角的对焦环手柄、冻结层羽翼式入场一脉相承。原图由 AI 生成（[`icon_gen/`](icon_gen/)），[`scripts/compose_icon.py`](scripts/compose_icon.py) 负责叠加取景括号并导出 PNG/ICO 三件套。
+- **Purely native**: the UI is `egui/eframe`, pin windows are Win32 `WS_POPUP` with GDI bitmaps; no browser engine anywhere.
+- **Performance first**: capture goes through `xcap` (Windows Graphics Capture / GDI backends), annotations are rasterised in Rust with `tiny-skia`, recording encodes frame-by-frame on its own thread.
+- **Built for daily long-term use**: theme, accent, font size, UI language and fonts are all switchable; every widget and icon is hand-drawn vectors that never blur when scaled.
+- **AI friendly**: a built-in MCP stdio server lets clients such as Claude Desktop, Cursor or Continue call capture, pin, long-capture and recording tools directly.
+- **Engineering transparency**: module boundaries, threading model, coordinate spaces and failure modes are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **The owl logo**: a flat-vector eagle-owl — intense orange eyes, a fierce stare, on a dark rounded plate — with **viewfinder corner brackets** (amber left pair, cyan right pair) that give it the capture-tool signature, echoing the focus-ring handles on the selection corners and the wing-fold entrance of the freeze overlay. The artwork is AI-generated ([`icon_gen/`](icon_gen/)); [`scripts/compose_icon.py`](scripts/compose_icon.py) overlays the brackets and exports the PNG/ICO set.
 
-PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、粘性元素、动画）与 Snipaste
-可能仍有差距，macOS / Linux 上的贴图后端也仍在打磨中。核心能力（截图、标注、
-贴图、长截图、录屏、OCR、GIF 编辑、上传、MCP）已可在 Windows 上日常使用。
+PinSight is still iterating quickly: edge cases of scrolling long capture (fixed headers, sticky elements, animations) may lag behind Snipaste, and the pin backends on macOS / Linux are still being polished. The core features (capture, annotate, pin, long capture, record, OCR, GIF editing, upload, MCP) are usable daily on Windows.
 
 ---
 
-## 功能
+## Features
 
-| 能力 | 状态 | 说明 |
+| Capability | Status | Notes |
 | --- | --- | --- |
-| 区域截图 | ✅ | 全局热键唤出冻结层，拖拽选区，支持边角/边线调整 |
-| 全屏截图 | ✅ | 截取光标所在显示器并复制到剪贴板 |
-| 标注 | ✅ | 矩形、椭圆、箭头、画笔、高亮、马赛克、序号标注、文字标注；颜色与线宽可调，`Ctrl+Z`/`Ctrl+Y` 撤销重做 |
-| 贴图 | ✅ | Windows 为原生置顶无边框窗口，其他平台用 egui 视口；拖动、滚轮缩放、`Ctrl+滚轮` 透明度、点击穿透、中键/Esc 关闭；**右键菜单**可复制/另存为/缩放预设/置顶/穿透/关闭/销毁 |
-| 贴图分组 | ✅ | 分组管理（新建/重命名/删除/整体显隐），每组可绑定**独立全局热键**切换显隐；另有总开关热键 |
-| 剪贴板贴图 | ✅ | 一键把剪贴板图片钉在屏幕上 |
-| 长截图 | 🧪 | 选区后自动滚轮+逐帧捕获+重叠区拼接；适合静态、无固定表头的内容 |
-| 录屏 | ✅ | 三种模式（选区 / 全屏 / 前台窗口）；4–60 fps；分辨率预设（原始 / 1080p / 720p）；可选摄像头画中画、系统声音与麦克风（双音轨混音）；安装 `ffmpeg` 时输出 MP4，否则回退 GIF |
-| 离线 OCR | ✅ | 离线识别：Windows 用内置 `Windows.Media.Ocr`，macOS 用 Vision，Linux 用 Tesseract；工具栏一键选取区域识别；CLI `pinsight shot --ocr` 整屏识别 |
-| 图片上传 | ✅ | 编辑器上传按钮 + CLI `--upload`；默认本地后端落盘到 `<截图目录>/uploaded/`，可切 HTTP（POST/PUT、表单或 JSON 响应） |
-| 语音便签 | 🧪 | 可录制带音轨的录屏便签；点击播放尚未闭环（待接入音频播放库） |
-| 全局热键 | ✅ | 8 个动作均可在设置页内「录制」自定义（点 Record 后按组合键，Esc 取消），即时生效；注册失败会标红并说明原因 |
-| 命令行 | ✅ | 无窗口子命令（scrot/maim 风格）：`shot` 截图、`pdf` 拼 PDF、`gif` 编辑动图、`voice` 录音便签，详见下文 |
-| 单实例 | ✅ | 重复启动不会注册第二套热键，而是唤起已在运行的实例（Windows 命名互斥量，其他平台锁文件 + PID 存活检测） |
-| 托盘菜单 | ✅ | 任务栏图标 + 本地化右键菜单（含各项快捷键提示），Explorer 重启后自动恢复 |
-| 自定义背景 | ✅ | 主窗口背景图：文件选择、高斯模糊、压暗 veil、cover/contain/stretch 三种适配 |
-| 开机自启 | ✅ | Windows 注册表 / Linux `.desktop` / macOS LaunchAgent，设置页一键开关 |
-| 便携模式 | ✅ | `--portable` 或 `pinsight.portable` 标记文件：配置与截图全部落在安装目录内 |
-| MCP | ✅ | `--mcp` 启动 stdio 服务，暴露 9 个工具 |
-| 主题 | ✅ | 跟随系统 / 浅色 / 深色，6 种强调色，即时生效 |
-| 多语言 | ✅ | 简体中文、繁體中文、English、日本語、한국어、Français、Deutsch |
-| 字体 | ✅ | 自动匹配系统语言字体，或指定无衬线 / 衬线 / 等宽 / 自定义字体文件；界面字号 8–16 pt 分段可选（默认 9 pt） |
-| 配置持久化 | ✅ | JSON 配置，外观改动即时写回；设置页标签位置也会记住 |
-| 文本标注 | ✅ | 覆盖层内联输入框，Enter 提交 / Shift+Enter 换行，字号与颜色跟随工具栏；也可用工具栏「文字」按钮提交 |
-| 序号标注 | ✅ | `N` 点击即放置，编号按点击顺序自动递增（七段矢量数字），可撤销 |
+| Region capture | ✅ | Global hotkey summons a frozen-screen overlay; drag a selection with corner/edge handles |
+| Fullscreen capture | ✅ | Grabs the monitor under the cursor and copies it |
+| Annotation | ✅ | Rectangle, ellipse, arrow, pen, highlighter, mosaic, numbered steps, text; colour and stroke width adjustable, `Ctrl+Z`/`Ctrl+Y` undo/redo |
+| Pin to screen | ✅ | Native always-on-top borderless window on Windows, egui viewport elsewhere; drag, wheel zoom, `Ctrl+wheel` opacity, click-through, middle/Esc to close; a **context menu** offers copy / save as / zoom presets / topmost / click-through / close / destroy |
+| Pin groups | ✅ | Group management (create/rename/delete/hide as a whole), each group can bind its **own global hotkey** to toggle visibility; plus a global show/hide toggle |
+| Pin from clipboard | ✅ | Pin whatever image is on the clipboard in one keystroke |
+| Long capture | 🧪 | Automatic scrolling + frame stitching after selection; best on static pages without sticky headers |
+| Screen recording | ✅ | Frame-by-frame capture of a region; MP4 when `ffmpeg` is installed, GIF otherwise |
+| Offline OCR | ✅ | Windows uses the built-in `Windows.Media.Ocr`, macOS uses Vision, Linux uses Tesseract; one-click region OCR in the toolbar; CLI `pinsight shot --ocr` for full screen |
+| Image upload | ✅ | Toolbar upload button + CLI `--upload`; defaults to a local backend writing into `<save dir>/uploaded/`, switchable to HTTP (POST/PUT, form or JSON responses) |
+| Voice notes | 🧪 | Record screen notes with an audio track; click-to-play not closed yet (audio playback library pending) |
+| Global hotkeys | ✅ | All 8 actions can be re-recorded in the settings window (press Record, then the combo; Esc cancels), effective instantly; conflicts are flagged in red with the reason |
+| Command line | ✅ | Headless subcommands (scrot/maim style): `shot` capture, `pdf` bundle PDF, `gif` edit animated GIFs, `voice` voice notes — see below |
+| Single instance | ✅ | Launching twice wakes the running instance instead of registering a second hotkey set (named mutex on Windows, lock file + PID check elsewhere) |
+| Tray menu | ✅ | Taskbar icon with a localised context menu (hotkey hints included); re-registers itself after an Explorer restart |
+| Custom background | ✅ | Main-window background image with Gaussian blur, dimming veil and cover/contain/stretch fitting |
+| Run at startup | ✅ | Windows registry / Linux `.desktop` / macOS LaunchAgent, one toggle in settings |
+| Portable mode | ✅ | `--portable` or a `pinsight.portable` marker file: config and captures stay inside the install folder |
+| MCP | ✅ | `--mcp` starts the stdio server with 9 tools |
+| Themes | ✅ | System / light / dark, 6 accent colours, instant |
+| Languages | ✅ | 简体中文，繁體中文，English，日本語，한국어，Français，Deutsch |
+| Fonts | ✅ | Auto-matched per UI language, or sans/serif/mono/custom font file; UI font size 8–16 pt steps (default 9 pt) |
+| Config persistence | ✅ | JSON config; appearance changes are written back instantly, the last settings tab is remembered |
+| Text annotation | ✅ | Inline editor in the overlay, Enter commits / Shift+Enter newline; size and colour follow the toolbar |
+| Numbered steps | ✅ | Press `N` and click to place; numbers increment automatically (seven-segment vector digits), undoable |
 
 ---
 
-## 界面
+## User interface
 
-主窗口由左侧图标导航 + 内容区 + 状态栏组成，所有控件（磁贴、分段控件、色板、开关、图标）
-都用 `egui::Painter` 手绘，不依赖图片素材，因此能随 DPI、主题和字号无损缩放。
+The main window is a left icon rail + content area + status bar. Every control (tiles, segmented controls, swatches, switches, icons) is painted with `egui::Painter` — no image assets — so everything scales losslessly with DPI, theme and font size.
 
-| 主界面 | 设置 | 贴图 | 标注 |
+| Main | Settings | Pins | Annotate |
 | --- | --- | --- | --- |
 | ![capture](docs/images/main.png) | ![settings](docs/images/settings.png) | ![pins](docs/images/pins.jpg) | ![annotate](docs/images/demo.jpg) |
 
-### 主题
+### Themes
 
-- **跟随系统**（默认）/ **浅色** / **深色**，切换即时生效并写回配置。
-- **6 种强调色**：蓝、紫、翡翠、琥珀、玫红、青色（左琥珀 / 右青正是猫头鹰 logo 的双眼瞳色）。强调色同时决定选中态、主按钮、选区描边和贴图卡片高亮。
-- 冻结层与工具栏始终使用暗色玻璃质感，保证在任意桌面背景上都有足够对比度。
+- **System** (default) / **light** / **dark**, applied instantly and persisted.
+- **6 accent colours**: blue, violet, emerald, amber, rose, cyan (amber left / cyan right are exactly the owl logo's two iris colours). The accent drives selected states, primary buttons, the selection outline and pin-card highlights.
+- The freeze overlay and its toolbar always use a dark glass look for contrast on any desktop background.
 
-### 多语言
+### Languages
 
-支持 7 种语言，首次启动按 Windows 界面语言自动选择：
+7 languages, chosen automatically from the OS UI language on first launch:
 
-| 语言 | 代码 |
+| Language | Code |
 | --- | --- |
 | 简体中文 | `zh-hans` |
 | 繁體中文 | `zh-hant` |
@@ -127,201 +117,174 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | Français | `fr` |
 | Deutsch | `de` |
 
-全部文案集中在 [`src/i18n.rs`](src/i18n.rs) 的一张表里，新增语言只需加一列；
-`strings!` 宏会把它展开成 `&'static str` 结构体，**漏翻会在编译期报错**而不是运行时空字符串。
+All strings live in one table in [`src/i18n.rs`](src/i18n.rs); adding a language means adding one column. The `strings!` macro expands it into a `&'static str` struct — **a missing translation is a compile error**, never an empty string at runtime.
 
-### 字体
+### Fonts
 
-- **自动**：按当前界面语言挑选系统字体（简中 → 微软雅黑、繁中 → 微軟 JhengHei、
-  日文 → Yu Gothic、韩文 → Malgun Gothic…），并追加 CJK 回退字体，避免豆腐块。
-- **无衬线 / 衬线 / 等宽**：从系统字体目录中挑选最合适的候选。
-- **自定义**：填入任意 `.ttf` / `.otf` / `.ttc` 路径（例如思源黑体）。
-- **字号**：8–16 pt 分段可选（默认 9 pt），影响全部文本样式（标题、正文、快捷键徽章）。
+- **Auto**: picks a system font per UI language (Simplified Chinese → Microsoft YaHei, Traditional Chinese → Microsoft JhengHei, Japanese → Yu Gothic, Korean → Malgun Gothic…) and appends CJK fallbacks to avoid tofu.
+- **Sans / serif / mono**: best candidates from the system font directories.
+- **Custom**: any `.ttf` / `.otf` / `.ttc` path (e.g. Source Han Sans).
+- **Size**: 8–16 pt steps (default 9 pt), applies to every text style (titles, body, hotkey badges).
 
-设置页底部会显示实际解析到的字体组合，例如 `字体: Microsoft YaHei + Microsoft JhengHei`，
-方便排查"为什么看起来没变"。
+The bottom of the settings window shows the resolved combination, e.g. `Font: Microsoft YaHei + Microsoft JhengHei`, which makes "why did nothing change?" easy to diagnose.
 
-### 托盘与背景
+### Tray & background
 
-- **托盘**：Windows 任务栏常驻图标，右键菜单包含区域截图、全屏、剪贴板贴图、长截图、
-  录屏、保存最近、显示主窗口、退出，每一项后面都跟着当前快捷键。Explorer 崩溃重启后
-  图标会自动重新注册。关闭主窗口默认是"藏到托盘"而不是退出（`close_to_tray`），
-  托盘里的"退出"才是真正结束进程。
-- **背景**：主窗口可以换成任意图片（`png/jpg/webp/bmp`），带高斯模糊、压暗和
-  cover / contain / stretch 三种适配方式；换图、调模糊、调暗度都即时生效并写回配置。
+- **Tray**: a Windows taskbar icon whose right-click menu covers region capture, fullscreen, clipboard pin, long capture, record, save last, show main window and exit — each with its current hotkey. The icon re-registers itself after an Explorer crash. Closing the main window hides to tray by default (`close_to_tray`); the tray's Exit truly quits.
+- **Background**: the main window can use any image (`png/jpg/webp/bmp`) with Gaussian blur, dimming and cover / contain / stretch fitting; changes apply instantly and persist.
 
 ---
 
-## 快速开始
+## Quick start
 
-### 环境要求
+### Requirements
 
-- Windows 10 / 11（x64 / ARM64）功能最全；macOS 与 Linux 可构建运行（贴图切换为 egui 视口，
-  托盘、长截图滚轮模拟等为平台能力裁剪后的行为）
-- Rust **1.85+**（edition 2024）
-- 可选：`ffmpeg` 在 `PATH` 中，用于 MP4 录屏；否则自动回退到 GIF
-- 可选（仅打包 installer 需要）：Inno Setup 6（`iscc`）
+- Windows 10 / 11 (x64 / ARM64) is the fully-featured platform; macOS and Linux build and run (pins fall back to an egui viewport; tray and scroll simulation are trimmed to platform abilities).
+- Rust **1.85+** (edition 2024)
+- Optional: `ffmpeg` on `PATH` for MP4 recording; falls back to GIF otherwise
+- Optional (packaging only): Inno Setup 6 (`iscc`)
 
-### 构建与运行
+### Build & run
 
 ```powershell
 git clone https://github.com/yiqiui/PinSight.git
 cd PinSight
 
-# 开发运行
+# dev run
 cargo run
 
-# 发布构建
+# release build
 cargo build --release
 .\target\release\pinsight.exe
 ```
 
-启动后主窗口会显示热键注册状态。按下 **`Ctrl+Shift+A`** 开始区域截图。
+The main window shows the hotkey registration status at startup. Press **`Ctrl+Shift+A`** for a region capture.
 
-> 首次运行会在 `%APPDATA%\PinSight\config.json` 写入默认配置，并在
-> `%USERPROFILE%\Pictures\PinSight` 创建输出目录。
-> 便携模式下两者都改为安装目录下的 `data\` 与 `captures\`，不写注册表、不碰 `%APPDATA%`。
+> On first run a default config is written to `%APPDATA%\PinSight\config.json` and an output folder is created at `%USERPROFILE%\Pictures\PinSight`. In portable mode both move to `data\` and `captures\` inside the install folder — no registry, no `%APPDATA%`.
 
-### 最小使用流程
+### Minimal workflow
 
-1. `Ctrl+Shift+A` → 屏幕冻结、出现选区覆盖层。
-2. 拖拽框选；按 `R/E/A/D/H/M` 切换标注工具（`V` 回到选择）。
-3. `Enter` 复制到剪贴板，`P` 贴图，`Ctrl+S` 保存 PNG，`Esc` 取消。
-4. 贴图窗口：左键拖动，滚轮缩放，`Ctrl+滚轮` 调透明度，中键或 `Esc` 关闭；
-   主窗口的 Pin 列表可以切换点击穿透、复制、保存、关闭。
+1. `Ctrl+Shift+A` → the screen freezes and the selection overlay appears.
+2. Drag a selection; `R/E/A/D/H/M` switch annotation tools (`V` back to select).
+3. `Enter` copies to clipboard, `P` pins, `Ctrl+S` saves a PNG, `Esc` cancels.
+4. Pin window: drag with the left button, wheel to zoom, `Ctrl+wheel` for opacity, middle-click or `Esc` to close; the pin list in the main window can toggle click-through, copy, save and close.
 
-### 命令行截图（scrot / maim 风格）
+### Command line (scrot / maim style)
 
-不开窗口、不建 GL 上下文，适合脚本、远程会话和没有托盘的 Linux 桌面：
-
-`pinsight` 的无头命令（别名 `capture` / `screenshot`）：
+No window, no GL context — made for scripts, remote sessions and Linux desktops without a tray:
 
 ```text
-# shot：截图（scrot/maim 风格，无窗口、无 GL 上下文）
-pinsight shot                              # 光标所在显示器 → 保存目录，stdout 打印路径
-pinsight shot --out shot.png               # → 指定文件
-pinsight shot --region 100,100,640,480     # 物理像素矩形 X,Y,W,H
-pinsight shot --monitor 65537 --out m.png  # 指定显示器（id 见 --list-monitors）
-pinsight shot --window 12345 --out w.png   # 指定顶层窗口（id 见 --list-windows）
-pinsight shot --clipboard                  # 只进剪贴板
-pinsight shot --upload                     # 上传后 stdout 打印分享链接
-pinsight shot --ocr                        # 离线 OCR 识别，文本打 stdout、路径打 stderr
-pinsight shot --delay 3 --out s.png        # 3 秒后截
-pinsight shot --list-monitors              # 列出显示器 id 与几何
-pinsight shot --list-windows               # 列出窗口 id / 标题
+# shot: capture (scrot/maim style, headless)
+pinsight shot                              # monitor under cursor → save dir, prints the path
+pinsight shot --out shot.png               # → a given file
+pinsight shot --region 100,100,640,480     # physical rectangle X,Y,W,H
+pinsight shot --monitor 65537 --out m.png  # a given monitor (ids via --list-monitors)
+pinsight shot --window 12345 --out w.png   # a given top-level window (ids via --list-windows)
+pinsight shot --clipboard                  # clipboard only
+pinsight shot --upload                     # prints the shareable link
+pinsight shot --ocr                        # offline OCR: text on stdout, path on stderr
+pinsight shot --delay 3 --out s.png        # wait 3 s first
+pinsight shot --list-monitors              # monitor ids and geometry
+pinsight shot --list-windows               # window ids / titles
 
-# pdf：多张图片合并为一个 PDF（长截图自动跨页，透明背景铺白）
+# pdf: bundle images into one PDF (tall captures paginate, transparency flattened white)
 pinsight pdf a.png b.png --out book.pdf
 
-# gif：编辑现有动图
-pinsight gif trim  clip.gif --start 2 --end 20   # 裁剪片段（按帧）
-pinsight gif crop  clip.gif --x 10 --y 10 --w 200 --h 120   # 裁切画面（矩形）
-pinsight gif text  clip.gif --text "Hello" --font 48 --pos 3   # 烧字（pos 0..4）
-pinsight gif mp4   clip.gif                          # 转 H.264 MP4（需 ffmpeg）
+# gif: edit an existing animated GIF
+pinsight gif trim  clip.gif --start 2 --end 20                 # keep a frame range
+pinsight gif crop  clip.gif --x 10 --y 10 --w 200 --h 120      # cut a rectangle
+pinsight gif text  clip.gif --text "Hello" --font 48 --pos 3   # burn text (pos 0..4)
+pinsight gif mp4   clip.gif                                    # convert to H.264 MP4 (needs ffmpeg)
 
-# voice：麦克风录音便签 → WAV（需 ffmpeg）
+# voice: record a microphone voice note → WAV (needs ffmpeg)
 pinsight voice --out note.wav --seconds 30
 ```
 
-约定与 `maim` 一致：`stdout` 只输出机器可读的一行结果（截图 = 绝对路径、
-`--upload` = 分享链接、`--ocr` = 识别文本、`pdf`/`gif`/`voice` = 产物路径），
-错误写 `stderr` 并以非零码退出。`--clipboard` 可与 `--out` 同时使用。
-`gif` 与 `voice` 需要系统安装 `ffmpeg`。
+Like `maim`: `stdout` carries exactly one machine-readable line (capture = absolute path, `--upload` = link, `--ocr` = text, `pdf`/`gif`/`voice` = output path), errors go to `stderr` with a non-zero exit code. `--clipboard` can combine with `--out`. `gif` and `voice` need `ffmpeg` installed.
 
-### 安装与打包
+### Install & package
 
 ```powershell
-# 一条命令产出便携 zip + 安装包（dist\ 下）
+# one command produces the portable zip + installer (under dist\)
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1
 
-# 没有 Inno Setup 时只出便携包
+# portable only, when Inno Setup is absent
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1 -SkipInstaller
 
-# UPX 压缩版：便携 zip 和安装包都用压缩后的 exe（约 10.3 MiB → 3.8 MiB）
-# 需要 upx 在 PATH 上；可能触发杀软误报，所以默认关闭
+# UPX-compressed variant for both (about 10.3 MiB → 3.8 MiB)
+# needs upx on PATH; may trigger antivirus false positives, so it is off by default
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1 -Upx
 ```
 
-只重打包（不重新编译），一次产出普通版 + UPX 版：
+Repackage without recompiling:
 
 ```bash
-python tools/_repackage_portable.py                        # 两个包都出
-PINSIGHT_UPX_ONLY=1 python tools/_repackage_portable.py    # 只出 UPX 版
+python tools/_repackage_portable.py                        # both packages
+PINSIGHT_UPX_ONLY=1 python tools/_repackage_portable.py    # UPX only
 ```
 
-- **安装版**（`dist\PinSight-<version>-setup.exe`）：Inno Setup 6 构建，
-  **安装目录由用户自选**（默认 `%LOCALAPPDATA%\Programs\PinSight`），可选创建桌面图标、
-  可选开机自启；卸载走系统"添加或删除程序"。
-- **便携版**（`dist\PinSight-<version>-portable.zip`）：解压即用，文件夹里自带
-  `pinsight.portable` 标记文件——程序检测到它就把配置、背景图、截图全部放在
-  本目录的 `data\` / `captures\` 里，整个文件夹可以随意拷贝/删除，不在系统里留痕迹。
-  删除该标记文件即可恢复为"按用户安装"行为。
-- 也可以手动触发便携模式：`pinsight.exe --portable` 或环境变量 `PINSIGHT_PORTABLE=1`。
-- CI 在打 `v*` 标签时自动构建发布包：Windows（x64 / ARM64）、macOS（x64 / ARM64）、Linux（x64 / ARM64）。
+- **Installer** (`dist\PinSight-<version>-setup.exe`): built with Inno Setup 6, **user-chosen install directory** (default `%LOCALAPPDATA%\Programs\PinSight`), optional desktop icon, optional autostart; uninstalls via "Add or remove programs".
+- **Portable** (`dist\PinSight-<version>-portable.zip`): unzip and run; the folder carries a `pinsight.portable` marker — config, background and captures then live in `data\` / `captures\` next to the exe, so the folder can be copied or deleted freely with no trace left. Remove the marker to return to per-user behaviour.
+- Portable mode can also be forced: `pinsight.exe --portable` or `PINSIGHT_PORTABLE=1`.
+- CI builds release packages automatically on `v*` tags: Windows (x64 / ARM64), macOS (x64 / ARM64), Linux (x64 / ARM64).
 
 ---
 
-## 快捷键
+## Hotkeys
 
-默认值（全部可在配置文件中修改）：
+Defaults (all editable in the config file):
 
-| 快捷键 | 动作 |
+| Hotkey | Action |
 | --- | --- |
-| `Ctrl+Shift+A` | 区域截图 + 标注 |
-| `Ctrl+Shift+F` | 全屏截图并复制 |
-| `Ctrl+Shift+V` | 把剪贴板图片贴到屏幕 |
-| `Ctrl+Shift+L` | 长截图（再次按下取消） |
-| `Ctrl+Shift+R` | 开始 / 停止选区录屏 |
-| `Ctrl+Shift+S` | 保存最近一次截图 |
-| `Ctrl+Shift+H` | 显示 / 隐藏全部贴图（Snipaste 式 F3 切换） |
-| `Ctrl+Shift+P` | 重复上次区域截图（直接复制，无需再框选） |
+| `Ctrl+Shift+A` | Region capture + annotate |
+| `Ctrl+Shift+F` | Fullscreen capture and copy |
+| `Ctrl+Shift+V` | Pin the clipboard image to the screen |
+| `Ctrl+Shift+L` | Long capture (press again to cancel) |
+| `Ctrl+Shift+R` | Start / stop region recording |
+| `Ctrl+Shift+H` | Show / hide all pins (Snipaste-style F3 toggle) |
+| `Ctrl+Shift+P` | Repeat the last area capture (straight to clipboard) |
+| `Ctrl+Shift+S` | Save the most recent capture |
 
-> 早期版本使用 `Ctrl+Alt+*`，实测与 Snipaste / QQ / 微信的截图快捷键冲突，因此改为
-> `Ctrl+Shift+*`。如果你的系统仍冲突，启动时主窗口会列出不可用的组合。
+> Earlier versions used `Ctrl+Alt+*`, which collided with Snipaste / QQ / WeChat in testing — hence `Ctrl+Shift+*`. If a combo is still taken, the main window lists it at startup.
 
-全部 8 个组合都可以在**设置页 → 快捷键**里直接重新录制：点某一行的 `Record`，
-然后按下新的组合键（需要至少一个修饰键，`Esc` 取消）。录制成功后立即重新注册，
-无需重启；被其他程序占用的组合会标红并说明原因。
+All 8 combos can be re-recorded in **Settings → Hotkeys**: click `Record` on a row, press the new combo (at least one modifier required; `Esc` cancels). Registration is hot-swapped, no restart; combos taken by other software are flagged in red with the reason.
 
-### 覆盖层内快捷键
+### Overlay hotkeys
 
-| 按键 | 动作 |
+| Key | Action |
 | --- | --- |
-| `V` | 选择/移动选区 |
-| `R` / `E` / `A` / `D` / `H` / `M` / `N` / `T` | 矩形 / 椭圆 / 箭头 / 画笔 / 高亮 / 马赛克 / 序号标注 / 文字 |
-| `Ctrl+Z` | 撤销上一个标注 |
-| `Ctrl+Y` | 重做（`Ctrl+Shift+Z` 同样有效，但部分输入法会占用该组合） |
-| `Enter` | 确认默认动作（复制或开始长截图/录屏） |
-| `P` | 贴图 |
-| `Ctrl+S` | 保存 PNG |
-| `Ctrl+C` | 复制 |
-| `Backspace` / `Delete` | 删除最后一个标注 |
-| `Esc` | 取消 |
+| `V` | Select / move the selection |
+| `R` / `E` / `A` / `D` / `H` / `M` / `N` / `T` | Rectangle / ellipse / arrow / pen / highlighter / mosaic / numbered steps / text |
+| `Ctrl+Z` | Undo the last annotation |
+| `Ctrl+Y` | Redo (`Ctrl+Shift+Z` also works, though some IMEs grab it) |
+| `Enter` | Confirm the default action (copy, or start long capture / recording) |
+| `P` | Pin |
+| `Ctrl+S` | Save PNG |
+| `Ctrl+C` | Copy |
+| `Backspace` / `Delete` | Remove the last annotation |
+| `Esc` | Cancel |
 
-序号标注（`N`）点击即放置，编号按点击顺序自动递增（1、2、3…），
-颜色跟随当前色板，可以用撤销回退。
+Numbered steps (`N`): click to place, numbers auto-increment (1, 2, 3…), colour follows the current palette, undoable.
 
-文字标注（`T`）点击后出现内联输入框，输入完成按 `Enter` 放置、`Esc` 取消；
-字号跟随工具栏的线宽滑块，颜色跟随色板。落盘时用与界面相同的字体文件轮廓化，
-预览与最终 PNG 一致。
+Text annotation (`T`): click for an inline editor; `Enter` places, `Esc` cancels. Size follows the toolbar's stroke slider, colour follows the palette. The PNG is rasterised from the same font file as the UI, so preview and output match.
 
 ---
 
-## MCP 集成
+## MCP integration
 
-### 启动
+### Start
 
-MCP 服务与 GUI 在同一个进程中运行，使用 **stdio** 传输：
+The MCP server runs in the same process as the GUI over **stdio**:
 
 ```powershell
 .\target\release\pinsight.exe --mcp
 ```
 
-日志写 stderr，stdout 只输出 JSON-RPC，符合 MCP stdio 约定。
+Logs go to stderr; stdout carries only JSON-RPC, as the MCP stdio convention requires.
 
 ### Claude Desktop
 
-编辑 `claude_desktop_config.json`：
+Edit `claude_desktop_config.json`:
 
 ```json
 {
@@ -336,7 +299,7 @@ MCP 服务与 GUI 在同一个进程中运行，使用 **stdio** 传输：
 
 ### Cursor
 
-项目根目录 `.cursor/mcp.json`：
+`.cursor/mcp.json` in the project root:
 
 ```json
 {
@@ -349,21 +312,21 @@ MCP 服务与 GUI 在同一个进程中运行，使用 **stdio** 传输：
 }
 ```
 
-### 工具列表
+### Tools
 
-| 工具 | 参数 | 作用 |
+| Tool | Arguments | Purpose |
 | --- | --- | --- |
-| `capture_screenshot` | `monitor_id?`, `save?`, `return_base64?` | 截取整个显示器；调用时会先把主窗口移出画面 |
-| `capture_region` | `x`, `y`, `width`, `height`, `save?`, `return_base64?` | 截取物理桌面矩形 |
-| `pin_image` | `path` 或 `base64` | 贴一张本地/内联图片 |
-| `list_pins` | — | 列出当前贴图 |
-| `close_pin` | `id` | 关闭指定贴图 |
-| `start_recording` | `monitor_id?`, `x?`, `y?`, `width?`, `height?`, `fps?` | 开始录屏 |
-| `stop_recording` | — | 停止并返回文件路径 |
-| `long_screenshot` | `monitor_id?`, `x?`, `y?`, `width?`, `height?`, `max_height?` | 滚动截长图并保存 |
-| `get_status` | — | 版本、贴图数、录制状态、输出目录 |
+| `capture_screenshot` | `monitor_id?`, `save?`, `return_base64?` | Capture a whole monitor; the main window is parked off-screen first |
+| `capture_region` | `x`, `y`, `width`, `height`, `save?`, `return_base64?` | Capture a physical-desktop rectangle |
+| `pin_image` | `path` or `base64` | Pin a local or inline image |
+| `list_pins` | — | List current pins |
+| `close_pin` | `id` | Close the given pin |
+| `start_recording` | `monitor_id?`, `x?`, `y?`, `width?`, `height?`, `fps?` | Start recording |
+| `stop_recording` | — | Stop and return the file path |
+| `long_screenshot` | `monitor_id?`, `x?`, `y?`, `width?`, `height?`, `max_height?` | Scrolling long capture, saved to disk |
+| `get_status` | — | Version, pin count, recording state, output directory |
 
-示例（JSON-RPC）：
+Example (JSON-RPC):
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"tools/call",
@@ -371,20 +334,19 @@ MCP 服务与 GUI 在同一个进程中运行，使用 **stdio** 传输：
            "arguments":{"x":100,"y":100,"width":640,"height":480}}}
 ```
 
-MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先用
-`capture_screenshot` 或 `get_status` 确认显示器信息。
+MCP coordinates are **physical pixels**. On mixed-DPI multi-monitor setups, confirm monitor info with `capture_screenshot` or `get_status` first.
 
 ---
 
-## 配置
+## Configuration
 
-配置文件路径：
+Config file location:
 
 ```text
 %APPDATA%\PinSight\config.json
 ```
 
-默认内容（也可参考 [`config.example.json`](config.example.json)）：
+Default content (see also [`config.example.json`](config.example.json)):
 
 ```json
 {
@@ -400,16 +362,7 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
   "gif_fps": 12,
   "record_max_seconds": 0,
-  "record_countdown": 3,
-  "record_fps": 30,
-  "record_mode": "region",
-  "record_resolution": "source",
-  "record_webcam": false,
-  "webcam_device": "",
-  "record_system_audio": false,
-  "system_audio_device": "",
-  "record_mic": false,
-  "mic_device": "",
+  "record_countdown": 0,
   "long_capture_max_height": 20000,
   "long_scroll_ticks": 4,
   "long_scroll_delay_ms": 420,
@@ -456,31 +409,24 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
 }
 ```
 
-- `record_fps`：录屏帧率（4–60），MP4 与 GIF 共用；`gif_fps` 为旧字段，已不再参与录制。
-- `record_countdown`：录屏开始前的倒计时秒数（0 / 3 / 5，最长 10），留出摆好窗口的时间。
-- `record_mode`：`region`（选区，弹出选择层）/ `screen`（全屏，光标所在显示器）/ `window`（前台窗口）。
-- `record_resolution`：`source`（原始）/ `r1080`（1920×1080）/ `r720`（1280×720）；仅 MP4 路径缩放，GIF 用原始尺寸。
-- `record_webcam` + `webcam_device`：摄像头画中画（右下角气泡），留空设备名用默认摄像头；仅 MP4。
-- `record_system_audio` + `system_audio_device`：系统声音（Windows 用 WASAPI 回环；macOS/Linux 需显式指定 BlackHole/监听设备）。
-- `record_mic` + `mic_device`：麦克风；留空用平台默认输入设备。系统声音与麦克风同时开启时用 `amix` 混成一条音轨。
-- `long_capture_max_height`：长截图最大高度，防止内存失控。
-- `mcp_enabled`：保留字段；是否启动 MCP 由 `--mcp` 决定。
-- `theme`：`system` / `light` / `dark`。
-- `accent`：`blue` / `violet` / `emerald` / `amber` / `rose` / `cyan`。
-- `lang`：`zh-hans` / `zh-hant` / `en` / `ja` / `ko` / `fr` / `de`。
-- `font`：`auto` / `sans` / `serif` / `mono` / `custom`；`custom` 时读取 `font_path`。
-- `font_size_pt`：界面字号（pt），可选 8 / 9 / 10 / 11 / 12 / 14 / 16，默认 9。
-- `bg_image`：主窗口背景图片路径，`null` 为纯色；`bg_blur` 为高斯模糊半径（px），
-  `bg_dim` 为压暗强度（0–0.85），`bg_fit` 为 `cover` / `contain` / `stretch`。
-- `close_to_tray`：关闭主窗口时藏到托盘而非退出（仅 Windows 默认开启）。
-- `run_at_startup`：开机自启（Windows 注册表 / Linux autostart / macOS LaunchAgent）。
-- `settings_tab`：设置页记住的标签，`general` / `appearance` / `capture` / `pins` / `output` / `controls`（别名 `hotkeys`）/ `updates` / `about`。
+- `gif_fps`: recording frame rate (4–30).
+- `long_capture_max_height`: maximum long-capture height, a guard against runaway memory.
+- `mcp_enabled`: reserved; whether MCP starts is decided by `--mcp`.
+- `theme`: `system` / `light` / `dark`.
+- `accent`: `blue` / `violet` / `emerald` / `amber` / `rose` / `cyan`.
+- `lang`: `zh-hans` / `zh-hant` / `en` / `ja` / `ko` / `fr` / `de`.
+- `font`: `auto` / `sans` / `serif` / `mono` / `custom`; `custom` reads `font_path`.
+- `font_size_pt`: UI font size in points; 8 / 9 / 10 / 11 / 12 / 14 / 16, default 9.
+- `bg_image`: main-window background image path, `null` for solid; `bg_blur` is the Gaussian radius (px), `bg_dim` the dimming (0–0.85), `bg_fit` is `cover` / `contain` / `stretch`.
+- `close_to_tray`: closing the main window hides to tray instead of quitting (Windows only, on by default).
+- `run_at_startup`: launch at login (Windows registry / Linux autostart / macOS LaunchAgent).
+- `settings_tab`: the remembered settings tab — `general` / `appearance` / `capture` / `pins` / `output` / `controls` (alias `hotkeys`) / `updates` / `about`.
 
-外观相关的字段在设置页改动后立即写回，不需要重启。
+Appearance fields are written back as soon as you change them; no restart needed.
 
 ---
 
-## 架构
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -498,14 +444,14 @@ flowchart LR
     APP -->|tools/call result| MCP
 ```
 
-### 目录结构
+### Repository layout
 
 ```text
 PinSight/
 ├── Cargo.toml
 ├── Cargo.lock
-├── README.md               # 简体中文
-├── README_EN.md            # English
+├── README.md               # English
+├── README.zh-CN.md         # 简体中文
 ├── LICENSE
 ├── CONTRIBUTING.md
 ├── CHANGELOG.md
@@ -513,205 +459,188 @@ PinSight/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                # Windows fmt / clippy / test / build
-│       └── release.yml           # v* 标签：Windows/macOS/Linux（x64 + ARM64）发布包
+│       └── release.yml           # v* tags: Windows/macOS/Linux (x64 + ARM64) packages
 ├── assets/
-│   ├── icon.png                  # 应用图标（多尺寸矢量导出）
-│   ├── icon.ico                  # Windows 图标
-│   └── tray.ico                  # 托盘图标（多分辨率）
+│   ├── icon.png                  # app icon (owl)
+│   ├── icon.ico                  # Windows icon
+│   └── tray.ico                  # tray icon (multi-resolution)
 ├── docs/
-│   ├── ARCHITECTURE.md          # 线程、坐标、数据流、失败模式
-│   └── images/                  # demo / main / settings / pins 截图
+│   ├── ARCHITECTURE.md          # threads, coordinates, data flow, failure modes
+│   └── images/                  # demo / main / settings / pins screenshots
 ├── packaging/
 │   └── windows/
-│       └── pinsight.iss          # Inno Setup 脚本（自选安装目录 / 开机自启任务）
+│       └── pinsight.iss          # Inno Setup script (custom dir / autostart task)
 ├── scripts/
-│   ├── package.ps1               # 产出便携 zip + 安装包
-│   ├── make_assets.py            # 生成 icon 与 README 演示图
-│   ├── make_icon.py              # 绘制应用/托盘图标
-│   ├── measure.py                # 内存/CPU 采样脚本
-│   ├── preview.py                # 驱动主窗口逐页截图（外观走查用）
-│   ├── overlay_drag.py           # 唤出冻结层并拖出选区后截图
-│   ├── pin_flow.py               # 端到端跑一遍 截图 → 贴图 → 贴图列表
-│   ├── shot.py                   # PrintWindow 抓取单个窗口
-│   ├── shot_ui.py                # 像素级 UI 自动化验收（点击/按键/找色）
-│   ├── undo_probe.py             # 端到端验证撤销/重做（像素计数）
-│   └── number_probe.py           # 端到端验证序号标注（圆盘+数字检测）
+│   ├── package.ps1               # portable zip + installer
+│   ├── make_owl_icon.py          # draws the owl icon set (PNG + ICO)
+│   ├── make_assets.py            # icon and README demo art
+│   ├── make_icon.py              # legacy icon generator
+│   ├── measure.py                # memory/CPU sampler
+│   ├── preview.py                # drives the main window page by page
+│   ├── overlay_drag.py           # summon the overlay and drag a selection
+│   ├── pin_flow.py               # end-to-end capture → pin → pin list
+│   ├── shot.py                   # PrintWindow single-window grab
+│   ├── shot_ui.py                # pixel-level UI automation checks
+│   ├── undo_probe.py             # end-to-end undo/redo verification
+│   └── number_probe.py           # end-to-end numbered-steps verification
 ├── src/
-│   ├── main.rs                       # CLI、日志、eframe 启动、窗口图标
-│   ├── app.rs                        # 应用状态机、页面、主窗口、捕获流程编排
-│   ├── cli.rs                        # 命令行入口：shot / pdf / gif / voice 子命令
-│   ├── app_keys.rs                   # 覆盖层内快捷键（"V"/"Ctrl+Z" 文本）解析
-│   ├── ui.rs                         # 手绘控件与矢量图标集（24×24 网格）
-│   ├── theme.rs                      # 调色板、控件样式、字号阶梯
-│   ├── fonts.rs                      # 系统字体发现与语言匹配
-│   ├── i18n.rs                       # 7 种语言的文案表与语言检测
-│   ├── text_font.rs                  # 文字标注字形轮廓光栅化
-│   ├── capture.rs                    # 显示器枚举 / 全屏 / 物理矩形抓取
-│   ├── overlay.rs                    # 冻结层、选区、工具栏、快捷键
-│   ├── annotate.rs                   # 标注模型、预览、tiny-skia 光栅化
-│   ├── marklayer.rs                  # 录屏叠加标注层（双置顶透明窗口）
-│   ├── pin.rs                        # Windows 原生贴图窗口（Win32 消息循环 + GDI）
-│   ├── pin_viewport.rs               # 其他平台的贴图（egui 视口实现）
-│   ├── decorate.rs                   # 截图后装饰：边框 / 阴影 / 水印
-│   ├── hud.rs                        # 后台任务浮动状态窗口
-│   ├── longshot.rs                   # 滚动捕获、重叠检测、拼接
-│   ├── record.rs                     # 录屏线程、GIF 编码、ffmpeg MP4
-│   ├── ocr.rs                        # 离线 OCR（Windows.Media.Ocr / macOS Vision / Linux Tesseract）
-│   ├── voice.rs                      # 麦克风录音便签（ffmpeg → WAV）
-│   ├── gifedit.rs                    # GIF 编辑：裁剪片段 / 裁切画面 / 加文字 / 转 MP4
-│   ├── pdf.rs                        # PDF 页面栅格化（可选）
-│   ├── hotkeys.rs                    # 全局热键注册、解析、冲突分类、热更新
-│   ├── tray.rs                       # Windows 托盘图标、消息窗口与右键菜单
-│   ├── tray_stub.rs                  # 非 Windows 平台的托盘空实现
-│   ├── startup.rs                    # 开机自启（注册表 / .desktop / LaunchAgent）
-│   ├── single_instance.rs            # 单实例：命名互斥量 / 锁文件 + PID 存活检测
-│   ├── background.rs                 # 自定义背景图：解码、模糊、适配、纹理
-│   ├── picker.rs                     # Windows 风格取色对话框
-│   ├── naming.rs                     # 保存文件名模板（占位符展开）
-│   ├── clipboard.rs                  # 剪贴板输出（按 ClipboardMode，arboard）
-│   ├── upload.rs                     # 图片上传（HTTP / 本地后端）
-│   ├── hdr.rs                        # HDR 高级色彩检测与修正
-│   ├── mcp.rs                        # 手写 MCP stdio server + 9 个工具定义
-│   ├── config.rs                     # JSON 配置读写、便携模式路径解析
-│   └── util.rs                       # 时间戳、PNG、剪贴板、路径工具
+│   ├── main.rs                       # CLI, logging, eframe bootstrap, window icon
+│   ├── app.rs                        # app state machine, pages, main window, capture orchestration
+│   ├── cli.rs                        # CLI entry: shot / pdf / gif / voice subcommands
+│   ├── app_keys.rs                   # overlay hotkey ("V"/"Ctrl+Z" text) parsing
+│   ├── ui.rs                         # hand-drawn widgets and vector icon set (24×24 grid)
+│   ├── theme.rs                      # palette, widget styling, font-size ladder
+│   ├── fonts.rs                      # system font discovery and language matching
+│   ├── i18n.rs                       # 7-language string table and detection
+│   ├── text_font.rs                  # text-annotation glyph outline rasteriser
+│   ├── capture.rs                    # monitor enumeration / fullscreen / physical rect grabs
+│   ├── overlay.rs                    # freeze layer, selection, toolbar, hotkeys
+│   ├── annotate.rs                   # annotation model, preview, tiny-skia rasterising
+│   ├── marklayer.rs                  # recording annotation layer (two topmost translucent windows)
+│   ├── pin.rs                        # native Windows pin window (Win32 message loop + GDI)
+│   ├── pin_viewport.rs               # pins elsewhere (egui viewport implementation)
+│   ├── decorate.rs                   # post-capture decoration: border / shadow / watermark
+│   ├── hud.rs                        # floating status window for background jobs
+│   ├── longshot.rs                   # scroll capture, overlap detection, stitching
+│   ├── record.rs                     # recorder thread, GIF encoding, ffmpeg MP4
+│   ├── ocr.rs                        # offline OCR (Windows.Media.Ocr / macOS Vision / Linux Tesseract)
+│   ├── voice.rs                      # microphone voice notes (ffmpeg → WAV)
+│   ├── gifedit.rs                    # GIF editing: trim / crop / text / MP4
+│   ├── pdf.rs                        # PDF page rasterising (optional)
+│   ├── hotkeys.rs                    # global hotkey registration, parsing, conflicts, hot reload
+│   ├── tray.rs                       # Windows tray icon, message window, context menu
+│   ├── tray_stub.rs                  # no-op tray for non-Windows platforms
+│   ├── startup.rs                    # autostart (registry / .desktop / LaunchAgent)
+│   ├── single_instance.rs            # single instance: named mutex / lock file + PID liveness
+│   ├── background.rs                 # custom background image: decode, blur, fit, texture
+│   ├── picker.rs                     # Windows-style colour picker dialog
+│   ├── naming.rs                     # save-file name template (placeholder expansion)
+│   ├── clipboard.rs                  # clipboard output (per ClipboardMode, arboard)
+│   ├── upload.rs                     # image upload (HTTP / local backend)
+│   ├── hdr.rs                        # HDR high-colour detection and correction
+│   ├── mcp.rs                        # hand-written MCP stdio server + 9 tools
+│   ├── config.rs                     # JSON config I/O, portable-mode path resolution
+│   └── util.rs                       # timestamps, PNG, clipboard, path helpers
 └── .gitignore
 ```
 
-### 技术栈
+### Tech stack
 
-| 层 | 选型 | 理由 |
+| Layer | Choice | Why |
 | --- | --- | --- |
-| GUI | `egui` + `eframe`（glow） | 纯 Rust、立即模式、无 WebView、编译快 |
-| 控件与图标 | 自绘（`egui::Painter`） | 主题/字号/DPI 变化时无损缩放，不依赖图片素材 |
-| 字体 | `FontDefinitions` + 系统字体扫描 | 按语言挑主字体并追加 CJK 回退，避免豆腐块 |
-| 屏幕捕获 | `xcap` | 多显示器、区域捕获、Windows 原生后端 |
-| 标注光栅化 | `tiny-skia` | CPU 抗锯齿路径，输出稳定，无 GPU 依赖 |
-| 贴图窗口 | Win32 `WS_POPUP` + GDI（Windows）/ egui 视口（其他平台） | Windows 上真正常驻置顶、无边框、可点击穿透；其他平台用视口保持同一套交互 |
-| 滚动模拟 | `enigo` | 发送鼠标滚轮 |
-| 全局热键 | `global-hotkey` | Windows RegisterHotKey 封装；改键时复用同一 manager 热更新 |
-| 托盘 | `windows` crate（`Shell_NotifyIconW` + message-only 窗口） | 消息窗口挂在 UI 线程，winit 的消息泵顺带派发，无需额外线程 |
-| 文件选择 | `rfd` | 跨平台原生对话框（IFileOpenDialog / NSOpenPanel / zenity），非 WebView |
-| 录屏 | `gif` + 可选 `ffmpeg` | 零外部依赖的 GIF；有 ffmpeg 时输出 MP4 |
-| MCP | 手写 JSON-RPC stdio | 避免 async runtime 与 SDK 版本绑定，协议可控 |
-| 剪贴板 | `arboard` | 图片剪贴板支持 |
-| 日志 | `tracing` + `tracing-subscriber` | stderr 日志，不污染 MCP stdout |
+| GUI | `egui` + `eframe` (glow) | pure Rust, immediate mode, no WebView, fast builds |
+| Widgets & icons | hand-drawn (`egui::Painter`) | lossless under theme/font/DPI changes, no image assets |
+| Fonts | `FontDefinitions` + system font scan | per-language primary + CJK fallbacks, no tofu |
+| Screen capture | `xcap` | multi-monitor, region capture, native Windows backend |
+| Annotation rasterising | `tiny-skia` | CPU anti-aliased paths, deterministic, no GPU dependency |
+| Pin windows | Win32 `WS_POPUP` + GDI (Windows) / egui viewport (elsewhere) | truly always-on top, borderless, click-through on Windows; the viewport keeps one interaction model elsewhere |
+| Scroll simulation | `enigo` | synthesises mouse wheel events |
+| Global hotkeys | `global-hotkey` | RegisterHotKey wrapper; re-registering on change reuses one manager |
+| Tray | `windows` crate (`Shell_NotifyIconW` + message-only window) | the message window lives on the UI thread; winit's pump dispatches it, no extra thread |
+| File dialogs | `rfd` | cross-platform native dialogs (IFileOpenDialog / NSOpenPanel / zenity), no WebView |
+| Recording | `gif` + optional `ffmpeg` | dependency-free GIF; MP4 when ffmpeg is present |
+| MCP | hand-written JSON-RPC stdio | no async runtime or SDK version lock-in; protocol under our control |
+| Clipboard | `arboard` | image clipboard support |
+| Logging | `tracing` + `tracing-subscriber` | stderr logs, MCP stdout stays clean |
 
 ---
 
-## 设计取舍
+## Design notes
 
-### 为什么不用 Tauri / React
+### Why not Tauri / React
 
-Tauri 的 UI 层就是 WebView。截图工具最敏感的路径是**冻结层标注**与**贴图窗口响应**，
-把这两块交给 WebView 会引入合成延迟、跨窗口状态同步和更高的内存占用。PinSight 选择
-`egui` 做控制面板与覆盖层，贴图则直接使用 Win32 窗口，整条链路保持原生。
+Tauri's UI layer is a WebView. A screenshot tool's most latency-sensitive paths are **freeze-layer annotation** and **pin window responsiveness**; handing them to a WebView adds compositing delay, cross-window state sync and memory. PinSight keeps `egui` for panels and the overlay, and uses Win32 windows for pins — the whole pipeline stays native.
 
-### 为什么贴图不用 egui 子窗口
+### Why pins don't use egui child windows
 
-`egui` 的 immediate/deferred viewport 适合临时窗口，但在实测中，长期存在的无边框贴图
-窗口在纹理上传和重绘调度上不够稳定。PinSight 改为每个贴图一个 Win32 消息循环线程，
-用 GDI `StretchDIBits` 直接呈现位图：置顶、拖动、缩放、透明度和点击穿透都由系统窗口
-管理器处理，行为可预测。
+egui's immediate/deferred viewports suit transient windows, but in testing long-lived borderless pin windows were unstable around texture upload and repaint scheduling. PinSight instead gives every pin its own Win32 message-loop thread and presents the bitmap with GDI `StretchDIBits`: topmost, drag, zoom, opacity and click-through are handled by the OS window manager, so behaviour is predictable.
 
-### 截图时如何避免截到自己
+### How captures avoid capturing ourselves
 
-主窗口不能简单 `hide()`：隐藏后 eframe 不再运行 UI pass，覆盖层也无法渲染。PinSight
-的做法是把主窗口移到虚拟桌面之外（`-10000, -10000`，而不是 Windows 会当成最小化的
-`-32000`），等待约 140ms 再抓屏，随后恢复位置与焦点。
+The main window can't just `hide()` — a hidden eframe window stops running UI passes, so the overlay couldn't render either. PinSight parks the main window outside the virtual desktop (`-10000, -10000`, not `-32000`, which Windows treats as minimised), waits ~140 ms, grabs the screen, then restores position and focus.
 
-### 性能与内存
+### Performance & memory
 
-发布构建（Windows 11 / 125% 缩放 / 简体中文界面）实测：
+Release build measurements (Windows 11 / 125% scaling / Simplified Chinese UI):
 
-| 指标 | 数值 | 备注 |
+| Metric | Value | Notes |
 | --- | --- | --- |
-| 空闲工作集（任务管理器「内存」列） | **≈ 5 MB** | 启动 8 秒后与最小化到托盘时调用 `SetProcessWorkingSetSize` 把页面交还系统；下次交互按需缺页调回（几毫秒） |
-| 空闲私有提交 | **≈ 47 MB** | 其中 **≈ 46 MB 是 egui/eframe/glow + Intel WGL 驱动的空窗底噪**：实测一个只有 `ui.label("hello")` 的 eframe 程序就是 47.8 MB 私有，PinSight 自身只多约 1–2 MB |
-| 启动后未修剪时的工作集 | ≈ 89 MB | 含可共享的代码页与 GL 驱动映射 |
-| 空闲 CPU | **0.2%** 单核 | `ControlFlow::Wait`，无输入时不重绘 |
-| 启动 CPU | ≈ 0.6 s | 字体解析 + 图标图集栅格化 |
+| Idle working set (Task Manager "Memory") | **≈ 5 MB** | 8 s after launch and when minimised to tray, `SetProcessWorkingSetSize` returns pages to the system; the next interaction page-faults them back (milliseconds) |
+| Idle private commit | **≈ 47 MB** | **≈ 46 MB of that is the egui/eframe/glow + Intel WGL driver floor**: a bare eframe program printing `ui.label("hello")` measures 47.8 MB private; PinSight adds only ~1–2 MB |
+| Untrimmed working set after launch | ≈ 89 MB | includes shareable code pages and GL driver mappings |
+| Idle CPU | **0.2%** of one core | `ControlFlow::Wait`; no repaint without input |
+| Startup CPU | ≈ 0.6 s | font parsing + icon atlas rasterising |
 
-> **为什么不是 9 MB**：WebView2 类工具（DBX 等）把渲染器放在系统共享运行时里，
-> 进程私有字节自然很小；egui + OpenGL 必须在进程内自带上下文与驱动分配。
-> 这是选型决定的固定成本，不是应用层的浪费——上面的底噪测量就是为了把这一点量化：
-> 即使砍掉 PinSight 的全部功能也只能降到约 48 MB。要做到个位数内存，只能换掉整个 UI 栈。
-> 在这个约束内已经做了能做的：字体内存映射（不占私有提交）、按需 CJK 回退、
-> LTO + 单 codegen unit + 剥离符号、录屏增量落盘、长截图硬上限。
+> **Why not 9 MB**: WebView2-based tools (DBX etc.) put the renderer in a system-shared runtime, so their private bytes stay small; egui + OpenGL must own the context and driver allocations in-process. That's a fixed cost of the stack choice, not application waste — the floor measurement above exists to quantify exactly this: ripping out every PinSight feature would only get to ~48 MB. Single-digit memory would require swapping the whole UI stack.
+> Within the constraint we did what's possible: memory-mapped fonts (no private commit), on-demand CJK fallback, LTO + one codegen unit + stripped symbols, incremental recording to disk, hard long-capture limits.
 
-几个关键的省内存设计：
+Key memory-saving designs:
 
-- **按需加载 CJK 回退字体**：主字体已覆盖 CJK 时不再加载第二个 20MB 字体；
-  确需加载时用**内存映射**而非堆拷贝，页面由页面缓存支撑、可被回收。
-- **发布产物瘦身**：fat LTO + 单 codegen unit + 剥离符号，可执行文件约 10.3 MB（UPX 压缩后约 3.8 MB；含内置 emoji 字体）。
-- **逐帧增量落盘**：录屏边捕获边写，内存不随时长增长。
-- **长截图有硬上限**：`long_capture_max_height`（默认 20000px）与 `long_max_frames`（默认 400 帧）封顶，
-  防止拼接结果失控。
+- **On-demand CJK fallback fonts**: when the primary font covers CJK, the second 20 MB font never loads; when it must load it is **memory-mapped**, not heap-copied, backed by page cache and reclaimable.
+- **Slim release artefacts**: fat LTO + one codegen unit + stripped symbols; the executable is ≈ 10.3 MB (≈ 3.8 MB UPX-compressed; includes the bundled emoji font).
+- **Frame-by-frame incremental writes**: recording writes while capturing; memory doesn't grow with duration.
+- **Hard long-capture limits**: `long_capture_max_height` (default 20000 px) and `long_max_frames` (default 400 frames) cap runaway stitching.
 
-复现方式：
+Reproduce with:
 
 ```powershell
 python scripts\measure.py 6
 ```
 
-### 长截图的拼接
+### Long-capture stitching
 
-1. `enigo` 把光标移到选区中心并滚动若干格。
-2. 等待动画稳定后抓取同一区域。
-3. 在 `[h/8, 0.9h]` 范围内搜索上下帧的重叠高度，对 RGB 采样做平均绝对差。
-4. 取差异最小的候选；差异过大则停止，避免把错位内容拼进去。
-5. 追加新行，直到达到 `max_height` 或页面不再移动。
+1. `enigo` moves the cursor to the selection centre and scrolls a few ticks.
+2. Wait for animations to settle, then grab the same region.
+3. Search the overlap height between frames within `[h/8, 0.9h]` using mean absolute difference over RGB samples.
+4. Take the best-matching candidate; stop when the difference is too large so misaligned content never enters the output.
+5. Append rows until `max_height` or the page stops moving.
 
-固定表头、悬浮按钮、滚动条和动画会破坏重叠匹配，因此长截图目前标记为实验性。
+Fixed headers, floating buttons, scrollbars and animations break overlap matching — long capture is therefore marked experimental.
 
 ---
 
-## 已知限制
+## Known limitations
 
-- **平台差异**：贴图在 Windows 用原生 Win32 窗口，macOS / Linux 自动切换为 egui 视口实现，
-  交互一致但系统级行为（如真点击穿透）以平台能力为准；托盘图标目前仅 Windows。
-- **长截图**：不适合含固定侧栏/表头、无限滚动、强动画的页面；默认最多 400 帧 / 20000px。
-- **录屏**：帧率受捕获速度限制（4–60 fps 为目标值）；GIF 体积较大；MP4 / 摄像头 / 音频均需要 `ffmpeg`。
-  摄像头与音频设备不可用时自动降级为纯屏幕录制；设备名填错或被占用会让该次录制失败。
-  系统声音在 Windows 直接可用（WASAPI 回环），macOS / Linux 需先安装并指定 BlackHole / PulseAudio 监听设备。
-- **标注**：矩形 / 椭圆 / 箭头 / 画笔 / 高亮 / 马赛克 / 序号 / 文字均支持 `Ctrl+Z` / `Ctrl+Y` 撤销重做（快照式历史）。
-- **混合 DPI 多显示器**：覆盖层用显示器逻辑坐标定位，极端缩放组合下可能需要微调。
-- **热键冲突**：`global-hotkey` 注册失败时，设置页会把该组合标红并写明"已被其他程序占用"，
-  不会自动改键；点 `Record` 换一个组合即可，无需重启。
-- **单实例**：已实现；重复启动会唤起已有实例后退出。非 Windows 平台的"唤起"能力有限
-  （无法直接操作其他进程的窗口），第二次启动只会安静退出。
-- **MCP 截图**：会把 PinSight 主窗口移出画面，但已存在的贴图窗口仍可能出现在截图中。
+- **Platform differences**: pins use a native Win32 window on Windows; macOS / Linux switch to an egui viewport — interactions match, but system-level behaviour (real click-through, for instance) follows platform ability; the tray icon is Windows-only for now.
+- **Long capture**: not suited to pages with fixed sidebars/headers, infinite scroll or heavy animation; defaults cap at 400 frames / 20000 px.
+- **Recording**: frame rate bounded by capture speed; GIFs are large; MP4 needs `ffmpeg`.
+- **Annotations**: rectangle / ellipse / arrow / pen / highlighter / mosaic / numbered steps / text all support `Ctrl+Z` / `Ctrl+Y` (snapshot history).
+- **Mixed-DPI multi-monitor**: the overlay positions in logical coordinates; extreme scaling combinations may need tuning.
+- **Hotkey conflicts**: when `global-hotkey` registration fails, the settings window flags the combo in red with "taken by another program"; it never re-binds silently — click `Record` and pick another, no restart.
+- **Single instance**: done; a second launch wakes the existing instance and exits. Non-Windows "waking" is limited (no direct access to another process's windows), so the second launch just exits quietly.
+- **MCP captures**: the main window is parked off-screen, but existing pin windows may still appear in captures.
 
 ---
 
 ## Roadmap
 
-- [x] 文本标注（覆盖层内联输入框，Enter 提交 / Shift+Enter 换行，字号与颜色跟随工具栏）
-- [x] OCR（Windows 用 `Windows.Media.Ocr`、macOS 用 Vision、Linux 用 Tesseract；工具栏一键识别 + CLI `pinsight shot --ocr`）
-- [x] GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）
-- [x] 图片上传（本地 / HTTP 后端，编辑器上传按钮 + CLI `--upload`）
-- [ ] 标注图层管理
-- [x] 撤销 / 重做（`Ctrl+Z` / `Ctrl+Y`，快照式历史，覆盖全部标注类型）
-- [x] 序号标注（`N`，七段矢量数字，自动递增）
-- [x] 单实例（命名互斥量 / 锁文件，二次启动唤起已有实例）
-- [ ] 滚动条感知的长截图；固定表头裁剪
-- [ ] MCP 工具 `ocr_image`（复用本地 OCR 引擎）
-- [ ] 语音便签点击播放（待接入音频播放库）
-- [ ] 贴图旋转、阴影、吸附对齐
-- [ ] 多显示器混合 DPI 校准
-- [ ] macOS / Linux 托盘与安装包（.dmg / .deb / AppImage）
-- [x] 主题（跟随系统 / 浅色 / 深色）、强调色、字号
-- [x] 国际化：简中 / 繁中 / 英 / 日 / 韩 / 法 / 德
-- [x] 字体选择与 CJK 回退
-- [x] Windows 托盘图标与本地化右键菜单
-- [x] 界面内热键录制与自定义（即时生效）
-- [x] 自定义主窗口背景图（模糊 / 压暗 / 适配）
-- [x] 开机自启（三平台）
-- [x] 便携模式与自选目录的安装包
-- [ ] 更多语言（西 / 葡 / 俄）与社区翻译流程
+- [x] Text annotation (inline overlay editor, Enter commits / Shift+Enter newline, toolbar size & colour)
+- [x] OCR (`Windows.Media.Ocr` on Windows, Vision on macOS, Tesseract on Linux; one-click toolbar region + CLI `pinsight shot --ocr`)
+- [x] GIF editing (trim / crop / text / MP4)
+- [x] Image upload (local / HTTP backends, toolbar button + CLI `--upload`)
+- [ ] Annotation layer management
+- [x] Undo / redo (`Ctrl+Z` / `Ctrl+Y`, snapshot history across all annotation types)
+- [x] Numbered steps (`N`, seven-segment vector digits, auto-increment)
+- [x] Single instance (named mutex / lock file; second launch wakes the running one)
+- [ ] Scrollbar-aware long capture; fixed-header clipping
+- [ ] MCP tool `ocr_image` (reusing the local OCR engine)
+- [ ] Voice-note click-to-play (audio playback library pending)
+- [ ] Pin rotation, shadow, snap alignment
+- [ ] Mixed-DPI multi-monitor calibration
+- [ ] macOS / Linux tray and installer packages (.dmg / .deb / AppImage)
+- [x] Themes (system / light / dark), accents, font size
+- [x] Internationalisation: zh-Hans / zh-Hant / en / ja / ko / fr / de
+- [x] Font selection with CJK fallback
+- [x] Windows tray icon with localised context menu
+- [x] In-app hotkey recording (effective immediately)
+- [x] Custom main-window background (blur / dim / fit)
+- [x] Run at startup (three platforms)
+- [x] Portable mode and custom-directory installer
+- [ ] More languages (es / pt / ru) and a community translation flow
 
 ---
 
-## 开发
+## Development
 
 ```powershell
 cargo fmt --all
@@ -720,47 +649,47 @@ cargo test
 cargo build --release
 ```
 
-单元测试覆盖：
+Unit tests cover:
 
-- 热键字符串解析与非法输入
-- 长截图重叠检测与拼接
-- 标注光栅化与马赛克
-- 背景图适配（cover / contain / stretch）与压暗计算
-- 开机自启路径构造
-- 7 种语言文案表完整性（漏翻即编译失败，测试兜底字段数量）
+- hotkey string parsing and invalid input
+- long-capture overlap detection and stitching
+- annotation rasterising and mosaic
+- background fitting (cover / contain / stretch) and dimming math
+- autostart path construction
+- completeness of the 7-language string table (a missing translation fails the build; tests double-check field counts)
 
-日志：
+Logging:
 
 ```powershell
 $env:RUST_LOG = "pinsight=debug"
 cargo run
 ```
 
-MCP 模式日志固定写 stderr：
+MCP-mode logs always go to stderr:
 
 ```powershell
 .\target\release\pinsight.exe --mcp 2> mcp.log
 ```
 
-更细的线程模型与坐标约定见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+The finer threading model and coordinate conventions live in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
-## 贡献
+## Contributing
 
-欢迎 Issue 与 PR。提交前请：
+Issues and PRs are welcome. Before submitting:
 
-1. 运行 `cargo fmt --all` 与 `cargo test`。
-2. 说明复现步骤、Windows 版本、显示器缩放比例。
-3. 涉及 UI 的改动请附截图或录屏。
+1. Run `cargo fmt --all` and `cargo test`.
+2. Describe reproduction steps, Windows version and display scaling.
+3. Attach screenshots or recordings for UI changes.
 
-详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
 [Apache-2.0](LICENSE) © 2026 PinSight contributors
 
-## 致谢
+## Acknowledgements
 
 - [egui / eframe](https://github.com/emilk/egui)
 - [xcap](https://github.com/nashaofu/xcap)
@@ -768,4 +697,4 @@ MCP 模式日志固定写 stderr：
 - [global-hotkey](https://github.com/tauri-apps/global-hotkey)
 - [enigo](https://github.com/enigo-rs/enigo)
 - [arboard](https://github.com/1Password/arboard)
-- Snipaste 与 PixPin：证明了这个小工具值得被认真做
+- Snipaste & PixPin — proof that this little tool is worth taking seriously
