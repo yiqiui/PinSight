@@ -464,6 +464,7 @@ impl PinSightApp {
         };
 
         app.install_tray(&cc.egui_ctx);
+        app.apply_window_icon(&cc.egui_ctx);
         app.sync_background(&cc.egui_ctx);
 
         if app.hotkeys.failures.is_empty() {
@@ -2644,6 +2645,26 @@ impl PinSightApp {
     #[cfg(not(windows))]
     fn tray_icon_pixels(&self) -> Option<(u32, u32, Vec<u8>)> {
         None
+    }
+
+    /// Push the icon style onto the window itself (title bar, taskbar,
+    /// Alt-Tab) so those places follow the tray setting instead of staying on
+    /// the embedded colour icon forever. `TrayIconStyle::Color` and the
+    /// light-taskbar `Auto` resolve to `None` pixels; the window falls back to
+    /// the embedded colour icon in that case, since a missing window icon
+    /// would show the platform default.
+    fn apply_window_icon(&self, ctx: &egui::Context) {
+        let icon = match self.tray_icon_pixels() {
+            Some((w, h, rgba)) => Some(egui::IconData {
+                width: w,
+                height: h,
+                rgba,
+            }),
+            None => eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).ok(),
+        };
+        if let Some(icon) = icon {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Icon(Some(std::sync::Arc::new(icon))));
+        }
     }
 
     fn tray_items(&self) -> Vec<crate::tray::TrayItem> {
@@ -5355,6 +5376,8 @@ impl PinSightApp {
                     // the shell icon, installing again picks up the new art.
                     self.tray_reset();
                     self.install_tray(&ctx);
+                    // Title bar / taskbar follow the same style.
+                    self.apply_window_icon(&ctx);
                 }
             });
 
@@ -5369,6 +5392,7 @@ impl PinSightApp {
                             let _ = self.config.save();
                             self.tray_reset();
                             self.install_tray(&ctx);
+                            self.apply_window_icon(&ctx);
                         }
                     }
                 });
@@ -7299,15 +7323,17 @@ impl eframe::App for PinSightApp {
         let glass = self.has_background();
         if glass {
             // Frost the surfaces so the wallpaper shows *through* them instead
-            // of being hidden behind opaque cards — the way other tools render
-            // a custom background. Without this the image is only visible in the
-            // few-pixel margins and reads as "not showing".
-            p.card = theme::with_alpha(p.card, 206);
-            p.card_hover = theme::with_alpha(p.card_hover, 214);
+            // of being hidden behind opaque cards — but keep them near-opaque:
+            // heavy transparency bleeds busy photo detail behind the text and
+            // wrecks legibility, which users rightly complain about. ~95 %
+            // keeps a faint wallpaper tint while text stays crisp; the image
+            // still reads clearly through the page margins and card gaps.
+            p.card = theme::with_alpha(p.card, 242);
+            p.card_hover = theme::with_alpha(p.card_hover, 246);
             self.paint_background(ui, &p);
         }
         let rail_fill = if glass {
-            theme::with_alpha(p.rail, 206)
+            theme::with_alpha(p.rail, 232)
         } else {
             p.rail
         };
