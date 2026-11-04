@@ -325,6 +325,10 @@ pub struct PinSightApp {
     /// available. Outer `Some` = an update is pending; inner `None` = fall
     /// back to the embedded colour icon.
     pending_taskbar_icon: Option<Option<(u32, u32, Vec<u8>)>>,
+    /// The single-instance slot. Released (dropped) right before a restart
+    /// spawns the fresh process: otherwise the new instance sees the mutex
+    /// still held by this dying one, gives up, and a restart becomes a quit.
+    instance_guard: Option<crate::single_instance::Guard>,
     settings_tab: SettingsTab,
     /// Index of the hotkey row currently recording a combination, if any.
     /// Which hotkey slot the recorder is armed for, if any.
@@ -349,7 +353,12 @@ pub struct PinSightApp {
 }
 
 impl PinSightApp {
-    pub fn new(cc: &CreationContext<'_>, config: Config, mcp_mode: bool) -> Self {
+    pub fn new(
+        cc: &CreationContext<'_>,
+        config: Config,
+        mcp_mode: bool,
+        instance_guard: Option<crate::single_instance::Guard>,
+    ) -> Self {
         let tr = Translator::new(config.lang);
         // HDR-aware capture routing is a capture-pipeline decision, so it is
         // pushed into `capture` once at startup and again on every toggle.
@@ -466,6 +475,10 @@ impl PinSightApp {
             // an update is pending; inner None = fall back to the embedded
             // colour icon.
             pending_taskbar_icon: None,
+            // Held for the app's lifetime; dropped just before a restart
+            // spawns the fresh process so the new instance can take the slot
+            // instead of seeing this (dying) one as "already running".
+            instance_guard,
             settings_tab,
             recording_hotkey: None,
             tray_rx: None,
@@ -3372,6 +3385,11 @@ impl PinSightApp {
     /// The current instance exits and a fresh one starts, so an updated
     /// binary takes effect without the user hunting for the exe.
     fn restart_app(&mut self, ctx: &egui::Context) {
+        // Release the single-instance slot BEFORE spawning: the fresh process
+        // must be able to take it. Spawned first and released last, the new
+        // instance would see the mutex still held by this dying process,
+        // raise the closing window and exit — a restart that only quits.
+        self.instance_guard = None;
         if let Ok(exe) = std::env::current_exe() {
             let _ = std::process::Command::new(exe)
                 .args(std::env::args().skip(1))
@@ -3406,6 +3424,9 @@ impl PinSightApp {
             self.toast(self.tr.tr.gen_admin_failed, true);
             return;
         }
+        // The elevated process is launching: free the slot so it can take it
+        // (same race as `restart_app`).
+        self.instance_guard = None;
         self.quitting = true;
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
@@ -6649,6 +6670,10 @@ impl PinSightApp {
                 match crate::update::extract(&path, &dest) {
                     Ok(src) => match crate::update::install_and_restart(&src) {
                         Ok(()) => {
+                            // The helper's script relaunches once this process
+                            // exits — free the slot so the fresh instance can
+                            // take it (same race as `restart_app`).
+                            self.instance_guard = None;
                             self.quitting = true;
                             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                         }

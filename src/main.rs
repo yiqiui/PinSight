@@ -97,15 +97,39 @@ fn main() -> eframe::Result {
     // One instance per session: a second process would register a second set
     // of global hotkeys and report phantom conflicts. `--mcp` runs alongside
     // the GUI by design, so it never takes the slot.
-    let _instance_guard = if mcp_mode {
+    let instance_guard = if mcp_mode {
         None
     } else {
         match single_instance::acquire() {
             Some(guard) => Some(guard),
             None => {
-                tracing::info!("another PinSight is already running; raising it");
-                single_instance::raise_existing();
-                return Ok(());
+                // Another instance holds the slot. Raising its window is the
+                // normal outcome — but if no window answers, the holder is
+                // probably a PinSight that is *shutting down* right now (the
+                // restart hand-off). Its mutex is released only when the
+                // process fully exits, so wait briefly instead of quitting
+                // and turning every in-app restart into a plain quit.
+                if single_instance::raise_existing() {
+                    tracing::info!("another PinSight is already running; raised it");
+                    return Ok(());
+                }
+                tracing::info!("instance slot held but no window found; waiting for hand-off");
+                let mut handed_off = None;
+                for _ in 0..12 {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    if let Some(guard) = single_instance::acquire() {
+                        handed_off = Some(guard);
+                        break;
+                    }
+                }
+                match handed_off {
+                    Some(guard) => Some(guard),
+                    None => {
+                        tracing::info!("another PinSight is already running; raising it");
+                        single_instance::raise_existing();
+                        return Ok(());
+                    }
+                }
             }
         }
     };
@@ -130,6 +154,13 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "PinSight",
         native_options,
-        Box::new(move |cc| Ok(Box::new(app::PinSightApp::new(cc, config, mcp_mode)))),
+        Box::new(move |cc| {
+            Ok(Box::new(app::PinSightApp::new(
+                cc,
+                config,
+                mcp_mode,
+                instance_guard,
+            )))
+        }),
     )
 }
