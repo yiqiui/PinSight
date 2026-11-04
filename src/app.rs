@@ -318,6 +318,13 @@ pub struct PinSightApp {
     last_region: Option<(u32, crate::util::PhysRect)>,
     /// Decoded + blurred custom wallpaper, when the user picked one.
     background: Option<Background>,
+    /// Taskbar icon queued by [`Self::apply_window_icon`]. egui's
+    /// `ViewportCommand::Icon` only reaches the SMALL (title-bar) icon; the
+    /// taskbar uses the BIG icon channel, which egui never touches, so the
+    /// pixels are drained in `ui()` where the winit window handle is
+    /// available. Outer `Some` = an update is pending; inner `None` = fall
+    /// back to the embedded colour icon.
+    pending_taskbar_icon: Option<Option<(u32, u32, Vec<u8>)>>,
     settings_tab: SettingsTab,
     /// Index of the hotkey row currently recording a combination, if any.
     /// Which hotkey slot the recorder is armed for, if any.
@@ -453,6 +460,12 @@ impl PinSightApp {
             last_capture_at: None,
             last_region: None,
             background: None,
+            // Taskbar icon queued by `apply_window_icon`: egui's
+            // ViewportCommand::Icon only reaches the SMALL (title-bar) icon,
+            // so the BIG (taskbar) pixels are drained in `ui()`. Outer Some =
+            // an update is pending; inner None = fall back to the embedded
+            // colour icon.
+            pending_taskbar_icon: None,
             settings_tab,
             recording_hotkey: None,
             tray_rx: None,
@@ -2503,7 +2516,7 @@ impl PinSightApp {
             let (base, scale) = if p.dark {
                 (egui::Color32::BLACK, 1.0)
             } else {
-                (egui::Color32::from_rgb(0x4A, 0x50, 0x5C), 0.6)
+                (egui::Color32::from_rgb(0x4A, 0x50, 0x5C), 0.75)
             };
             let a = (dim * 255.0 * scale) as u8;
             if a > 2 {
@@ -2653,18 +2666,60 @@ impl PinSightApp {
     /// light-taskbar `Auto` resolve to `None` pixels; the window falls back to
     /// the embedded colour icon in that case, since a missing window icon
     /// would show the platform default.
-    fn apply_window_icon(&self, ctx: &egui::Context) {
-        let icon = match self.tray_icon_pixels() {
+    ///
+    /// The title bar is handled here via `ViewportCommand::Icon` (egui routes
+    /// it to winit's SMALL-icon channel). The taskbar uses the BIG channel,
+    /// which egui never updates — those pixels are queued in
+    /// [`Self::pending_taskbar_icon`] and applied from `ui()` via
+    /// `Window::set_taskbar_icon`.
+    fn apply_window_icon(&mut self, ctx: &egui::Context) {
+        let pixels = self.tray_icon_pixels();
+        let icon = match &pixels {
             Some((w, h, rgba)) => Some(egui::IconData {
-                width: w,
-                height: h,
-                rgba,
+                width: *w,
+                height: *h,
+                rgba: rgba.clone(),
             }),
             None => eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).ok(),
         };
         if let Some(icon) = icon {
             ctx.send_viewport_cmd(egui::ViewportCommand::Icon(Some(std::sync::Arc::new(icon))));
         }
+        self.pending_taskbar_icon = Some(pixels);
+    }
+
+    /// Drain a queued icon into the taskbar's BIG icon channel. egui only
+    /// ever sets the SMALL (title-bar) icon, so without this the taskbar and
+    /// Alt-Tab keep the executable's colour icon no matter what tray style is
+    /// configured.
+    fn apply_taskbar_icon(&mut self, frame: &mut eframe::Frame) {
+        let Some(pixels) = self.pending_taskbar_icon.take() else {
+            return;
+        };
+        #[cfg(windows)]
+        {
+            // `set_taskbar_icon` lives on the Windows-only extension trait.
+            use winit::platform::windows::WindowExtWindows as _;
+            let Some(window) = frame.winit_window() else {
+                return;
+            };
+            let embedded = || {
+                eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
+                    .ok()
+                    .and_then(|d| winit::window::Icon::from_rgba(d.rgba, d.width, d.height).ok())
+            };
+            let icon = match pixels {
+                Some((w, h, rgba)) => {
+                    winit::window::Icon::from_rgba(rgba, w, h).ok().or_else(embedded)
+                }
+                None => embedded(),
+            };
+            if let Some(icon) = icon {
+                window.set_taskbar_icon(Some(icon));
+            }
+        }
+        #[cfg(not(windows))]
+        let _ = (frame, pixels);
     }
 
     fn tray_items(&self) -> Vec<crate::tray::TrayItem> {
@@ -7276,6 +7331,7 @@ enum PinAction {
 impl eframe::App for PinSightApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.apply_taskbar_icon(_frame);
         self.poll_jobs(&ctx);
         self.process_ui_commands(&ctx);
         self.process_pending(&ctx);
@@ -7325,15 +7381,15 @@ impl eframe::App for PinSightApp {
             // Frost the surfaces so the wallpaper shows *through* them instead
             // of being hidden behind opaque cards — but keep them near-opaque:
             // heavy transparency bleeds busy photo detail behind the text and
-            // wrecks legibility, which users rightly complain about. ~95 %
+            // wrecks legibility, which users rightly complain about. ~97 %
             // keeps a faint wallpaper tint while text stays crisp; the image
             // still reads clearly through the page margins and card gaps.
-            p.card = theme::with_alpha(p.card, 242);
-            p.card_hover = theme::with_alpha(p.card_hover, 246);
+            p.card = theme::with_alpha(p.card, 248);
+            p.card_hover = theme::with_alpha(p.card_hover, 252);
             self.paint_background(ui, &p);
         }
         let rail_fill = if glass {
-            theme::with_alpha(p.rail, 232)
+            theme::with_alpha(p.rail, 246)
         } else {
             p.rail
         };
@@ -7363,7 +7419,13 @@ impl eframe::App for PinSightApp {
             .frame(
                 egui::Frame::NONE
                     .fill(if glass {
-                        egui::Color32::TRANSPARENT
+                        // A translucent plate under the whole content column:
+                        // page titles and the tab strip draw directly on the
+                        // panel (not on cards), so without it they sit naked
+                        // on the wallpaper and become hard to read. The plate
+                        // still leaves ~40 % of the image visible in the
+                        // margins, on top of the dim veil.
+                        theme::with_alpha(p.bg, 150)
                     } else {
                         p.bg
                     })
