@@ -11,6 +11,16 @@
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
   "gif_fps": 12,
   "record_max_seconds": 0,
+  "record_countdown": 3,
+  "record_fps": 30,
+  "record_mode": "region",
+  "record_resolution": "source",
+  "record_webcam": false,
+  "webcam_device": "",
+  "record_system_audio": false,
+  "system_audio_device": "",
+  "record_mic": false,
+  "mic_device": "",
   "long_capture_max_height": 20000,
   "long_scroll_ticks": 4,
   "long_scroll_delay_ms": 420,
@@ -85,6 +95,5 @@
       "name": "",
       "hidden": false
     }
-  ],
-  "record_countdown": 0
+  ]
 }

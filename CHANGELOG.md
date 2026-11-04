@@ -34,8 +34,8 @@ All notable changes to PinSight are documented here. The format follows
   (ease-out quad), like a pair of wings folding over the screen.
 - **Cyan accent**: a sixth accent preset (the owl's right-eye colour), with
   full light/dark palette entries and localised labels.
-- **Bilingual README**: `README_EN.md` mirrors the Chinese one; both hero
-  sections cross-link via "English · 简体中文".
+- **Bilingual README**: an English README mirrors the Chinese one; both hero
+  sections cross-link via "English · 简体中文" (now `README.md` + `README.zh-CN.md`).
 
 ### Fixed
 

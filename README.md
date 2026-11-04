@@ -362,7 +362,16 @@ Default content (see also [`config.example.json`](config.example.json)):
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
   "gif_fps": 12,
   "record_max_seconds": 0,
-  "record_countdown": 0,
+  "record_countdown": 3,
+  "record_fps": 30,
+  "record_mode": "region",
+  "record_resolution": "source",
+  "record_webcam": false,
+  "webcam_device": "",
+  "record_system_audio": false,
+  "system_audio_device": "",
+  "record_mic": false,
+  "mic_device": "",
   "long_capture_max_height": 20000,
   "long_scroll_ticks": 4,
   "long_scroll_delay_ms": 420,
@@ -409,7 +418,14 @@ Default content (see also [`config.example.json`](config.example.json)):
 }
 ```
 
-- `gif_fps`: recording frame rate (4–30).
+- `gif_fps`: legacy field, no longer used by recording; `record_fps` drives both MP4 and GIF.
+- `record_fps`: recording frame rate (4–60), shared by MP4 and GIF.
+- `record_countdown`: countdown seconds before recording starts (0 / 3 / 5, up to 10), time to arrange your windows.
+- `record_mode`: `region` (selection overlay) / `screen` (monitor under the cursor) / `window` (foreground window).
+- `record_resolution`: `source` / `r1080` (1920×1080) / `r720` (1280×720); MP4 path only, GIF keeps the source size.
+- `record_webcam` + `webcam_device`: webcam picture-in-picture (bottom-right bubble); empty device name uses the default camera; MP4 only.
+- `record_system_audio` + `system_audio_device`: system audio (WASAPI loopback on Windows; on macOS/Linux point this at a BlackHole / PulseAudio monitor device).
+- `record_mic` + `mic_device`: microphone; empty name uses the platform default input. With system audio and mic both on they are mixed into one track with `amix`.
 - `long_capture_max_height`: maximum long-capture height, a guard against runaway memory.
 - `mcp_enabled`: reserved; whether MCP starts is decided by `--mcp`.
 - `theme`: `system` / `light` / `dark`.
