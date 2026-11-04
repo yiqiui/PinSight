@@ -156,10 +156,12 @@ static RECORD_ACTION: OnceLock<Arc<Mutex<Option<RecordHudAction>>>> = OnceLock::
 /// closed the moment the job ends (a deferred viewport outlives the frame).
 static RECORD_OPEN: AtomicBool = AtomicBool::new(false);
 /// Last geometry (w, h, x, y) applied to the deferred recording viewport, so
-/// the builder only carries a position/size when it actually changes.
-static HUD_GEOM: OnceLock<Mutex<Option<(u32, u32, i32, i32)>>> = OnceLock::new();
+/// the builder only carries a position/size when it actually changes. The alias
+/// keeps the nested `OnceLock<Mutex<Option<…>>>` type simple enough for clippy.
+type HudGeom = (u32, u32, i32, i32);
+static HUD_GEOM: OnceLock<Mutex<Option<HudGeom>>> = OnceLock::new();
 
-fn hud_geom() -> &'static Mutex<Option<(u32, u32, i32, i32)>> {
+fn hud_geom() -> &'static Mutex<Option<HudGeom>> {
     HUD_GEOM.get_or_init(|| Mutex::new(None))
 }
 

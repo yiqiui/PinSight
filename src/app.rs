@@ -2722,9 +2722,9 @@ impl PinSightApp {
                     .and_then(|d| winit::window::Icon::from_rgba(d.rgba, d.width, d.height).ok())
             };
             let icon = match pixels {
-                Some((w, h, rgba)) => {
-                    winit::window::Icon::from_rgba(rgba, w, h).ok().or_else(embedded)
-                }
+                Some((w, h, rgba)) => winit::window::Icon::from_rgba(rgba, w, h)
+                    .ok()
+                    .or_else(embedded),
                 None => embedded(),
             };
             if let Some(icon) = icon {
