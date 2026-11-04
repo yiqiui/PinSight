@@ -834,9 +834,12 @@ pub fn segmented<T: PartialEq + Copy>(
             cell,
             // Deprecated in egui 0.37 in favour of `Id::unique`, but a *stable*
             // id is exactly what a click target needs: `Id::unique` would mint
-            // a new one every frame and no press would ever complete.
+            // a new one every frame and no press would ever complete. Scope the
+            // id to this control (`ui.id()`) plus the cell index so it stays
+            // identical across frames and never collides with another
+            // `segmented` control rendered elsewhere.
             #[allow(deprecated)]
-            egui::Id::new(("pinsight-seg", i, galleys[i].size().x as i32)),
+            ui.id().with(("pinsight-seg", i)),
             Sense::click(),
         );
         response

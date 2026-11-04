@@ -2495,9 +2495,20 @@ impl PinSightApp {
 
         let dim = self.config.bg_dim.clamp(0.0, 0.95);
         if dim > 0.002 {
-            let base = if p.dark { egui::Color32::BLACK } else { p.bg };
-            ui.painter()
-                .rect_filled(area, 0.0, theme::with_alpha(base, (dim * 255.0) as u8));
+            // Dark mode dims with black, which keeps the wallpaper readable.
+            // Light mode used to dim with the near-white panel colour, which
+            // washed the image out to nothing. A neutral slate veil calms busy
+            // photos for text contrast while leaving the image clearly visible.
+            let (base, scale) = if p.dark {
+                (egui::Color32::BLACK, 1.0)
+            } else {
+                (egui::Color32::from_rgb(0x4A, 0x50, 0x5C), 0.6)
+            };
+            let a = (dim * 255.0 * scale) as u8;
+            if a > 2 {
+                ui.painter()
+                    .rect_filled(area, 0.0, theme::with_alpha(base, a));
+            }
         }
     }
 
@@ -7282,15 +7293,25 @@ impl eframe::App for PinSightApp {
             }
         }
 
-        let p = Palette::current(&ctx, self.config.accent, self.config.accent_custom);
+        // Enforce the configured theme every frame so an explicit Dark/Light
+        // choice can never be silently reverted by anything downstream.
+        ctx.set_theme(self.config.theme.preference());
+
+        let mut p = Palette::current(&ctx, self.config.accent, self.config.accent_custom);
 
         // A wallpaper goes down first so every panel below paints over it.
         let glass = self.has_background();
         if glass {
+            // Frost the surfaces so the wallpaper shows *through* them instead
+            // of being hidden behind opaque cards — the way other tools render
+            // a custom background. Without this the image is only visible in the
+            // few-pixel margins and reads as "not showing".
+            p.card = theme::with_alpha(p.card, 206);
+            p.card_hover = theme::with_alpha(p.card_hover, 214);
             self.paint_background(ui, &p);
         }
         let rail_fill = if glass {
-            theme::with_alpha(p.rail, 232)
+            theme::with_alpha(p.rail, 206)
         } else {
             p.rail
         };
