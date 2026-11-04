@@ -827,6 +827,16 @@ pub fn segmented<T: PartialEq + Copy>(
     );
 
     let mut x = rect.left() + 3.0;
+    // Unique, frame-stable control key. Two segmented controls can be alive in
+    // the same frame — the theme picker and the background-fit picker share the
+    // Appearance page once a wallpaper is set — and a bare
+    // ("pinsight-seg", index, label_width) id collides whenever two controls
+    // have same-index options of equal rendered width: 深色 and 拉伸 are both
+    // two CJK glyphs, so their ids matched and whichever registered second
+    // stole the hit rect, leaving the theme's Dark button dead. Deriving the id
+    // from *all* the labels disambiguates controls and is identical across
+    // frames, so a press+release still completes.
+    let control_key: Vec<&str> = options.iter().map(|(_, label)| *label).collect();
     for (i, (value, _)) in options.iter().enumerate() {
         let w = widths[i];
         let cell = Rect::from_min_size(Pos2::new(x, rect.top() + 3.0), Vec2::new(w, height - 6.0));
@@ -834,11 +844,9 @@ pub fn segmented<T: PartialEq + Copy>(
             cell,
             // Deprecated in egui 0.37 in favour of `Id::unique`, but a *stable*
             // id is exactly what a click target needs: `Id::unique` would mint
-            // a new one every frame and no press would ever complete. The id is
-            // derived from the cell index and the (stable) label width, so it
-            // is identical across frames and a press+release completes.
+            // a new one every frame and no press would ever complete.
             #[allow(deprecated)]
-            egui::Id::new(("pinsight-seg", i, galleys[i].size().x as i32)),
+            egui::Id::new(("pinsight-seg", &control_key, i)),
             Sense::click(),
         );
         response
