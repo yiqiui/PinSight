@@ -194,6 +194,29 @@ pub struct CaptureSession {
     born_at: std::time::Instant,
     tr: &'static Strings,
     palette: Palette,
+    /// Floating chrome on the frozen screen (toolbar, size label, OCR panel,
+    /// hint pills). The overlay is always dimmed, so these use one dark glass
+    /// palette regardless of the app's light/dark setting — a white card from
+    /// a light theme reads as a pasted-on strip and breaks the whole overlay.
+    glass: Palette,
+}
+
+/// Derive the dark glass palette from the session palette, keeping its accent
+/// so the selection, tool highlight and primary action stay the same colour.
+fn overlay_glass(p: Palette) -> Palette {
+    use egui::Color32;
+    let mut g = p;
+    g.dark = true;
+    g.card = Color32::from_rgba_unmultiplied(0x1C, 0x22, 0x2C, 242);
+    g.card_hover = Color32::from_rgba_unmultiplied(0x2D, 0x36, 0x44, 250);
+    g.rail = Color32::from_rgba_unmultiplied(0x16, 0x1B, 0x24, 236);
+    g.bg = Color32::from_rgba_unmultiplied(0x14, 0x19, 0x21, 226);
+    g.stroke = Color32::from_white_alpha(28);
+    g.stroke_strong = Color32::from_white_alpha(58);
+    g.text = Color32::from_rgb(0xEE, 0xF1, 0xF6);
+    g.text_weak = Color32::from_rgb(0xA6, 0xB0, 0xC0);
+    g.accent_soft = crate::theme::with_alpha(p.accent, 55);
+    g
 }
 
 impl CaptureSession {
@@ -235,6 +258,7 @@ impl CaptureSession {
             born_at: std::time::Instant::now(),
             tr,
             palette,
+            glass: overlay_glass(palette),
         }
     }
 
@@ -427,7 +451,7 @@ impl CaptureSession {
             if self.prefs.anchors {
                 self.paint_handles(ui, sel_screen);
             }
-            paint_size_label(ui, &self.palette, sel, sel_screen);
+            paint_size_label(ui, &self.glass, sel, sel_screen);
         }
 
         // Annotations.
@@ -627,7 +651,7 @@ impl CaptureSession {
     fn show_text_editor(&mut self, ui: &mut egui::Ui, screen: egui::Rect, scale: f32) {
         let hint = self.tr.ov_text_hint;
         let paste_label = self.tr.ov_paste;
-        let palette = self.palette;
+        let palette = self.glass;
         let font = egui::FontId::proportional((self.text_size() * scale).clamp(14.0, 40.0));
         let Some(draft) = self.editing.as_mut() else {
             return;
@@ -1252,7 +1276,7 @@ impl CaptureSession {
         // Edge midpoints stay small square handles.
         for point in edge_points {
             let r = egui::Rect::from_center_size(point, egui::vec2(7.5, 7.5));
-            ui.painter().rect_filled(r, 1.5, self.palette.card);
+            ui.painter().rect_filled(r, 1.5, self.glass.card);
             ui.painter().rect_stroke(
                 r,
                 1.5,
@@ -1275,7 +1299,7 @@ impl CaptureSession {
             self.image.height() as f32,
         ));
         let sel_screen = image_to_screen(sel, screen, scale);
-        let area_size = self.toolbar_size.unwrap_or(egui::vec2(720.0, 46.0));
+        let area_size = self.toolbar_size.unwrap_or(egui::vec2(680.0, 84.0));
         let mut pos = if self.selection.is_some() {
             // Dock under the selection, or above it when there is no room.
             let mut pos = egui::pos2(sel_screen.left(), sel_screen.bottom() + 12.0);
@@ -1296,9 +1320,8 @@ impl CaptureSession {
             (screen.right() - area_size.x - 8.0).max(screen.left() + 8.0),
         );
 
-        // Follow the session palette: it already reflects the configured theme
-        // (a hardcoded dark glass bar ignored the light appearance entirely).
-        let p = self.palette;
+        // Follow the overlay glass palette, not the app theme.
+        let p = self.glass;
         let t = self.tr;
         let mut action = None;
 
@@ -1307,8 +1330,9 @@ impl CaptureSession {
             .fixed_pos(pos)
             .show(ui.ctx(), |ui| {
                 egui::Frame::NONE
-                    // The bar follows the theme: a hardcoded dark glass fill
-                    // left dark text on a dark panel once light mode was on.
+                    // Dark glass regardless of the app theme: the frozen screen
+                    // behind is always dimmed, so a light-theme white card read
+                    // as a pasted-on strip that did not belong to the overlay.
                     .fill(p.card)
                     .stroke(egui::Stroke::new(1.0, p.stroke))
                     .corner_radius(14)
@@ -1320,13 +1344,19 @@ impl CaptureSession {
                         color: egui::Color32::from_black_alpha(90),
                     })
                     .show(ui, |ui| {
-                        ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
-                        // Keep the bar from running off a narrow screen: cap its
-                        // width to the viewport and let the row wrap when the
-                        // tools + colours + actions would not fit on one line.
-                        ui.set_max_width((screen.width() - 48.0).max(320.0));
-                        ui.horizontal_wrapped(|ui| {
-                            ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
+                        ui.spacing_mut().item_spacing = egui::vec2(4.0, 8.0);
+                        // A compact fixed-width two-row bar. One long wrapping
+                        // row stretched across the whole screen and mixed 28 px
+                        // icon buttons, 18 px swatches, a slider and text pills
+                        // at wildly different sizes — visually noisy, with dead
+                        // space in the middle. Groups now read left to right:
+                        // tools | colours | stroke + history  /  hint | actions.
+                        const BAR_W: f32 = 660.0;
+                        ui.set_width(BAR_W);
+
+                        // ---- row 1: editing tools --------------------------
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing = egui::vec2(3.0, 0.0);
                             for tool in Tool::ALL {
                                 let selected = self.tool == tool;
                                 let label =
@@ -1353,11 +1383,31 @@ impl CaptureSession {
                             }
 
                             vertical_separator(ui, &p);
-                            ui.add_sized(
-                                egui::vec2(52.0, 18.0),
-                                egui::Slider::new(&mut self.width, 1.0..=14.0).show_value(false),
-                            )
+
+                            // Slider inherits the app's visuals, which clash
+                            // with the dark glass; override just this widget.
+                            ui.scope(|ui| {
+                                let v = ui.visuals_mut();
+                                v.widgets.inactive.bg_fill = egui::Color32::from_white_alpha(38);
+                                v.widgets.hovered.bg_fill = egui::Color32::from_white_alpha(64);
+                                v.widgets.active.bg_fill = p.accent;
+                                v.selection.bg_fill = p.accent;
+                                ui.add_sized(
+                                    egui::vec2(64.0, 20.0),
+                                    egui::Slider::new(&mut self.width, 1.0..=14.0)
+                                        .show_value(false),
+                                )
+                            })
+                            .inner
                             .on_hover_text(t.ov_width);
+                            ui.label(
+                                egui::RichText::new((self.width.round() as u8).to_string())
+                                    .size(11.0)
+                                    .color(p.text_weak),
+                            );
+
+                            vertical_separator(ui, &p);
+
                             if ui::icon_button_enabled(
                                 ui,
                                 &p,
@@ -1388,61 +1438,94 @@ impl CaptureSession {
                                 self.history.record(&self.annotations);
                                 self.annotations.clear();
                             }
+                        });
 
-                            // Actions follow the editing controls in the same
-                            // row (the selection size is painted on the
-                            // selection itself, so no second row is needed).
-                            vertical_separator(ui, &p);
-                            if self.intent == Intent::LongShot || self.intent == Intent::Record {
-                                let label = if self.intent == Intent::LongShot {
-                                    t.ov_start_long
-                                } else {
-                                    t.ov_start_record
-                                };
-                                let icon = if self.intent == Intent::LongShot {
-                                    Icon::Scroll
-                                } else {
-                                    Icon::Record
-                                };
-                                if pill_button(ui, &p, label, Some(icon), true).clicked() {
-                                    action = Some(OverlayAction::Start);
-                                }
-                                // Long-shot also offers a manual mode: PinSight
-                                // does not scroll, the user rolls the wheel and
-                                // decides how far to go. This is the reliable
-                                // fallback when auto-scroll will not move a
-                                // given window.
-                                if self.intent == Intent::LongShot
-                                    && pill_button(ui, &p, t.ov_start_long_manual, None, false)
-                                        .clicked()
-                                {
-                                    action = Some(OverlayAction::StartManual);
-                                }
-                            } else {
-                                if pill_button(ui, &p, t.ov_ocr, Some(Icon::Ocr), false)
-                                    .on_hover_text(t.ov_ocr_unavailable)
-                                    .clicked()
-                                {
-                                    self.start_ocr();
-                                }
-                                if pill_button(ui, &p, t.ov_save, Some(Icon::Save), false).clicked()
-                                {
-                                    action = Some(OverlayAction::Save);
-                                }
-                                if pill_button(ui, &p, t.ov_pin, Some(Icon::Pin), false).clicked() {
-                                    action = Some(OverlayAction::Pin);
-                                }
-                                if pill_button(ui, &p, t.ov_copy, Some(Icon::Copy), true).clicked()
-                                {
-                                    action = Some(OverlayAction::Copy);
-                                }
-                                if pill_button(ui, &p, t.ov_upload, None, false).clicked() {
-                                    action = Some(OverlayAction::Upload);
-                                }
-                            }
-                            if pill_button(ui, &p, t.ov_cancel, None, false).clicked() {
-                                action = Some(OverlayAction::Cancel);
-                            }
+                        // ---- row 2: active tool + actions ------------------
+                        ui.horizontal(|ui| {
+                            // The top-centre hint already explains the capture
+                            // flow; repeating it here would only crowd the
+                            // action pills. Show the active tool instead.
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} ({})",
+                                    tool_label(self.tool, t),
+                                    self.tool.shortcut()
+                                ))
+                                .size(11.0)
+                                .color(p.text_weak),
+                            );
+                            // right_to_left: the first button added lands on
+                            // the right, so the primary action stays at the
+                            // far right as in every desktop dialog.
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.spacing_mut().item_spacing = egui::vec2(5.0, 0.0);
+                                    if self.intent == Intent::LongShot
+                                        || self.intent == Intent::Record
+                                    {
+                                        let label = if self.intent == Intent::LongShot {
+                                            t.ov_start_long
+                                        } else {
+                                            t.ov_start_record
+                                        };
+                                        let icon = if self.intent == Intent::LongShot {
+                                            Icon::Scroll
+                                        } else {
+                                            Icon::Record
+                                        };
+                                        if pill_button(ui, &p, label, Some(icon), true).clicked() {
+                                            action = Some(OverlayAction::Start);
+                                        }
+                                        if pill_button(ui, &p, t.ov_cancel, None, false).clicked() {
+                                            action = Some(OverlayAction::Cancel);
+                                        }
+                                        // Manual long-shot: PinSight does not
+                                        // scroll, the user rolls the wheel and
+                                        // decides how far to go.
+                                        if self.intent == Intent::LongShot
+                                            && pill_button(
+                                                ui,
+                                                &p,
+                                                t.ov_start_long_manual,
+                                                None,
+                                                false,
+                                            )
+                                            .clicked()
+                                        {
+                                            action = Some(OverlayAction::StartManual);
+                                        }
+                                    } else {
+                                        if pill_button(ui, &p, t.ov_copy, Some(Icon::Copy), true)
+                                            .clicked()
+                                        {
+                                            action = Some(OverlayAction::Copy);
+                                        }
+                                        if pill_button(ui, &p, t.ov_cancel, None, false).clicked() {
+                                            action = Some(OverlayAction::Cancel);
+                                        }
+                                        if pill_button(ui, &p, t.ov_upload, None, false).clicked() {
+                                            action = Some(OverlayAction::Upload);
+                                        }
+                                        if pill_button(ui, &p, t.ov_pin, Some(Icon::Pin), false)
+                                            .clicked()
+                                        {
+                                            action = Some(OverlayAction::Pin);
+                                        }
+                                        if pill_button(ui, &p, t.ov_save, Some(Icon::Save), false)
+                                            .clicked()
+                                        {
+                                            action = Some(OverlayAction::Save);
+                                        }
+                                        if pill_button(ui, &p, t.ov_ocr, Some(Icon::Ocr), false)
+                                            .on_hover_text(t.ov_ocr_unavailable)
+                                            .clicked()
+                                        {
+                                            self.start_ocr();
+                                        }
+                                    }
+                                },
+                            );
                         });
                     });
             });
@@ -1563,7 +1646,7 @@ impl CaptureSession {
         if !self.ocr_open {
             return;
         }
-        let p = self.palette;
+        let p = self.glass;
         let t = self.tr;
         let width = 320.0_f32;
         let anchor = match self.ocr_rect {
@@ -1757,7 +1840,8 @@ fn pill_button(
     let hovered = response.hovered();
 
     // On the dark overlay glass, secondary actions read better as a faint
-    // translucent wash than as an opaque card.
+    // translucent wash than as an opaque card: a light-theme `p.card` here
+    // used to paint bright white pills that clashed with the dimmed screen.
     let (fill, stroke, text) = if primary {
         (
             if hovered {
@@ -1770,8 +1854,12 @@ fn pill_button(
         )
     } else {
         (
-            if hovered { p.card_hover } else { p.card },
-            egui::Stroke::new(1.0, p.stroke),
+            if hovered {
+                egui::Color32::from_white_alpha(34)
+            } else {
+                egui::Color32::from_white_alpha(14)
+            },
+            egui::Stroke::new(1.0, egui::Color32::from_white_alpha(26)),
             p.text,
         )
     };
@@ -1847,16 +1935,16 @@ impl CaptureSession {
         let galley = ui.painter().layout_no_wrap(
             text.to_owned(),
             egui::FontId::proportional(12.5),
-            self.palette.text,
+            self.glass.text,
         );
         let size = galley.size() + egui::vec2(22.0, 10.0);
         let rect =
             egui::Rect::from_center_size(egui::pos2(screen.center().x, screen.top() + 26.0), size);
-        ui.painter().rect_filled(rect, 9.0, self.palette.card);
+        ui.painter().rect_filled(rect, 9.0, self.glass.card);
         ui.painter().rect_stroke(
             rect,
             9.0,
-            egui::Stroke::new(1.0, self.palette.stroke_strong),
+            egui::Stroke::new(1.0, self.glass.stroke_strong),
             egui::StrokeKind::Inside,
         );
         ui.painter().galley(
@@ -1865,7 +1953,7 @@ impl CaptureSession {
                 rect.center().y - galley.size().y * 0.5,
             ),
             galley,
-            self.palette.text,
+            self.glass.text,
         );
 
         let response = ui.interact(
