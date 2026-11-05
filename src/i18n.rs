@@ -852,6 +852,15 @@ strings! {
     ov_qr_open { en: "Open link", zh: "打开链接", tw: "開啟連結", ja: "リンクを開く", ko: "링크 열기", fr: "Ouvrir le lien", de: "Link öffnen" }
     ov_qr_empty { en: "No QR code was found in this region.", zh: "这片区域里没有找到二维码。", tw: "這片區域裡沒有找到二維碼。", ja: "この領域に QR コードは見つかりませんでした。", ko: "이 영역에서 QR 코드를 찾지 못했습니다.", fr: "Aucun code QR trouvé dans cette zone.", de: "In diesem Bereich wurde kein QR-Code gefunden." }
     ov_qr_count { en: "code(s) found", zh: "个二维码", tw: "個二維碼", ja: "件のコード", ko: "개의 코드", fr: "code(s) trouvé(s)", de: "Code(s) gefunden" }
+    ov_translate { en: "Translate", zh: "翻译", tw: "翻譯", ja: "翻訳", ko: "번역", fr: "Traduire", de: "Übersetzen" }
+    ov_tr_running { en: "Translating…", zh: "翻译中…", tw: "翻譯中…", ja: "翻訳中…", ko: "번역 중…", fr: "Traduction…", de: "Übersetze…" }
+    tr_settings { en: "Translation", zh: "翻译", tw: "翻譯", ja: "翻訳", ko: "번역", fr: "Traduction", de: "Übersetzung" }
+    tr_provider { en: "Provider", zh: "服务商", tw: "服務商", ja: "プロバイダー", ko: "공급자", fr: "Fournisseur", de: "Anbieter" }
+    tr_google { en: "Google (free)", zh: "Google（免费）", tw: "Google（免費）", ja: "Google（無料）", ko: "Google(무료)", fr: "Google (gratuit)", de: "Google (kostenlos)" }
+    tr_deepl { en: "DeepL (API key)", zh: "DeepL（需密钥）", tw: "DeepL（需金鑰）", ja: "DeepL（API キー）", ko: "DeepL(API 키)", fr: "DeepL (clé API)", de: "DeepL (API-Schlüssel)" }
+    tr_target { en: "Target language", zh: "目标语言", tw: "目標語言", ja: "翻訳先の言語", ko: "대상 언어", fr: "Langue cible", de: "Zielsprache" }
+    tr_key { en: "DeepL API key", zh: "DeepL 密钥", tw: "DeepL 金鑰", ja: "DeepL API キー", ko: "DeepL API 키", fr: "Clé API DeepL", de: "DeepL-API-Schlüssel" }
+    tr_hint { en: "Used by the Translate button on the OCR panel. Google works without a key; DeepL needs one (free keys end with “:fx”).", zh: "供识别面板的「翻译」按钮使用。Google 无需密钥；DeepL 需要密钥（免费密钥以 “:fx” 结尾）。", tw: "供辨識面板的「翻譯」按鈕使用。Google 無需金鑰；DeepL 需要金鑰（免費金鑰以 “:fx” 結尾）。", ja: "OCR パネルの「翻訳」ボタンで使用します。Google はキー不要、DeepL はキーが必要です（無料キーは「:fx」で終わります）。", ko: "OCR 패널의 '번역' 버튼에 사용됩니다. Google은 키가 필요 없고, DeepL은 키가 필요합니다(무료 키는 ':fx'로 끝납니다).", fr: "Utilisé par le bouton Traduire du panneau OCR. Google fonctionne sans clé ; DeepL en nécessite une (les clés gratuites finissent par « :fx »).", de: "Wird vom Übersetzen-Button des OCR-Panels verwendet. Google braucht keinen Schlüssel; DeepL schon (kostenlose Schlüssel enden auf „:fx“)." }
     qr_gen_title { en: "QR code generator", zh: "二维码生成器", tw: "二維碼產生器", ja: "QR コード生成", ko: "QR 코드 생성기", fr: "Générateur de code QR", de: "QR-Code-Generator" }
     qr_gen_hint { en: "Type text or a URL, then copy, save or pin the code.", zh: "输入文字或网址，然后复制、保存或贴图。", tw: "輸入文字或網址，然後複製、儲存或貼圖。", ja: "テキストや URL を入力し、コピー・保存・ピン留めできます。", ko: "텍스트나 URL을 입력한 뒤 복사·저장·고정할 수 있습니다.", fr: "Saisissez du texte ou une URL, puis copiez, enregistrez ou épinglez.", de: "Text oder URL eingeben, dann kopieren, speichern oder anheften." }
     qr_gen_input { en: "Text / URL", zh: "文字 / 网址", tw: "文字 / 網址", ja: "テキスト / URL", ko: "텍스트 / URL", fr: "Texte / URL", de: "Text / URL" }

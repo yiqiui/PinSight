@@ -126,6 +126,10 @@ pub struct OverlayPrefs {
     pub magnifier_size: u32,
     /// How the sampled colour is printed.
     pub color_format: crate::config::ColorFormat,
+    /// Provider/target for the OCR panel's translate button.
+    pub translate: crate::config::TranslatePrefs,
+    /// Resolved proxy URL for translation requests (`None` = direct).
+    pub translate_proxy: Option<String>,
 }
 
 impl Default for OverlayPrefs {
@@ -145,6 +149,8 @@ impl Default for OverlayPrefs {
             magnifier: true,
             magnifier_size: 15,
             color_format: crate::config::ColorFormat::Hex,
+            translate: crate::config::TranslatePrefs::default(),
+            translate_proxy: None,
         }
     }
 }
@@ -196,6 +202,9 @@ pub struct CaptureSession {
     qr_result: Option<Result<Vec<String>, String>>,
     qr_rect: Option<ImgRect>,
     qr_open: bool,
+    /// Live translation job for the OCR panel plus its settled result.
+    ocr_tr_rx: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
+    ocr_translation: Option<Result<String, String>>,
     /// Creation instant, for the wing-unfold entrance of the dim mask.
     born_at: std::time::Instant,
     tr: &'static Strings,
@@ -242,6 +251,8 @@ impl CaptureSession {
             qr_result: None,
             qr_rect: None,
             qr_open: false,
+            ocr_tr_rx: None,
+            ocr_translation: None,
             born_at: std::time::Instant::now(),
             tr,
             palette,
@@ -339,6 +350,7 @@ impl CaptureSession {
         // Collect any finished OCR / QR job before we paint this frame.
         self.poll_ocr();
         self.poll_qr();
+        self.poll_translate();
 
         // Top-level paste: Ctrl/Cmd+V (or the OS paste event) drops the
         // clipboard text onto the screenshot as a new text annotation, so OCR
@@ -1691,6 +1703,55 @@ impl CaptureSession {
         }
     }
 
+    /// Translate the OCR result with the configured provider. Requires a
+    /// settled OCR text; the network runs on a worker thread and
+    /// [`CaptureSession::poll_translate`] collects the answer.
+    fn start_translate(&mut self) {
+        // One job at a time.
+        if self.ocr_tr_rx.is_some() {
+            return;
+        }
+        let Some(Ok(words)) = self.ocr_words.as_ref() else {
+            return;
+        };
+        let text = crate::ocr::words_to_text(words);
+        if text.trim().is_empty() {
+            return;
+        }
+        let prefs = self.prefs.translate.clone();
+        let proxy = self.prefs.translate_proxy.clone();
+        self.ocr_translation = None;
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let res = crate::translate::translate(
+                &text,
+                &prefs.target,
+                crate::translate::Provider::parse(&prefs.provider),
+                &prefs.key,
+                proxy.as_deref(),
+            );
+            let _ = tx.send(res);
+        });
+        self.ocr_tr_rx = Some(rx);
+    }
+
+    fn poll_translate(&mut self) {
+        let Some(rx) = self.ocr_tr_rx.as_ref() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(result) => {
+                self.ocr_translation = Some(result);
+                self.ocr_tr_rx = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.ocr_translation = Some(Err("translation thread crashed".to_string()));
+                self.ocr_tr_rx = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+        }
+    }
+
     /// Floating panel that shows the recognised text (or an error / spinner)
     /// and offers "Copy text". Drawn as an `Area` so it matches the toolbar's
     /// glass styling rather than a heavy OS window.
@@ -1777,8 +1838,42 @@ impl CaptureSession {
                                         ui.monospace(text.as_str());
                                     });
                                 ui.separator();
-                                if ui.button(t.ov_ocr_copy).clicked() {
-                                    let _ = crate::clipboard::copy_text(&text);
+                                ui.horizontal(|ui| {
+                                    let translating = self.ocr_tr_rx.is_some();
+                                    if ui
+                                        .add_enabled(!translating, egui::Button::new(t.ov_translate))
+                                        .clicked()
+                                    {
+                                        self.start_translate();
+                                    }
+                                    if ui.button(t.ov_ocr_copy).clicked() {
+                                        let _ = crate::clipboard::copy_text(&text);
+                                    }
+                                });
+                                // Translated output (once a run settles).
+                                if self.ocr_tr_rx.is_some() {
+                                    ui.label(t.ov_tr_running);
+                                } else if let Some(res) = &self.ocr_translation {
+                                    ui.separator();
+                                    match res {
+                                        Ok(tr) => {
+                                            egui::ScrollArea::vertical()
+                                                .id_salt("pinsight-ocr-tr")
+                                                .max_height(160.0)
+                                                .show(ui, |ui| {
+                                                    ui.monospace(tr.as_str());
+                                                });
+                                            if ui.button(t.ov_ocr_copy).clicked() {
+                                                let _ = crate::clipboard::copy_text(tr);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            ui.colored_label(
+                                                egui::Color32::from_rgb(255, 120, 120),
+                                                e,
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1878,12 +1973,12 @@ impl CaptureSession {
                                                     let _ = crate::clipboard::copy_text(payload);
                                                 }
                                                 let trimmed = payload.trim_start();
-                                                if trimmed.starts_with("http://")
-                                                    || trimmed.starts_with("https://")
+                                                let is_link = trimmed.starts_with("http://")
+                                                    || trimmed.starts_with("https://");
+                                                if is_link
+                                                    && ui.button(t.ov_qr_open).clicked()
                                                 {
-                                                    if ui.button(t.ov_qr_open).clicked() {
-                                                        crate::util::open_url(trimmed);
-                                                    }
+                                                    crate::util::open_url(trimmed);
                                                 }
                                             });
                                         });

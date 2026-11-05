@@ -480,6 +480,30 @@ pub struct Config {
     pub proxy_user: String,
     /// Optional password for an authenticated proxy.
     pub proxy_password: String,
+    // ---- translation (翻译) -----------------------------------------------
+    /// Provider + target language for the OCR panel's translate button.
+    pub translate: TranslatePrefs,
+}
+
+/// Translation settings for the OCR panel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranslatePrefs {
+    /// Provider id: `google` or `deepl` (see `translate::Provider::parse`).
+    pub provider: String,
+    /// Target language, a BCP-47 code such as `zh-CN`, `en`, `ja`.
+    pub target: String,
+    /// DeepL auth key; ignored by the Google provider.
+    pub key: String,
+}
+
+impl Default for TranslatePrefs {
+    fn default() -> Self {
+        Self {
+            provider: "google".into(),
+            target: "zh-CN".into(),
+            key: String::new(),
+        }
+    }
 }
 
 /// Modifier half of a mouse binding.
@@ -904,6 +928,7 @@ impl Default for Config {
             proxy_port: 0,
             proxy_user: String::new(),
             proxy_password: String::new(),
+            translate: TranslatePrefs::default(),
         }
     }
 }

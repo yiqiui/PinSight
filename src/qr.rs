@@ -21,7 +21,7 @@ pub fn generate(text: &str, module_px: u32) -> Result<RgbaImage, String> {
     let n = code.width(); // modules per side
     let colors = code.to_colors(); // row-major, n * n
     let quiet = 4usize;
-    let side = ((n + quiet * 2) as u32 * module_px) as u32;
+    let side = (n + quiet * 2) as u32 * module_px;
     let mut img = RgbaImage::from_pixel(side, side, Rgba([255, 255, 255, 255]));
     for (i, c) in colors.iter().enumerate() {
         if *c != qrcode::Color::Dark {

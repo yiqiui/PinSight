@@ -57,6 +57,7 @@ mod tray;
 #[cfg(not(windows))]
 #[path = "tray_stub.rs"]
 mod tray;
+mod translate;
 mod ui;
 mod update;
 mod upload;

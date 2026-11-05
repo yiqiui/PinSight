@@ -1156,6 +1156,8 @@ impl PinSightApp {
                                 magnifier: self.config.capture_magnifier,
                                 magnifier_size: self.config.capture_magnifier_size,
                                 color_format: self.config.color_format,
+                                translate: self.config.translate.clone(),
+                                translate_proxy: crate::update::proxy_url(&self.config),
                             };
                             self.capture = Some(session);
                         }
@@ -5710,6 +5712,72 @@ impl PinSightApp {
                 job.wrap.overflow_character = Some('…');
                 ui.add(egui::Label::new(job).selectable(false));
             });
+        });
+
+        // Translation: provider + target language for the OCR panel's button.
+        ui::card(ui, p, |ui| {
+            ui::section_header(ui, p, Icon::Ocr, t.tr_settings);
+            ui.add_space(8.0);
+            let current = crate::translate::Provider::parse(&self.config.translate.provider);
+            let provider_label = |prov: crate::translate::Provider| match prov {
+                crate::translate::Provider::Google => t.tr_google,
+                crate::translate::Provider::DeepL => t.tr_deepl,
+            };
+            ui::field_row(ui, p, t.tr_provider, |ui| {
+                egui::ComboBox::from_id_salt("pinsight-tr-provider")
+                    .selected_text(provider_label(current))
+                    .width(168.0)
+                    .show_ui(ui, |ui| {
+                        for prov in crate::translate::Provider::ALL {
+                            if ui
+                                .selectable_label(current == prov, provider_label(prov))
+                                .clicked()
+                            {
+                                self.config.translate.provider = prov.key().to_string();
+                                let _ = self.config.save();
+                            }
+                        }
+                    });
+            });
+            ui::field_row(ui, p, t.tr_target, |ui| {
+                egui::ComboBox::from_id_salt("pinsight-tr-target")
+                    .selected_text(self.config.translate.target.as_str())
+                    .width(168.0)
+                    .show_ui(ui, |ui| {
+                        for code in ["zh-CN", "zh-TW", "en", "ja", "ko", "fr", "de", "ru", "es"] {
+                            if ui
+                                .selectable_label(
+                                    self.config.translate.target == code,
+                                    code,
+                                )
+                                .clicked()
+                            {
+                                self.config.translate.target = code.to_string();
+                                let _ = self.config.save();
+                            }
+                        }
+                    });
+            });
+            if current == crate::translate::Provider::DeepL {
+                ui::field_row(ui, p, t.tr_key, |ui| {
+                    let mut key = self.config.translate.key.clone();
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut key)
+                            .password(true)
+                            .desired_width(168.0),
+                    );
+                    // Commit when the field loses focus.
+                    if response.lost_focus() {
+                        self.config.translate.key = key.trim().to_string();
+                        let _ = self.config.save();
+                    }
+                });
+            }
+            ui.label(
+                egui::RichText::new(t.tr_hint)
+                    .small()
+                    .color(egui::Color32::from_gray(128)),
+            );
         });
     }
 

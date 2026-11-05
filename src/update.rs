@@ -109,7 +109,7 @@ pub fn platform_key() -> &'static str {
 }
 
 /// Proxy URL derived from the settings, or `None` for a direct connection.
-fn proxy_url(cfg: &Config) -> Option<String> {
+pub(crate) fn proxy_url(cfg: &Config) -> Option<String> {
     let auth = if cfg.proxy_user.trim().is_empty() {
         String::new()
     } else {
