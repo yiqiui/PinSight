@@ -145,6 +145,8 @@ pub(crate) enum TrayCommand {
     EditGif,
     /// Record a voice note from the tray.
     RecordVoice,
+    /// Open the QR code generator window.
+    QrGenerator,
 }
 
 /// A pin that was closed: enough to recreate it exactly where it was.
@@ -339,6 +341,13 @@ pub struct PinSightApp {
     /// Set by the tray's "Quit" item so the close it triggers is not turned
     /// into "hide to tray" by [`Self::handle_close_request`].
     quitting: bool,
+    /// QR code generator window: whether it is open, the user's text, and the
+    /// rendered preview image (regenerated on every text change).
+    qr_gen_open: bool,
+    qr_gen_text: String,
+    /// Text the preview was last rendered from, so we only regenerate on change.
+    qr_gen_src: String,
+    qr_gen_img: Option<Arc<RgbaImage>>,
     /// Live tray icon. `None` when the shell refused it or on other platforms.
     #[cfg(windows)]
     tray: Option<crate::tray::Tray>,
@@ -483,6 +492,10 @@ impl PinSightApp {
             recording_hotkey: None,
             tray_rx: None,
             quitting: false,
+            qr_gen_open: false,
+            qr_gen_text: String::new(),
+            qr_gen_src: String::new(),
+            qr_gen_img: None,
             #[cfg(windows)]
             tray: None,
             #[cfg(windows)]
@@ -669,6 +682,118 @@ impl PinSightApp {
         }
         if close {
             self.window_picker = None;
+        }
+    }
+
+    /// Floating QR-code generator window (tray → "QR generator"). The preview
+    /// is regenerated whenever the text changes; copy / save / pin act on the
+    /// rendered image.
+    fn show_qr_generator(&mut self, ctx: &egui::Context, p: &Palette) {
+        if !self.qr_gen_open {
+            return;
+        }
+        let t = self.tr.tr;
+        let mut close = false;
+        let mut action: Option<crate::qr::GenAction> = None;
+        egui::Window::new(t.qr_gen_title)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(360.0)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                ui.label(t.qr_gen_hint);
+                ui.add_space(6.0);
+                if ui
+                    .add(
+                        egui::TextEdit::multiline(&mut self.qr_gen_text)
+                            .hint_text(t.qr_gen_input)
+                            .desired_rows(3),
+                    )
+                    .changed()
+                {
+                    // Generation is milliseconds for sane payloads, so doing it
+                    // inline on the UI thread keeps the code simple.
+                    self.qr_gen_src = self.qr_gen_text.clone();
+                    self.qr_gen_img = if self.qr_gen_text.trim().is_empty() {
+                        None
+                    } else {
+                        crate::qr::generate(&self.qr_gen_text, 8).ok().map(Arc::new)
+                    };
+                }
+                match &self.qr_gen_img {
+                    Some(img) => {
+                        let color = egui::ColorImage::from_rgba_unmultiplied(
+                            [img.width() as usize, img.height() as usize],
+                            img.as_raw(),
+                        );
+                        // NEAREST so each module stays a crisp square.
+                        let tex = ctx.load_texture(
+                            "pinsight-qr-preview",
+                            color,
+                            egui::TextureOptions::NEAREST,
+                        );
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::vec2(224.0, 224.0), egui::Sense::hover());
+                        ui.painter().image(
+                            tex.id(),
+                            rect,
+                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                            egui::Color32::WHITE,
+                        );
+                    }
+                    None => {
+                        if !self.qr_gen_text.trim().is_empty() {
+                            ui.label(t.qr_gen_error);
+                        }
+                    }
+                }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if let Some(img) = &self.qr_gen_img {
+                        if ui::primary_button(ui, p, t.qr_gen_copy).clicked() {
+                            action = Some(crate::qr::GenAction::Copy(img.clone()));
+                        }
+                        if ui.button(t.key_save).clicked() {
+                            action = Some(crate::qr::GenAction::Save(img.clone()));
+                        }
+                        if ui.button(t.ov_pin).clicked() {
+                            action = Some(crate::qr::GenAction::Pin(img.clone()));
+                        }
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button(t.key_cancel).clicked() {
+                            close = true;
+                        }
+                    });
+                });
+            });
+        match action {
+            Some(crate::qr::GenAction::Copy(img)) => {
+                match crate::clipboard::copy_image(&img) {
+                    Ok(()) => self.toast(t.copied, false),
+                    Err(err) => self.toast(format!("{}: {err}", t.clipboard_error), true),
+                }
+            }
+            Some(crate::qr::GenAction::Save(img)) => {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("PNG", &["png"])
+                    .set_file_name("qrcode.png")
+                    .save_file()
+                {
+                    match img.save(&path) {
+                        Ok(()) => self.toast(t.saved, false),
+                        Err(err) => self.toast(format!("{}: {err}", t.save_failed), true),
+                    }
+                }
+            }
+            Some(crate::qr::GenAction::Pin(img)) => {
+                self.add_pin(img.as_ref().clone());
+                self.toast(t.pinned, false);
+            }
+            None => {}
+        }
+        if close {
+            self.qr_gen_open = false;
         }
     }
 
@@ -2863,6 +2988,11 @@ impl PinSightApp {
                 command: TrayCommand::EditGif,
             },
             TrayItem::Command {
+                id: 20,
+                label: t.tray_qr_gen.to_string(),
+                command: TrayCommand::QrGenerator,
+            },
+            TrayItem::Command {
                 id: 6,
                 label: row(t.tray_save_last, &hk.save_last),
                 command: TrayCommand::SaveLast,
@@ -3072,6 +3202,11 @@ impl PinSightApp {
                 }
                 TrayCommand::RecordVoice => {
                     self.record_voice_note();
+                }
+                TrayCommand::QrGenerator => {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                    self.qr_gen_open = true;
                 }
                 TrayCommand::Quit => {
                     // Mark the intent first: the close we are about to ask for
@@ -7529,6 +7664,7 @@ impl eframe::App for PinSightApp {
         self.show_job_huds(&ctx, &p);
         self.show_config_move_dialog(&ctx, &p);
         self.show_window_picker(&ctx, &p);
+        self.show_qr_generator(&ctx, &p);
 
         if let Some(toast) = &self.toast {
             if toast.at.elapsed() > TOAST_LIFETIME {

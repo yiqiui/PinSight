@@ -59,6 +59,7 @@ pub enum Icon {
     /// Filmstrip, for the GIF editor.
     Film,
     Ruler,
+    Qr,
 }
 
 /// Paint an icon inside `rect` (a square-ish box) using a 24×24 design grid.
@@ -453,6 +454,19 @@ pub fn paint_icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color3
             line((6.0, 11.0), (10.0, 7.0));
             line((9.5, 13.0), (13.5, 9.0));
             line((13.0, 15.0), (17.0, 11.0));
+        }
+        Icon::Qr => {
+            // Three finder squares plus a couple of data modules.
+            boxed(3.0, 3.0, 9.0, 9.0, 1.0);
+            boxed(4.8, 4.8, 7.2, 7.2, 0.5);
+            boxed(15.0, 3.0, 21.0, 9.0, 1.0);
+            boxed(16.8, 4.8, 19.2, 7.2, 0.5);
+            boxed(3.0, 15.0, 9.0, 21.0, 1.0);
+            boxed(4.8, 16.8, 7.2, 19.2, 0.5);
+            line((12.0, 12.0), (14.0, 12.0));
+            line((17.0, 14.0), (21.0, 14.0));
+            line((12.0, 17.0), (14.0, 17.0));
+            line((15.0, 20.0), (21.0, 20.0));
         }
         Icon::Ocr => {
             // Scan frame with three text lines: the classic "recognise the

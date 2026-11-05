@@ -190,6 +190,12 @@ pub struct CaptureSession {
     ocr_rect: Option<ImgRect>,
     /// Whether the OCR results panel is open.
     ocr_open: bool,
+    /// Live QR scan job: worker result channel, decoded payloads, the region it
+    /// ran on, and whether the results panel is open.
+    qr_rx: Option<std::sync::mpsc::Receiver<Result<Vec<String>, String>>>,
+    qr_result: Option<Result<Vec<String>, String>>,
+    qr_rect: Option<ImgRect>,
+    qr_open: bool,
     /// Creation instant, for the wing-unfold entrance of the dim mask.
     born_at: std::time::Instant,
     tr: &'static Strings,
@@ -232,6 +238,10 @@ impl CaptureSession {
             ocr_words: None,
             ocr_rect: None,
             ocr_open: false,
+            qr_rx: None,
+            qr_result: None,
+            qr_rect: None,
+            qr_open: false,
             born_at: std::time::Instant::now(),
             tr,
             palette,
@@ -326,8 +336,9 @@ impl CaptureSession {
             }
         }
 
-        // Collect any finished OCR job before we paint this frame.
+        // Collect any finished OCR / QR job before we paint this frame.
         self.poll_ocr();
+        self.poll_qr();
 
         // Top-level paste: Ctrl/Cmd+V (or the OS paste event) drops the
         // clipboard text onto the screenshot as a new text annotation, so OCR
@@ -550,6 +561,8 @@ impl CaptureSession {
 
         // Floating OCR results panel (if open).
         self.show_ocr_panel(ui, screen, scale);
+        // Floating QR results panel (if open).
+        self.show_qr_panel(ui, screen, scale);
 
         // Hint line at the top center while no selection exists.
         if self.selection.is_none() && self.prefs.hints {
@@ -1509,6 +1522,12 @@ impl CaptureSession {
                                         {
                                             self.start_ocr();
                                         }
+                                        if pill_button(ui, &p, t.ov_qr, Some(Icon::Qr), false)
+                                            .on_hover_text(t.ov_qr_running)
+                                            .clicked()
+                                        {
+                                            self.start_qr();
+                                        }
                                     }
                                 },
                             );
@@ -1561,14 +1580,10 @@ impl CaptureSession {
         OverlayOutcome::Image { action, image }
     }
 
-    /// Kick off text recognition on the current selection (or the whole image
-    /// when nothing is selected). The work runs on a worker thread so the GUI
-    /// never blocks; [`CaptureSession::poll_ocr`] collects the result.
-    fn start_ocr(&mut self) {
-        // A job is already in flight — ignore the extra click.
-        if self.ocr_rx.is_some() {
-            return;
-        }
+    /// Crop the current selection (or the whole image) into a fresh, small
+    /// copy a detector thread can own, together with the region it came from.
+    /// Shared by OCR and QR scanning.
+    fn scan_crop(&self) -> Option<(RgbaImage, ImgRect)> {
         let (x, y, w, h) = match self.selection {
             Some(sel) => {
                 let c = sel.clamped(self.image.width(), self.image.height());
@@ -1588,14 +1603,27 @@ impl CaptureSession {
         let w = w.min(self.image.width().saturating_sub(x));
         let h = h.min(self.image.height().saturating_sub(y));
         if w == 0 || h == 0 {
+            return None;
+        }
+        let crop = image::imageops::crop_imm(&self.image, x, y, w, h).to_image();
+        Some((
+            crop,
+            ImgRect::from_min_size(x as f32, y as f32, w as f32, h as f32),
+        ))
+    }
+
+    /// Kick off text recognition on the current selection (or the whole image
+    /// when nothing is selected). The work runs on a worker thread so the GUI
+    /// never blocks; [`CaptureSession::poll_ocr`] collects the result.
+    fn start_ocr(&mut self) {
+        // A job is already in flight — ignore the extra click.
+        if self.ocr_rx.is_some() {
             return;
         }
-        // Crop a fresh, small copy so the worker owns its pixels and the overlay
-        // keeps the full image for display.
-        let crop = image::imageops::crop_imm(&self.image, x, y, w, h).to_image();
-        self.ocr_rect = Some(ImgRect::from_min_size(
-            x as f32, y as f32, w as f32, h as f32,
-        ));
+        let Some((crop, rect)) = self.scan_crop() else {
+            return;
+        };
+        self.ocr_rect = Some(rect);
         self.ocr_words = None;
         self.ocr_open = true;
         let (tx, rx) = std::sync::mpsc::channel();
@@ -1604,6 +1632,44 @@ impl CaptureSession {
             let _ = tx.send(res);
         });
         self.ocr_rx = Some(rx);
+    }
+
+    /// Look for QR codes in the selection on a worker thread. Decoding is pure
+    /// CPU and can take a moment on a full-screen frame, so it must not run on
+    /// the GUI thread; [`CaptureSession::poll_qr`] collects the payloads.
+    fn start_qr(&mut self) {
+        if self.qr_rx.is_some() {
+            return;
+        }
+        let Some((crop, rect)) = self.scan_crop() else {
+            return;
+        };
+        self.qr_rect = Some(rect);
+        self.qr_result = None;
+        self.qr_open = true;
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let res = crate::qr::recognize(&crop);
+            let _ = tx.send(Ok(res));
+        });
+        self.qr_rx = Some(rx);
+    }
+
+    fn poll_qr(&mut self) {
+        let Some(rx) = self.qr_rx.as_ref() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(result) => {
+                self.qr_result = Some(result);
+                self.qr_rx = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.qr_result = Some(Err("QR scan thread crashed".to_string()));
+                self.qr_rx = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+        }
     }
 
     /// Move a finished OCR job's result out of the channel into
@@ -1715,6 +1781,115 @@ impl CaptureSession {
                                     let _ = crate::clipboard::copy_text(&text);
                                 }
                             }
+                        }
+                    });
+            });
+    }
+
+    /// Floating panel that shows decoded QR payloads (or an error / spinner)
+    /// and offers "Copy" for each, plus "Open link" when a payload looks like a
+    /// URL. Drawn as an `Area` so it matches the toolbar's glass styling.
+    fn show_qr_panel(&mut self, ui: &mut egui::Ui, screen: egui::Rect, scale: f32) {
+        if !self.qr_open {
+            return;
+        }
+        let p = self.palette;
+        let t = self.tr;
+        let width = 320.0_f32;
+        let anchor = match self.qr_rect {
+            Some(r) => {
+                let rs = image_to_screen(r, screen, scale);
+                egui::pos2(rs.left(), (rs.top() - 12.0).max(screen.top() + 8.0))
+            }
+            None => screen.center(),
+        };
+        let pos = egui::pos2(
+            anchor.x.clamp(
+                screen.left() + 8.0,
+                (screen.right() - width - 8.0).max(screen.left() + 8.0),
+            ),
+            anchor.y.clamp(
+                screen.top() + 8.0,
+                (screen.bottom() - 240.0).max(screen.top() + 8.0),
+            ),
+        );
+
+        // Snapshot the result out of `self` so the buttons below can close the
+        // panel without fighting the borrow held by the `match`.
+        let (running, err_opt, payloads) = match &self.qr_result {
+            None => (true, None, Vec::new()),
+            Some(Err(e)) => (false, Some(e.clone()), Vec::new()),
+            Some(Ok(v)) => (false, None, v.clone()),
+        };
+
+        egui::Area::new(egui::Id::new(("pinsight-qr", self.monitor.id)))
+            .order(egui::Order::Foreground)
+            .fixed_pos(pos)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::NONE
+                    .fill(p.card)
+                    .stroke(egui::Stroke::new(1.0, p.stroke))
+                    .corner_radius(12)
+                    .inner_margin(egui::Margin::symmetric(12, 10))
+                    .shadow(egui::epaint::Shadow {
+                        offset: [0, 6],
+                        blur: 18,
+                        spread: 0,
+                        color: egui::Color32::from_black_alpha(90),
+                    })
+                    .show(ui, |ui| {
+                        ui.set_min_width(width);
+                        ui.set_max_width(width);
+                        ui.horizontal(|ui| {
+                            ui.heading(t.ov_qr_title);
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui.button(t.ov_qr_close).clicked() {
+                                        self.qr_open = false;
+                                    }
+                                },
+                            );
+                        });
+                        ui.separator();
+                        if running {
+                            ui.label(t.ov_qr_running);
+                        } else if let Some(e) = err_opt {
+                            ui.colored_label(egui::Color32::from_rgb(255, 120, 120), e);
+                            ui.separator();
+                            if ui.button(t.ov_qr_close).clicked() {
+                                self.qr_open = false;
+                            }
+                        } else if payloads.is_empty() {
+                            ui.label(t.ov_qr_empty);
+                        } else {
+                            ui.label(format!("{} {}", payloads.len(), t.ov_qr_count));
+                            ui.separator();
+                            egui::ScrollArea::vertical()
+                                .max_height(220.0)
+                                .show(ui, |ui| {
+                                    for payload in &payloads {
+                                        ui.group(|ui| {
+                                            ui.set_min_width(width - 50.0);
+                                            ui.monospace(payload.as_str());
+                                            ui.separator();
+                                            ui.horizontal(|ui| {
+                                                if ui.button(t.ov_qr_copy).clicked() {
+                                                    let _ = crate::clipboard::copy_text(payload);
+                                                }
+                                                let trimmed = payload.trim_start();
+                                                if trimmed.starts_with("http://")
+                                                    || trimmed.starts_with("https://")
+                                                {
+                                                    if ui.button(t.ov_qr_open).clicked() {
+                                                        crate::util::open_url(trimmed);
+                                                    }
+                                                }
+                                            });
+                                        });
+                                        ui.add_space(6.0);
+                                    }
+                                });
                         }
                     });
             });

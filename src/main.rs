@@ -44,6 +44,7 @@ mod overlay;
 mod pdf;
 mod picker;
 mod pin;
+mod qr;
 #[cfg(not(windows))]
 mod pin_viewport;
 mod record;

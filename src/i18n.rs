@@ -844,6 +844,19 @@ strings! {
     ov_ocr_close { en: "Close", zh: "关闭", tw: "關閉", ja: "閉じる", ko: "닫기", fr: "Fermer", de: "Schließen" }
     ov_ocr_empty { en: "No text was found in this region.", zh: "这片区域里没有识别到文字。", tw: "這片區域裡沒有辨識到文字。", ja: "この領域から文字が見つかりませんでした。", ko: "이 영역에서 텍스트를 찾지 못했습니다.", fr: "Aucun texte trouvé dans cette zone.", de: "In diesem Bereich wurde kein Text gefunden." }
     ov_ocr_unavailable { en: "OCR uses the OS engine: Windows.Media.Ocr, macOS Vision, or Tesseract on Linux.", zh: "文字识别使用系统引擎：Windows.Media.Ocr、macOS Vision，或 Linux 上的 Tesseract。", tw: "文字辨識使用系統引擎：Windows.Media.Ocr、macOS Vision，或 Linux 上的 Tesseract。", ja: "OCR は OS のエンジンを使用します（Windows.Media.Ocr / macOS Vision / Linux の Tesseract）。", ko: "OCR은 OS 엔진을 사용합니다(Windows.Media.Ocr, macOS Vision, Linux의 Tesseract).", fr: "L'OCR utilise le moteur du système : Windows.Media.Ocr, Vision sur macOS, ou Tesseract sur Linux.", de: "OCR nutzt die Engine des Systems: Windows.Media.Ocr, Vision unter macOS oder Tesseract unter Linux." }
+    ov_qr { en: "QR", zh: "二维码", tw: "二維碼", ja: "QR", ko: "QR", fr: "QR", de: "QR" }
+    ov_qr_running { en: "Looking for QR codes…", zh: "正在查找二维码…", tw: "正在尋找二維碼…", ja: "QR コードを検索中…", ko: "QR 코드 검색 중…", fr: "Recherche de codes QR…", de: "Suche nach QR-Codes…" }
+    ov_qr_title { en: "QR codes", zh: "二维码内容", tw: "二維碼內容", ja: "QR コード", ko: "QR 코드", fr: "Codes QR", de: "QR-Codes" }
+    ov_qr_copy { en: "Copy", zh: "复制", tw: "複製", ja: "コピー", ko: "복사", fr: "Copier", de: "Kopieren" }
+    ov_qr_close { en: "Close", zh: "关闭", tw: "關閉", ja: "閉じる", ko: "닫기", fr: "Fermer", de: "Schließen" }
+    ov_qr_open { en: "Open link", zh: "打开链接", tw: "開啟連結", ja: "リンクを開く", ko: "링크 열기", fr: "Ouvrir le lien", de: "Link öffnen" }
+    ov_qr_empty { en: "No QR code was found in this region.", zh: "这片区域里没有找到二维码。", tw: "這片區域裡沒有找到二維碼。", ja: "この領域に QR コードは見つかりませんでした。", ko: "이 영역에서 QR 코드를 찾지 못했습니다.", fr: "Aucun code QR trouvé dans cette zone.", de: "In diesem Bereich wurde kein QR-Code gefunden." }
+    ov_qr_count { en: "code(s) found", zh: "个二维码", tw: "個二維碼", ja: "件のコード", ko: "개의 코드", fr: "code(s) trouvé(s)", de: "Code(s) gefunden" }
+    qr_gen_title { en: "QR code generator", zh: "二维码生成器", tw: "二維碼產生器", ja: "QR コード生成", ko: "QR 코드 생성기", fr: "Générateur de code QR", de: "QR-Code-Generator" }
+    qr_gen_hint { en: "Type text or a URL, then copy, save or pin the code.", zh: "输入文字或网址，然后复制、保存或贴图。", tw: "輸入文字或網址，然後複製、儲存或貼圖。", ja: "テキストや URL を入力し、コピー・保存・ピン留めできます。", ko: "텍스트나 URL을 입력한 뒤 복사·저장·고정할 수 있습니다.", fr: "Saisissez du texte ou une URL, puis copiez, enregistrez ou épinglez.", de: "Text oder URL eingeben, dann kopieren, speichern oder anheften." }
+    qr_gen_input { en: "Text / URL", zh: "文字 / 网址", tw: "文字 / 網址", ja: "テキスト / URL", ko: "텍스트 / URL", fr: "Texte / URL", de: "Text / URL" }
+    qr_gen_copy { en: "Copy image", zh: "复制图片", tw: "複製圖片", ja: "画像をコピー", ko: "이미지 복사", fr: "Copier l'image", de: "Bild kopieren" }
+    qr_gen_error { en: "The text is too long for a QR code.", zh: "内容过长，无法生成二维码。", tw: "內容過長，無法產生二維碼。", ja: "テキストが長すぎて QR コードにできません。", ko: "텍스트가 너무 길어 QR 코드를 만들 수 없습니다.", fr: "Le texte est trop long pour un code QR.", de: "Der Text ist zu lang für einen QR-Code." }
 
     // ---- GIF editor ------------------------------------------------------
     nav_gif { en: "GIF", zh: "GIF", tw: "GIF", ja: "GIF", ko: "GIF", fr: "GIF", de: "GIF" }
@@ -880,6 +893,7 @@ strings! {
     gif_open { en: "Open", zh: "打开", tw: "開啟", ja: "開く", ko: "열기", fr: "Ouvrir", de: "Öffnen" }
     gif_needs_ffmpeg { en: "MP4 conversion needs ffmpeg on PATH.", zh: "转 MP4 需要 PATH 中有 ffmpeg。", tw: "轉 MP4 需要 PATH 中有 ffmpeg。", ja: "MP4 変換には PATH の ffmpeg が必要です。", ko: "MP4 변환에는 PATH의 ffmpeg가 필요합니다.", fr: "La conversion MP4 nécessite ffmpeg dans le PATH.", de: "MP4 braucht ffmpeg im PATH." }
     tray_edit_gif { en: "Edit GIF", zh: "编辑 GIF", tw: "編輯 GIF", ja: "GIF 編集", ko: "GIF 편집", fr: "Éditer le GIF", de: "GIF bearbeiten" }
+    tray_qr_gen { en: "QR generator", zh: "二维码生成", tw: "二維碼產生", ja: "QR 生成", ko: "QR 생성", fr: "Générateur QR", de: "QR-Generator" }
     tray_record_voice { en: "Record voice note", zh: "录制语音便签", tw: "錄製語音便籤", ja: "音声メモ録音", ko: "음성 메모 녹음", fr: "Mémo vocal", de: "Sprachnotiz" }
     voice_recording { en: "Recording voice note…", zh: "正在录制语音便签…", tw: "正在錄製語音便籤…", ja: "音声メモ録音中…", ko: "음성 메모 녹음 중…", fr: "Enregistrement vocal…", de: "Sprachnotiz aufnehmen…" }
     voice_done { en: "Voice note saved", zh: "语音便签已保存", tw: "語音便籤已儲存", ja: "音声メモを保存", ko: "음성 메모 저장됨", fr: "Mémo vocal enregistré", de: "Sprachnotiz gespeichert" }
