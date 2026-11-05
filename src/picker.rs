@@ -291,85 +291,99 @@ impl ColorPicker {
                 });
                 ui.add_space(10.0);
 
-                // Numbers, Windows style: two columns of label + spin box.
-                egui::Grid::new("pinsight-color-numbers")
-                    .num_columns(2)
-                    .spacing([10.0, 6.0])
-                    .show(ui, |ui| {
-                        let mut hue = self.h;
-                        if self
-                            .num_row(ui, p, t.color_hue, &mut hue, 0.0, 360.0)
-                            .changed()
-                        {
-                            self.h = hue.clamp(0.0, 359.9);
-                        }
-                        ui.end_row();
-                        let mut sat = self.s * 100.0;
-                        if self
-                            .num_row(ui, p, t.color_sat, &mut sat, 0.0, 100.0)
-                            .changed()
-                        {
-                            self.s = (sat / 100.0).clamp(0.0, 1.0);
-                        }
-                        ui.end_row();
-                        let mut val = self.v * 100.0;
-                        if self
-                            .num_row(ui, p, t.color_val, &mut val, 0.0, 100.0)
-                            .changed()
-                        {
-                            self.v = (val / 100.0).clamp(0.0, 1.0);
-                        }
-                        ui.end_row();
-
-                        let mut rgb = self.rgb();
-                        let mut touched = false;
-                        for (index, name) in
-                            [(0, t.color_red), (1, t.color_green), (2, t.color_blue)]
-                        {
-                            let mut channel = rgb[index] as f32;
+                // Numbers, Windows style but tightened: HSV and RGB(+alpha)
+                // sit side by side so the block stays short and fills the
+                // width instead of one skinny column drifting in whitespace.
+                ui.horizontal_top(|ui| {
+                    egui::Grid::new("pinsight-color-hsv")
+                        .num_columns(2)
+                        .spacing([8.0, 6.0])
+                        .show(ui, |ui| {
+                            let mut hue = self.h;
                             if self
-                                .num_row(ui, p, name, &mut channel, 0.0, 255.0)
+                                .num_row(ui, p, t.color_hue, &mut hue, 0.0, 360.0)
                                 .changed()
                             {
-                                rgb[index] = channel.round().clamp(0.0, 255.0) as u8;
-                                touched = true;
+                                self.h = hue.clamp(0.0, 359.9);
                             }
                             ui.end_row();
-                        }
-                        if touched {
-                            self.set_rgb(rgb);
-                        }
-
-                        let mut alpha = self.alpha as f32;
-                        if self
-                            .num_row(ui, p, t.color_alpha, &mut alpha, 0.0, 255.0)
-                            .changed()
-                        {
-                            self.alpha = alpha.round().clamp(0.0, 255.0) as u8;
-                        }
-                        ui.end_row();
-
-                        // HTML field
-                        ui.label(
-                            egui::RichText::new(t.color_html)
-                                .size(11.5)
-                                .color(p.text_weak),
-                        );
-                        let response = ui.add(
-                            egui::TextEdit::singleline(&mut self.hex_draft)
-                                .desired_width(96.0)
-                                .font(egui::TextStyle::Monospace),
-                        );
-                        if response.changed() {
-                            if let Some(rgb) = parse_hex(&self.hex_draft) {
-                                let (h, s, v) = rgb_to_hsv(rgb);
-                                self.h = h;
-                                self.s = s;
-                                self.v = v;
+                            let mut sat = self.s * 100.0;
+                            if self
+                                .num_row(ui, p, t.color_sat, &mut sat, 0.0, 100.0)
+                                .changed()
+                            {
+                                self.s = (sat / 100.0).clamp(0.0, 1.0);
                             }
+                            ui.end_row();
+                            let mut val = self.v * 100.0;
+                            if self
+                                .num_row(ui, p, t.color_val, &mut val, 0.0, 100.0)
+                                .changed()
+                            {
+                                self.v = (val / 100.0).clamp(0.0, 1.0);
+                            }
+                            ui.end_row();
+                        });
+
+                    ui.add_space(10.0);
+
+                    egui::Grid::new("pinsight-color-rgb")
+                        .num_columns(2)
+                        .spacing([8.0, 6.0])
+                        .show(ui, |ui| {
+                            let mut rgb = self.rgb();
+                            let mut touched = false;
+                            for (index, name) in
+                                [(0, t.color_red), (1, t.color_green), (2, t.color_blue)]
+                            {
+                                let mut channel = rgb[index] as f32;
+                                if self
+                                    .num_row(ui, p, name, &mut channel, 0.0, 255.0)
+                                    .changed()
+                                {
+                                    rgb[index] = channel.round().clamp(0.0, 255.0) as u8;
+                                    touched = true;
+                                }
+                                ui.end_row();
+                            }
+                            if touched {
+                                self.set_rgb(rgb);
+                            }
+
+                            let mut alpha = self.alpha as f32;
+                            if self
+                                .num_row(ui, p, t.color_alpha, &mut alpha, 0.0, 255.0)
+                                .changed()
+                            {
+                                self.alpha = alpha.round().clamp(0.0, 255.0) as u8;
+                            }
+                            ui.end_row();
+                        });
+                });
+
+                ui.add_space(8.0);
+
+                // HTML field on its own row, aligned with the fields above.
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(t.color_html)
+                            .size(11.5)
+                            .color(p.text_weak),
+                    );
+                    let response = ui.add(
+                        egui::TextEdit::singleline(&mut self.hex_draft)
+                            .desired_width(110.0)
+                            .font(egui::TextStyle::Monospace),
+                    );
+                    if response.changed() {
+                        if let Some(rgb) = parse_hex(&self.hex_draft) {
+                            let (h, s, v) = rgb_to_hsv(rgb);
+                            self.h = h;
+                            self.s = s;
+                            self.v = v;
                         }
-                        ui.end_row();
-                    });
+                    }
+                });
             });
         });
 
@@ -377,14 +391,24 @@ impl ColorPicker {
 
         // ---- footer -------------------------------------------------------
         ui.horizontal(|ui| {
-            // Live preview strip: the colour as it will be applied.
-            let (rect, _) = ui.allocate_exact_size(Vec2::new(64.0, 26.0), Sense::hover());
+            // Live preview swatch with its hex value beside it: the colour as
+            // it will be applied, readable at a glance instead of a lonely
+            // small block drifting in the corner.
+            let (rect, _) = ui.allocate_exact_size(Vec2::new(46.0, 26.0), Sense::hover());
             ui.painter().rect_filled(rect, 6.0, preview);
             ui.painter().rect_stroke(
                 rect,
                 6.0,
                 Stroke::new(1.0, p.stroke_strong),
                 StrokeKind::Inside,
+            );
+            ui.add_space(6.0);
+            let rgb = self.rgb();
+            ui.label(
+                egui::RichText::new(format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]))
+                    .size(12.0)
+                    .monospace()
+                    .color(p.text_weak),
             );
             ui.add_space(6.0);
             if ui::link_button(ui, p, Icon::Focus, t.color_pick_screen).clicked() {
@@ -623,7 +647,10 @@ impl ColorPicker {
             egui::DragValue::new(value)
                 .range(min..=max)
                 .speed(1.0)
-                .fixed_decimals(0),
+                .fixed_decimals(0)
+                // Fixed width so both grids line up and the values hug their
+                // labels instead of stretching apart with dead space between.
+                .min_size(Vec2::new(64.0, 0.0)),
         )
     }
 }
