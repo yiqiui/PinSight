@@ -82,16 +82,23 @@ pub struct WatermarkDeco {
 /// Everything the "decorate" step can do to an image. `None` on a sub-field
 /// means "skip that effect", so a user can mix and match freely.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct Decorations {
     pub border: Option<BorderDeco>,
     pub shadow: Option<ShadowDeco>,
     pub watermark: Option<WatermarkDeco>,
+    /// Corner radius in pixels applied to the whole finished picture (border,
+    /// shadow and all). `None` keeps square corners.
+    pub rounded: Option<u32>,
 }
 
 impl Decorations {
     /// True when no effect is requested; lets the save path skip the clone.
     pub fn is_empty(&self) -> bool {
-        self.border.is_none() && self.shadow.is_none() && self.watermark.is_none()
+        self.border.is_none()
+            && self.shadow.is_none()
+            && self.watermark.is_none()
+            && self.rounded.is_none()
     }
 }
 
@@ -115,7 +122,56 @@ pub fn decorate_image(image: &RgbaImage, deco: &Decorations) -> RgbaImage {
     if let Some(wm) = &deco.watermark {
         apply_watermark(&mut img, wm);
     }
+    if let Some(radius) = deco.rounded {
+        img = round_corners(&img, radius);
+    }
     img
+}
+
+/// Round the four corners of `image` with a one-pixel anti-aliased cutout.
+///
+/// Only the corner bounding boxes are visited, so the cost is independent of
+/// the image area. It runs last so the rounded shape includes the border and
+/// shadow already composited, matching how PixPin-style rounded captures look.
+fn round_corners(image: &RgbaImage, radius: u32) -> RgbaImage {
+    let (w, h) = (image.width(), image.height());
+    if radius == 0 || w == 0 || h == 0 {
+        return image.clone();
+    }
+    let r = radius.min(w / 2).min(h / 2) as f32;
+    let mut out = image.clone();
+    let r2 = r * r;
+    let aa_inner = (r - 1.0).max(0.0).powi(2);
+    // (box min x, box min y, centre x, centre y) for each corner.
+    let corners: [(i32, i32, f32, f32); 4] = [
+        (0, 0, r, r),
+        (w as i32 - r as i32, 0, w as f32 - r, r),
+        (0, h as i32 - r as i32, r, h as f32 - r),
+        (w as i32 - r as i32, h as i32 - r as i32, w as f32 - r, h as f32 - r),
+    ];
+    let bw = r as i32;
+    for &(bx, by, cx, cy) in &corners {
+        for y in by..(by + bw).min(h as i32) {
+            for x in bx.max(0)..(bx + bw).min(w as i32) {
+                let dx = x as f32 - cx;
+                let dy = y as f32 - cy;
+                let d2 = dx * dx + dy * dy;
+                if d2 >= r2 {
+                    out.put_pixel(x as u32, y as u32, Rgba([0, 0, 0, 0]));
+                } else if d2 >= aa_inner {
+                    // Soft one-pixel edge: scale the existing alpha by coverage.
+                    let coverage = (r - d2.sqrt()).clamp(0.0, 1.0);
+                    let px = out.get_pixel(x as u32, y as u32).0;
+                    out.put_pixel(
+                        x as u32,
+                        y as u32,
+                        Rgba([px[0], px[1], px[2], (px[3] as f32 * coverage) as u8]),
+                    );
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Wrap the image in a solid frame.
@@ -553,5 +609,35 @@ mod tests {
             }
         }
         assert!(changed, "watermark should alter some pixels");
+    }
+
+    #[test]
+    fn rounded_corners_clear_outside_radius() {
+        // A solid square with a large radius must leave the four extreme
+        // corners fully transparent while keeping the centre opaque.
+        let img = RgbaImage::from_pixel(100, 100, Rgba([20, 20, 20, 255]));
+        let deco = Decorations {
+            rounded: Some(30),
+            ..Default::default()
+        };
+        let out = decorate_image(&img, &deco);
+        assert_eq!(out.get_pixel(0, 0).0[3], 0, "corner should be transparent");
+        assert_eq!(
+            out.get_pixel(50, 50).0[3],
+            255,
+            "centre should stay opaque"
+        );
+    }
+
+    #[test]
+    fn rounded_off_is_identity() {
+        let img = RgbaImage::from_pixel(50, 50, Rgba([1, 2, 3, 255]));
+        let deco = Decorations {
+            rounded: None,
+            ..Default::default()
+        };
+        let out = decorate_image(&img, &deco);
+        assert_eq!(out.dimensions(), (50, 50));
+        assert_eq!(out.get_pixel(0, 0).0[3], 255);
     }
 }

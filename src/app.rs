@@ -5105,6 +5105,29 @@ impl PinSightApp {
                     }
                 });
             }
+
+            // Rounded corners (applied last so the border + shadow are also
+            // rounded, matching the PixPin-style look).
+            let mut rounded_on = self.config.decorations.rounded.is_some();
+            ui::field_row(ui, p, t.deco_rounded, |ui| {
+                if ui::toggle(ui, p, &mut rounded_on).changed() {
+                    self.config.decorations.rounded = if rounded_on {
+                        Some(16)
+                    } else {
+                        None
+                    };
+                    let _ = self.config.save();
+                }
+            });
+            if let Some(radius) = self.config.decorations.rounded {
+                ui::field_row(ui, p, t.deco_rounded_radius, |ui| {
+                    let mut value = radius as f32;
+                    if ui::slider(ui, p, &mut value, 0.0..=100.0, 0, " px").changed() {
+                        self.config.decorations.rounded = Some(value.round() as u32);
+                        let _ = self.config.save();
+                    }
+                });
+            }
         });
 
         // ---- recording ----------------------------------------------------

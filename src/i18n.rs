@@ -656,6 +656,8 @@ strings! {
     deco_wm_image { en: "Image mark", zh: "图片水印", tw: "圖片浮水印", ja: "画像マーク", ko: "이미지 워터마크", fr: "Filigrane image", de: "Bild-Wasserzeichen" }
     deco_wm_image_hint { en: "Path to an image, optional", zh: "图片路径（可选）", tw: "圖片路徑（選填）", ja: "画像パス（任意）", ko: "이미지 경로(선택)", fr: "Chemin d'une image (facultatif)", de: "Bildpfad (optional)" }
     deco_wm_browse { en: "Choose…", zh: "选择…", tw: "選擇…", ja: "選択…", ko: "선택…", fr: "Choisir…", de: "Wählen…" }
+    deco_rounded { en: "Rounded corners", zh: "圆角", tw: "圓角", ja: "角丸", ko: "둥근 모서리", fr: "Coins arrondis", de: "Abgerundete Ecken" }
+    deco_rounded_radius { en: "Corner radius", zh: "圆角半径", tw: "圓角半徑", ja: "角丸半径", ko: "모서리 반경", fr: "Rayon des coins", de: "Eckenradius" }
     rec_settings { en: "Recording", zh: "录屏", tw: "錄屏", ja: "録画", ko: "녹화", fr: "Enregistrement", de: "Aufnahme" }
     rec_fps { en: "Frame rate", zh: "帧率", tw: "影格率", ja: "フレームレート", ko: "프레임률", fr: "Images par seconde", de: "Bildrate" }
     out_clipboard { en: "Clipboard", zh: "复制到剪贴板", tw: "複製到剪貼簿", ja: "クリップボードにコピー", ko: "클립보드에 복사", fr: "Presse-papiers", de: "Zwischenablage" }
