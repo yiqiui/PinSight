@@ -460,9 +460,7 @@ impl CaptureSession {
                 if pts.len() >= 2 {
                     let mut screen_pts: Vec<egui::Pos2> = pts
                         .iter()
-                        .map(|p| {
-                            egui::pos2(screen.min.x + p.x * scale, screen.min.y + p.y * scale)
-                        })
+                        .map(|p| egui::pos2(screen.min.x + p.x * scale, screen.min.y + p.y * scale))
                         .collect();
                     // Close the loop so the region reads as one shape.
                     if pts.len() >= 3 {
@@ -470,10 +468,7 @@ impl CaptureSession {
                     }
                     ui.painter().add(egui::Shape::line(
                         screen_pts,
-                        egui::Stroke::new(
-                            self.prefs.border_width.max(1.5),
-                            self.palette.accent,
-                        ),
+                        egui::Stroke::new(self.prefs.border_width.max(1.5), self.palette.accent),
                     ));
                 }
             } else {
@@ -1047,14 +1042,10 @@ impl CaptureSession {
                         // size label keep working on a freeform region.
                         let xs = pts.iter().map(|p| p.x);
                         let ys = pts.iter().map(|p| p.y);
-                        let (min_x, max_x) = (
-                            xs.clone().fold(img.x, f32::min),
-                            xs.fold(img.x, f32::max),
-                        );
-                        let (min_y, max_y) = (
-                            ys.clone().fold(img.y, f32::min),
-                            ys.fold(img.y, f32::max),
-                        );
+                        let (min_x, max_x) =
+                            (xs.clone().fold(img.x, f32::min), xs.fold(img.x, f32::max));
+                        let (min_y, max_y) =
+                            (ys.clone().fold(img.y, f32::min), ys.fold(img.y, f32::max));
                         self.selection = Some(ImgRect::from_min_size(
                             min_x,
                             min_y,
@@ -1947,7 +1938,10 @@ impl CaptureSession {
                                 ui.horizontal(|ui| {
                                     let translating = self.ocr_tr_rx.is_some();
                                     if ui
-                                        .add_enabled(!translating, egui::Button::new(t.ov_translate))
+                                        .add_enabled(
+                                            !translating,
+                                            egui::Button::new(t.ov_translate),
+                                        )
                                         .clicked()
                                     {
                                         self.start_translate();
@@ -2081,9 +2075,7 @@ impl CaptureSession {
                                                 let trimmed = payload.trim_start();
                                                 let is_link = trimmed.starts_with("http://")
                                                     || trimmed.starts_with("https://");
-                                                if is_link
-                                                    && ui.button(t.ov_qr_open).clicked()
-                                                {
+                                                if is_link && ui.button(t.ov_qr_open).clicked() {
                                                     crate::util::open_url(trimmed);
                                                 }
                                             });

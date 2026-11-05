@@ -44,20 +44,20 @@ mod overlay;
 mod pdf;
 mod picker;
 mod pin;
-mod qr;
 #[cfg(not(windows))]
 mod pin_viewport;
+mod qr;
 mod record;
 mod single_instance;
 mod startup;
 mod text_font;
 mod theme;
+mod translate;
 #[cfg(windows)]
 mod tray;
 #[cfg(not(windows))]
 #[path = "tray_stub.rs"]
 mod tray;
-mod translate;
 mod ui;
 mod update;
 mod upload;

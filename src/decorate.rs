@@ -147,7 +147,12 @@ fn round_corners(image: &RgbaImage, radius: u32) -> RgbaImage {
         (0, 0, r, r),
         (w as i32 - r as i32, 0, w as f32 - r, r),
         (0, h as i32 - r as i32, r, h as f32 - r),
-        (w as i32 - r as i32, h as i32 - r as i32, w as f32 - r, h as f32 - r),
+        (
+            w as i32 - r as i32,
+            h as i32 - r as i32,
+            w as f32 - r,
+            h as f32 - r,
+        ),
     ];
     let bw = r as i32;
     for &(bx, by, cx, cy) in &corners {
@@ -622,11 +627,7 @@ mod tests {
         };
         let out = decorate_image(&img, &deco);
         assert_eq!(out.get_pixel(0, 0).0[3], 0, "corner should be transparent");
-        assert_eq!(
-            out.get_pixel(50, 50).0[3],
-            255,
-            "centre should stay opaque"
-        );
+        assert_eq!(out.get_pixel(50, 50).0[3], 255, "centre should stay opaque");
     }
 
     #[test]

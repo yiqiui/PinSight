@@ -673,9 +673,7 @@ fn draw_annotation(pixmap: &mut Pixmap, annotation: &Annotation, ox: f32, oy: f3
             }
             // Endpoint dots so the exact anchor pixels are visible.
             for end in [a, b] {
-                if let Some(disc) =
-                    tiny_skia::Rect::from_xywh(end.x - 2.5, end.y - 2.5, 5.0, 5.0)
-                {
+                if let Some(disc) = tiny_skia::Rect::from_xywh(end.x - 2.5, end.y - 2.5, 5.0, 5.0) {
                     if let Some(path) = PathBuilder::from_oval(disc) {
                         pixmap.fill_path(
                             &path,
@@ -696,14 +694,7 @@ fn draw_annotation(pixmap: &mut Pixmap, annotation: &Annotation, ox: f32, oy: f3
             let mid = tiny_skia::Point::from_xy((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
             let size = 13.0_f32;
             let label = format!("{} px  {}°", len.round(), angle.round());
-            crate::text_font::font().draw(
-                pixmap,
-                &label,
-                mid.x + 8.0,
-                mid.y - size,
-                size,
-                *color,
-            );
+            crate::text_font::font().draw(pixmap, &label, mid.x + 8.0, mid.y - size, size, *color);
         }
         Annotation::Arrow {
             from,

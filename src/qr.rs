@@ -82,11 +82,7 @@ pub fn recognize(image: &RgbaImage) -> Vec<String> {
             }
             let mut prepared = rqrr::PreparedImage::prepare_from_greyscale(sw, sh, |x, y| {
                 let src = luma[(y / scale as usize) * (w as usize) + (x / scale as usize)];
-                if invert {
-                    255 - src
-                } else {
-                    src
-                }
+                if invert { 255 - src } else { src }
             });
             for grid in prepared.detect_grids() {
                 if let Ok((_, text)) = grid.decode() {

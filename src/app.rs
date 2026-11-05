@@ -768,12 +768,10 @@ impl PinSightApp {
                 });
             });
         match action {
-            Some(crate::qr::GenAction::Copy(img)) => {
-                match crate::clipboard::copy_image(&img) {
-                    Ok(()) => self.toast(t.copied, false),
-                    Err(err) => self.toast(format!("{}: {err}", t.clipboard_error), true),
-                }
-            }
+            Some(crate::qr::GenAction::Copy(img)) => match crate::clipboard::copy_image(&img) {
+                Ok(()) => self.toast(t.copied, false),
+                Err(err) => self.toast(format!("{}: {err}", t.clipboard_error), true),
+            },
             Some(crate::qr::GenAction::Save(img)) => {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter("PNG", &["png"])
@@ -5249,11 +5247,7 @@ impl PinSightApp {
             let mut rounded_on = self.config.decorations.rounded.is_some();
             ui::field_row(ui, p, t.deco_rounded, |ui| {
                 if ui::toggle(ui, p, &mut rounded_on).changed() {
-                    self.config.decorations.rounded = if rounded_on {
-                        Some(16)
-                    } else {
-                        None
-                    };
+                    self.config.decorations.rounded = if rounded_on { Some(16) } else { None };
                     let _ = self.config.save();
                 }
             });
@@ -5746,10 +5740,7 @@ impl PinSightApp {
                     .show_ui(ui, |ui| {
                         for code in ["zh-CN", "zh-TW", "en", "ja", "ko", "fr", "de", "ru", "es"] {
                             if ui
-                                .selectable_label(
-                                    self.config.translate.target == code,
-                                    code,
-                                )
+                                .selectable_label(self.config.translate.target == code, code)
                                 .clicked()
                             {
                                 self.config.translate.target = code.to_string();
