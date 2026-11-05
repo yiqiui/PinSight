@@ -3094,7 +3094,22 @@ impl PinSightApp {
         }
         // "Quit" from the tray means quit, even though closing the window any
         // other way would only hide it.
-        if self.quitting || !self.config.close_to_tray {
+        if self.quitting {
+            return;
+        }
+        // A modal dialog owns the window's close button: clicking the system X
+        // must dismiss only the dialog, not hide the whole app (and the
+        // settings page the user was on) into the tray.
+        if self.picker.is_some() || self.window_picker.is_some() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            if let Some(picker) = self.picker.take() {
+                self.config.custom_colors = picker.custom.clone();
+                let _ = self.config.save();
+            }
+            self.window_picker = None;
+            return;
+        }
+        if !self.config.close_to_tray {
             return;
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);

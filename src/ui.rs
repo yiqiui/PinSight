@@ -1063,11 +1063,18 @@ pub fn primary_button(ui: &mut Ui, palette: &Palette, text: &str) -> Response {
 
 /// A secondary (outline) button for less prominent actions.
 pub fn button(ui: &mut Ui, palette: &Palette, text: &str) -> Response {
+    button_sized(ui, palette, text, 0.0)
+}
+
+/// Same as [`button`], but at least `min_width` wide. Used in dialogs where a
+/// button should line up with the control column above it (e.g. the colour
+/// picker's swatch grid) instead of shrinking to its label.
+pub fn button_sized(ui: &mut Ui, palette: &Palette, text: &str, min_width: f32) -> Response {
     let font = egui::FontId::proportional(body_size(ui) * 0.95);
     let galley = ui
         .painter()
         .layout_no_wrap(text.to_owned(), font, palette.text);
-    let size = Vec2::new(galley.size().x + 24.0, 28.0);
+    let size = Vec2::new((galley.size().x + 24.0).max(min_width), 28.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     let stroke = if response.hovered() {

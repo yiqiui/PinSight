@@ -176,8 +176,8 @@ impl ColorPicker {
         let mut pos = if self.first {
             let screen = ctx.content_rect();
             Pos2::new(
-                screen.center().x - 260.0,
-                (screen.center().y - 230.0).max(screen.top() + 40.0),
+                screen.center().x - 274.0,
+                (screen.center().y - 220.0).max(screen.top() + 40.0),
             )
         } else {
             Pos2::ZERO
@@ -190,6 +190,24 @@ impl ColorPicker {
         }
         self.first = false;
 
+        // A modal dialog must not let clicks fall through to the settings page
+        // behind it. This scrim sits below the dialog but above the panels, so
+        // any click outside the dialog is absorbed instead of toggling a
+        // switch or opening another colour field.
+        let screen = ctx.content_rect();
+        egui::Area::new(egui::Id::new("pinsight-color-scrim"))
+            .order(egui::Order::Middle)
+            .fixed_pos(screen.min)
+            .show(ctx, |ui| {
+                let (rect, response) = ui.allocate_exact_size(screen.size(), Sense::click());
+                ui.painter().rect_filled(
+                    rect,
+                    0.0,
+                    Color32::from_black_alpha(if p.dark { 110 } else { 70 }),
+                );
+                let _ = response;
+            });
+
         let area = egui::Area::new(egui::Id::new("pinsight-color-picker"))
             .order(egui::Order::Foreground)
             .fixed_pos(pos)
@@ -200,7 +218,7 @@ impl ColorPicker {
                     .corner_radius(12)
                     .inner_margin(egui::Margin::same(14))
                     .show(ui, |ui| {
-                        ui.set_width(470.0);
+                        ui.set_width(520.0);
                         self.body(ui, p, t, &mut action, &mut open);
                     });
             });
@@ -223,10 +241,15 @@ impl ColorPicker {
         // ---- title bar ----------------------------------------------------
         ui.horizontal(|ui| {
             ui.label(
-                egui::RichText::new(format!("{} — {}", t.color_pick_title, self.target.label(t)))
+                egui::RichText::new(t.color_pick_title)
                     .size(14.0)
                     .strong()
                     .color(p.text),
+            );
+            ui.label(
+                egui::RichText::new(self.target.label(t))
+                    .size(11.5)
+                    .color(p.text_weak),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui::icon_button_enabled(ui, p, Icon::Close, false, t.key_cancel, true).clicked()
@@ -235,29 +258,52 @@ impl ColorPicker {
                 }
             });
         });
-        ui.add_space(10.0);
+        ui.add_space(12.0);
 
-        let preview = Color32::from_rgb(self.rgb()[0], self.rgb()[1], self.rgb()[2]);
+        let rgb = self.rgb();
+        let preview = Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
 
+        // ---- upper row: basic colours | gradient + hue --------------------
+        // This is the Windows "选择颜色" arrangement: a labelled 8-wide grid
+        // with its screen-picker button on the left, the large saturation/
+        // value square and vertical hue strip on the right.
         ui.horizontal_top(|ui| {
-            // ---- left: basic + custom swatches ---------------------------
             ui.vertical(|ui| {
                 ui.label(
                     egui::RichText::new(t.color_basic)
                         .size(11.5)
                         .color(p.text_weak),
                 );
-                ui.add_space(4.0);
-                if let Some(rgb) = self.swatch_grid(ui, p, &BASIC, 8) {
-                    self.set_rgb(rgb);
+                ui.add_space(5.0);
+                if let Some(picked) = self.swatch_grid(ui, p, &BASIC, 8) {
+                    self.set_rgb(picked);
                 }
-                ui.add_space(10.0);
+                ui.add_space(8.0);
+                if ui::button_sized(ui, p, t.color_pick_screen, 165.0).clicked() {
+                    *action = Some(PickerAction::PickScreen);
+                }
+            });
+
+            ui.add_space(14.0);
+
+            ui.horizontal(|ui| {
+                self.sv_field(ui, p);
+                ui.add_space(8.0);
+                self.hue_strip_vertical(ui, p);
+            });
+        });
+
+        ui.add_space(14.0);
+
+        // ---- lower row: custom colours | big preview | numbers -----------
+        ui.horizontal_top(|ui| {
+            ui.vertical(|ui| {
                 ui.label(
                     egui::RichText::new(t.color_custom)
                         .size(11.5)
                         .color(p.text_weak),
                 );
-                ui.add_space(4.0);
+                ui.add_space(5.0);
                 // Two rows of eight, empty slots drawn as white wells — that
                 // is what makes the dialog read as "custom colours" instead of
                 // "another palette".
@@ -267,8 +313,8 @@ impl ColorPicker {
                 if let Some(picked) = self.swatch_grid_indexed(ui, p, &slots, 8, before) {
                     self.set_rgb(picked);
                 }
-                ui.add_space(10.0);
-                if ui::link_button(ui, p, Icon::Check, t.color_add_custom).clicked() {
+                ui.add_space(8.0);
+                if ui::button_sized(ui, p, t.color_add_custom, 165.0).clicked() {
                     let rgb = self.rgb();
                     self.custom.retain(|c| *c != rgb);
                     self.custom.push(rgb);
@@ -278,22 +324,24 @@ impl ColorPicker {
                 }
             });
 
-            ui.add_space(16.0);
+            ui.add_space(12.0);
 
-            // ---- right: HSV field + vertical hue bar + numbers -----------
+            // Tall preview swatch, like the Windows dialog: the current colour
+            // reads at a glance instead of being a tiny chip in the footer.
+            let (rect, _) = ui.allocate_exact_size(Vec2::new(44.0, 132.0), Sense::hover());
+            ui.painter().rect_filled(rect, 5.0, preview);
+            ui.painter().rect_stroke(
+                rect,
+                5.0,
+                Stroke::new(1.0, p.stroke_strong),
+                StrokeKind::Inside,
+            );
+
+            ui.add_space(12.0);
+
             ui.vertical(|ui| {
-                ui.horizontal(|ui| {
-                    self.sv_field(ui, p);
-                    ui.add_space(8.0);
-                    // Windows places the hue strip vertically to the right of
-                    // the field, spanning the same height.
-                    self.hue_strip_vertical(ui, p);
-                });
-                ui.add_space(10.0);
-
-                // Numbers, Windows style but tightened: HSV and RGB(+alpha)
-                // sit side by side so the block stays short and fills the
-                // width instead of one skinny column drifting in whitespace.
+                // HSV and RGB/alpha side by side, so the number block is short
+                // and fills the space instead of one skinny column.
                 ui.horizontal_top(|ui| {
                     egui::Grid::new("pinsight-color-hsv")
                         .num_columns(2)
@@ -363,7 +411,7 @@ impl ColorPicker {
 
                 ui.add_space(8.0);
 
-                // HTML field on its own row, aligned with the fields above.
+                // HTML field spanning the number block.
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new(t.color_html)
@@ -372,7 +420,7 @@ impl ColorPicker {
                     );
                     let response = ui.add(
                         egui::TextEdit::singleline(&mut self.hex_draft)
-                            .desired_width(110.0)
+                            .desired_width(150.0)
                             .font(egui::TextStyle::Monospace),
                     );
                     if response.changed() {
@@ -387,42 +435,17 @@ impl ColorPicker {
             });
         });
 
-        ui.add_space(12.0);
+        ui.add_space(14.0);
 
         // ---- footer -------------------------------------------------------
-        ui.horizontal(|ui| {
-            // Live preview swatch with its hex value beside it: the colour as
-            // it will be applied, readable at a glance instead of a lonely
-            // small block drifting in the corner.
-            let (rect, _) = ui.allocate_exact_size(Vec2::new(46.0, 26.0), Sense::hover());
-            ui.painter().rect_filled(rect, 6.0, preview);
-            ui.painter().rect_stroke(
-                rect,
-                6.0,
-                Stroke::new(1.0, p.stroke_strong),
-                StrokeKind::Inside,
-            );
-            ui.add_space(6.0);
-            let rgb = self.rgb();
-            ui.label(
-                egui::RichText::new(format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]))
-                    .size(12.0)
-                    .monospace()
-                    .color(p.text_weak),
-            );
-            ui.add_space(6.0);
-            if ui::link_button(ui, p, Icon::Focus, t.color_pick_screen).clicked() {
-                *action = Some(PickerAction::PickScreen);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui::primary_button(ui, p, t.ok).clicked() {
+                *action = Some(PickerAction::Apply(preview));
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui::primary_button(ui, p, t.ok).clicked() {
-                    *action = Some(PickerAction::Apply(preview));
-                }
-                ui.add_space(6.0);
-                if ui::link_button(ui, p, Icon::Close, t.key_cancel).clicked() {
-                    *open = false;
-                }
-            });
+            ui.add_space(8.0);
+            if ui::button(ui, p, t.key_cancel).clicked() {
+                *open = false;
+            }
         });
     }
 
@@ -493,7 +516,7 @@ impl ColorPicker {
 
     /// Saturation/value square with the hue applied.
     fn sv_field(&mut self, ui: &mut egui::Ui, p: &Palette) {
-        let size = Vec2::new(240.0, 170.0);
+        let size = Vec2::new(280.0, 170.0);
         let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
         let response = response.on_hover_cursor(egui::CursorIcon::Crosshair);
         if response.dragged() || response.clicked() {
