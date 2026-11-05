@@ -194,29 +194,6 @@ pub struct CaptureSession {
     born_at: std::time::Instant,
     tr: &'static Strings,
     palette: Palette,
-    /// Floating chrome on the frozen screen (toolbar, size label, OCR panel,
-    /// hint pills). The overlay is always dimmed, so these use one dark glass
-    /// palette regardless of the app's light/dark setting — a white card from
-    /// a light theme reads as a pasted-on strip and breaks the whole overlay.
-    glass: Palette,
-}
-
-/// Derive the dark glass palette from the session palette, keeping its accent
-/// so the selection, tool highlight and primary action stay the same colour.
-fn overlay_glass(p: Palette) -> Palette {
-    use egui::Color32;
-    let mut g = p;
-    g.dark = true;
-    g.card = Color32::from_rgba_unmultiplied(0x1C, 0x22, 0x2C, 242);
-    g.card_hover = Color32::from_rgba_unmultiplied(0x2D, 0x36, 0x44, 250);
-    g.rail = Color32::from_rgba_unmultiplied(0x16, 0x1B, 0x24, 236);
-    g.bg = Color32::from_rgba_unmultiplied(0x14, 0x19, 0x21, 226);
-    g.stroke = Color32::from_white_alpha(28);
-    g.stroke_strong = Color32::from_white_alpha(58);
-    g.text = Color32::from_rgb(0xEE, 0xF1, 0xF6);
-    g.text_weak = Color32::from_rgb(0xA6, 0xB0, 0xC0);
-    g.accent_soft = crate::theme::with_alpha(p.accent, 55);
-    g
 }
 
 impl CaptureSession {
@@ -258,7 +235,6 @@ impl CaptureSession {
             born_at: std::time::Instant::now(),
             tr,
             palette,
-            glass: overlay_glass(palette),
         }
     }
 
@@ -451,7 +427,7 @@ impl CaptureSession {
             if self.prefs.anchors {
                 self.paint_handles(ui, sel_screen);
             }
-            paint_size_label(ui, &self.glass, sel, sel_screen);
+            paint_size_label(ui, &self.palette, sel, sel_screen);
         }
 
         // Annotations.
@@ -651,7 +627,7 @@ impl CaptureSession {
     fn show_text_editor(&mut self, ui: &mut egui::Ui, screen: egui::Rect, scale: f32) {
         let hint = self.tr.ov_text_hint;
         let paste_label = self.tr.ov_paste;
-        let palette = self.glass;
+        let palette = self.palette;
         let font = egui::FontId::proportional((self.text_size() * scale).clamp(14.0, 40.0));
         let Some(draft) = self.editing.as_mut() else {
             return;
@@ -1276,7 +1252,7 @@ impl CaptureSession {
         // Edge midpoints stay small square handles.
         for point in edge_points {
             let r = egui::Rect::from_center_size(point, egui::vec2(7.5, 7.5));
-            ui.painter().rect_filled(r, 1.5, self.glass.card);
+            ui.painter().rect_filled(r, 1.5, self.palette.card);
             ui.painter().rect_stroke(
                 r,
                 1.5,
@@ -1320,8 +1296,9 @@ impl CaptureSession {
             (screen.right() - area_size.x - 8.0).max(screen.left() + 8.0),
         );
 
-        // Follow the overlay glass palette, not the app theme.
-        let p = self.glass;
+        // Follow the session theme so the floating chrome matches the app
+        // (light card in light mode, dark in dark) instead of a fixed colour.
+        let p = self.palette;
         let t = self.tr;
         let mut action = None;
 
@@ -1330,9 +1307,8 @@ impl CaptureSession {
             .fixed_pos(pos)
             .show(ui.ctx(), |ui| {
                 egui::Frame::NONE
-                    // Dark glass regardless of the app theme: the frozen screen
-                    // behind is always dimmed, so a light-theme white card read
-                    // as a pasted-on strip that did not belong to the overlay.
+                    // Follow the session theme: the toolbar card is light in
+                    // light mode and dark in dark, matching the rest of the app.
                     .fill(p.card)
                     .stroke(egui::Stroke::new(1.0, p.stroke))
                     .corner_radius(14)
@@ -1384,21 +1360,13 @@ impl CaptureSession {
 
                             vertical_separator(ui, &p);
 
-                            // Slider inherits the app's visuals, which clash
-                            // with the dark glass; override just this widget.
-                            ui.scope(|ui| {
-                                let v = ui.visuals_mut();
-                                v.widgets.inactive.bg_fill = egui::Color32::from_white_alpha(38);
-                                v.widgets.hovered.bg_fill = egui::Color32::from_white_alpha(64);
-                                v.widgets.active.bg_fill = p.accent;
-                                v.selection.bg_fill = p.accent;
-                                ui.add_sized(
-                                    egui::vec2(64.0, 20.0),
-                                    egui::Slider::new(&mut self.width, 1.0..=14.0)
-                                        .show_value(false),
-                                )
-                            })
-                            .inner
+                            // The slider follows the session theme like every
+                            // other control on the bar; fixed sizing keeps the
+                            // row compact.
+                            ui.add_sized(
+                                egui::vec2(64.0, 20.0),
+                                egui::Slider::new(&mut self.width, 1.0..=14.0).show_value(false),
+                            )
                             .on_hover_text(t.ov_width);
                             ui.label(
                                 egui::RichText::new((self.width.round() as u8).to_string())
@@ -1646,7 +1614,7 @@ impl CaptureSession {
         if !self.ocr_open {
             return;
         }
-        let p = self.glass;
+        let p = self.palette;
         let t = self.tr;
         let width = 320.0_f32;
         let anchor = match self.ocr_rect {
@@ -1839,9 +1807,9 @@ fn pill_button(
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     let hovered = response.hovered();
 
-    // On the dark overlay glass, secondary actions read better as a faint
-    // translucent wash than as an opaque card: a light-theme `p.card` here
-    // used to paint bright white pills that clashed with the dimmed screen.
+    // The floating chrome now follows the session theme, so secondary actions
+    // use the theme card (light in light mode, dark in dark) with theme text and
+    // border — not a fixed translucent white wash that only worked on dark.
     let (fill, stroke, text) = if primary {
         (
             if hovered {
@@ -1849,17 +1817,20 @@ fn pill_button(
             } else {
                 p.accent
             },
-            egui::Stroke::new(1.0, egui::Color32::from_white_alpha(40)),
+            egui::Stroke::new(
+                1.0,
+                if p.dark {
+                    egui::Color32::from_white_alpha(40)
+                } else {
+                    p.stroke
+                },
+            ),
             p.on_accent,
         )
     } else {
         (
-            if hovered {
-                egui::Color32::from_white_alpha(34)
-            } else {
-                egui::Color32::from_white_alpha(14)
-            },
-            egui::Stroke::new(1.0, egui::Color32::from_white_alpha(26)),
+            if hovered { p.card_hover } else { p.card },
+            egui::Stroke::new(1.0, p.stroke),
             p.text,
         )
     };
@@ -1935,16 +1906,16 @@ impl CaptureSession {
         let galley = ui.painter().layout_no_wrap(
             text.to_owned(),
             egui::FontId::proportional(12.5),
-            self.glass.text,
+            self.palette.text,
         );
         let size = galley.size() + egui::vec2(22.0, 10.0);
         let rect =
             egui::Rect::from_center_size(egui::pos2(screen.center().x, screen.top() + 26.0), size);
-        ui.painter().rect_filled(rect, 9.0, self.glass.card);
+        ui.painter().rect_filled(rect, 9.0, self.palette.card);
         ui.painter().rect_stroke(
             rect,
             9.0,
-            egui::Stroke::new(1.0, self.glass.stroke_strong),
+            egui::Stroke::new(1.0, self.palette.stroke_strong),
             egui::StrokeKind::Inside,
         );
         ui.painter().galley(
@@ -1953,7 +1924,7 @@ impl CaptureSession {
                 rect.center().y - galley.size().y * 0.5,
             ),
             galley,
-            self.glass.text,
+            self.palette.text,
         );
 
         let response = ui.interact(
