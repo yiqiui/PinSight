@@ -1648,6 +1648,7 @@ impl PinSightApp {
                 Action::SaveLast => self.save_last(),
                 Action::TogglePins => self.toggle_all_pins(),
                 Action::RepeatCapture => self.repeat_capture(RepeatAction::Copy, ctx),
+                Action::PickColor => self.begin_area(Intent::PickColor, ctx),
                 Action::ToggleGroup(id) => self.toggle_group(id),
             }
             ctx.request_repaint();
@@ -6845,8 +6846,9 @@ impl PinSightApp {
                 self.hotkeys.failure_for(Action::SaveLast),
                 self.hotkeys.failure_for(Action::TogglePins),
                 self.hotkeys.failure_for(Action::RepeatCapture),
+                self.hotkeys.failure_for(Action::PickColor),
             ];
-            let fields: [(&mut String, &str); 8] = [
+            let fields: [(&mut String, &str); 9] = [
                 (&mut self.hotkey_draft.capture_area, t.hk_capture_area),
                 (&mut self.hotkey_draft.capture_full, t.hk_capture_full),
                 (&mut self.hotkey_draft.pin_clipboard, t.hk_pin_clipboard),
@@ -6855,6 +6857,7 @@ impl PinSightApp {
                 (&mut self.hotkey_draft.save_last, t.hk_save_last),
                 (&mut self.hotkey_draft.toggle_pins, t.hk_toggle_pins),
                 (&mut self.hotkey_draft.repeat_capture, t.hk_repeat_capture),
+                (&mut self.hotkey_draft.pick_color, t.hk_pick_color),
             ];
 
             for (i, (value, label)) in fields.into_iter().enumerate() {
@@ -7035,7 +7038,11 @@ impl PinSightApp {
                     2 => &mut self.hotkey_draft.pin_clipboard,
                     3 => &mut self.hotkey_draft.long_capture,
                     4 => &mut self.hotkey_draft.record,
-                    _ => &mut self.hotkey_draft.save_last,
+                    5 => &mut self.hotkey_draft.save_last,
+                    6 => &mut self.hotkey_draft.toggle_pins,
+                    7 => &mut self.hotkey_draft.repeat_capture,
+                    8 => &mut self.hotkey_draft.pick_color,
+                    _ => &mut self.hotkey_draft.capture_area,
                 };
                 *field = text;
                 // Apply straight away: recording a key and then hunting for an

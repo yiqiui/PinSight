@@ -341,6 +341,7 @@ strings! {
     hk_save_last { en: "Save last", zh: "保存最近", tw: "儲存最近", ja: "直前を保存", ko: "최근 저장", fr: "Enregistrer la dernière", de: "Letzte sichern" }
     hk_toggle_pins { en: "Show / hide pins", zh: "显示 / 隐藏贴图", tw: "顯示 / 隱藏貼圖", ja: "ピン表示切替", ko: "핀 표시 전환", fr: "Afficher / masquer les épingles", de: "Pins ein-/ausblenden" }
     hk_repeat_capture { en: "Repeat last area", zh: "重复上次区域", tw: "重複上次區域", ja: "前回の範囲を再取得", ko: "마지막 영역 반복", fr: "Répéter la dernière zone", de: "Letzten Bereich wiederholen" }
+    hk_pick_color { en: "Colour picker", zh: "取色", tw: "取色", ja: "カラー選択", ko: "색상 추출", fr: "Pipette de couleur", de: "Farbpipette" }
     hk_group_hotkey { en: "Group hotkey", zh: "分组热键", tw: "分組熱鍵", ja: "グループ ホットキー", ko: "그룹 단축키", fr: "Raccourci du groupe", de: "Gruppen-Kürzel" }
     tray_repeat_last { en: "Repeat last area", zh: "重复上次区域", tw: "重複上次區域", ja: "前回の範囲を再取得", ko: "마지막 영역 반복", fr: "Répéter la dernière zone", de: "Letzten Bereich wiederholen" }
     tray_repeat_copy { en: "Copy", zh: "复制", tw: "複製", ja: "コピー", ko: "복사", fr: "Copier", de: "Kopieren" }

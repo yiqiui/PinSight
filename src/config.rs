@@ -736,6 +736,13 @@ pub struct Hotkeys {
     /// Re-grab the last selection straight to the clipboard.
     #[serde(default = "default_repeat_capture_hotkey")]
     pub repeat_capture: String,
+    /// Open the screen colour picker (Snipaste-style eyedropper).
+    #[serde(default = "default_pick_color_hotkey")]
+    pub pick_color: String,
+}
+
+fn default_pick_color_hotkey() -> String {
+    "Ctrl+Shift+K".into()
 }
 
 fn default_repeat_capture_hotkey() -> String {
@@ -759,6 +766,7 @@ impl Hotkeys {
             Action::SaveLast => &self.save_last,
             Action::TogglePins => &self.toggle_pins,
             Action::RepeatCapture => &self.repeat_capture,
+            Action::PickColor => &self.pick_color,
             // Group hotkeys live on the groups, not here; the status readout
             // never needs their text.
             Action::ToggleGroup(_) => "",
@@ -766,7 +774,7 @@ impl Hotkeys {
     }
 
     /// Every binding in settings-row order, for conflict checks.
-    pub fn all(&self) -> [&str; 8] {
+    pub fn all(&self) -> [&str; 9] {
         [
             &self.capture_area,
             &self.capture_full,
@@ -776,6 +784,7 @@ impl Hotkeys {
             &self.save_last,
             &self.toggle_pins,
             &self.repeat_capture,
+            &self.pick_color,
         ]
     }
 }
@@ -909,6 +918,7 @@ impl Default for Hotkeys {
             save_last: "Ctrl+Shift+S".into(),
             toggle_pins: default_toggle_pins_hotkey(),
             repeat_capture: default_repeat_capture_hotkey(),
+            pick_color: default_pick_color_hotkey(),
         }
     }
 }
