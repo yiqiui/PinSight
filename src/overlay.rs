@@ -279,10 +279,13 @@ impl CaptureSession {
         let screen = ui.max_rect();
         ui.painter().rect_filled(screen, 0.0, egui::Color32::BLACK);
 
-        let texture_id = self.texture.as_ref().expect("texture created").id();
+        // If the texture failed to upload (e.g. a GPU/context hiccup) do not
+        // panic — the dimmed backdrop is already drawn, so we simply skip the
+        // screenshot and let the rest of the UI keep working.
         let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-        ui.painter()
-            .image(texture_id, screen, uv, egui::Color32::WHITE);
+        if let Some(tid) = self.texture.as_ref().map(|t| t.id()) {
+            ui.painter().image(tid, screen, uv, egui::Color32::WHITE);
+        }
 
         let (image_w, image_h) = (self.image.width() as f32, self.image.height() as f32);
         let scale = if image_w > 0.0 {
@@ -412,12 +415,14 @@ impl CaptureSession {
         }
         if let Some(sel) = self.selection {
             let sel_screen = image_to_screen(sel, screen, scale);
-            ui.painter().with_clip_rect(sel_screen).image(
-                texture_id,
-                screen,
-                uv,
-                egui::Color32::WHITE,
-            );
+            if let Some(tid) = self.texture.as_ref().map(|t| t.id()) {
+                ui.painter().with_clip_rect(sel_screen).image(
+                    tid,
+                    screen,
+                    uv,
+                    egui::Color32::WHITE,
+                );
+            }
             ui.painter().rect_stroke(
                 sel_screen,
                 0.0,

@@ -207,7 +207,8 @@ pub fn start(monitor_id: u32, region: ImgRect, options: LongShotOptions) -> Long
     STOP_HIT.store(false, Ordering::Relaxed);
     #[cfg(windows)]
     spawn_esc_watcher(stop.clone(), done.clone());
-    std::thread::Builder::new()
+    let fail_tx = tx.clone();
+    let spawn_res = std::thread::Builder::new()
         .name("pinsight-longshot".into())
         .spawn(move || {
             let result = run(monitor_id, region, options, &tx, &stop_thread);
@@ -216,8 +217,12 @@ pub fn start(monitor_id: u32, region: ImgRect, options: LongShotOptions) -> Long
             if let Err(err) = result {
                 let _ = tx.send(LongShotUpdate::Failed(err));
             }
-        })
-        .expect("spawn long screenshot thread");
+        });
+    if let Err(err) = spawn_res {
+        let _ = fail_tx.send(LongShotUpdate::Failed(format!(
+            "could not start capture thread: {err}"
+        )));
+    }
 
     LongShotJob {
         stop,
@@ -1210,11 +1215,14 @@ impl Stitch {
         let start = self.h.saturating_sub(rows) as usize * row_bytes;
         let data = self.data.split_off(start);
         self.h -= rows;
-        RgbaImage::from_raw(self.w, rows, data).expect("tail rows are a whole image")
+        // `from_raw` only fails if the buffer length is wrong; guard it so a
+        // math slip degrades to an empty strip instead of panicking mid-stitch.
+        RgbaImage::from_raw(self.w, rows, data).unwrap_or_else(|| RgbaImage::new(self.w, 0))
     }
 
     fn into_image(self) -> RgbaImage {
-        RgbaImage::from_raw(self.w, self.h, self.data).expect("stitch buffer is a whole image")
+        RgbaImage::from_raw(self.w, self.h, self.data)
+            .unwrap_or_else(|| RgbaImage::new(self.w, self.h))
     }
 }
 

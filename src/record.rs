@@ -251,7 +251,8 @@ pub fn start(
     };
 
     let countdown = record_options.countdown.clamp(0, 10);
-    std::thread::Builder::new()
+    let fail_tx = tx.clone();
+    let spawn_res = std::thread::Builder::new()
         .name("pinsight-recorder".into())
         .spawn(move || {
             if let Err(err) = run(
@@ -267,8 +268,12 @@ pub fn start(
             ) {
                 let _ = tx.send(RecordUpdate::Failed(err));
             }
-        })
-        .expect("spawn recorder thread");
+        });
+    if let Err(err) = spawn_res {
+        let _ = fail_tx.send(RecordUpdate::Failed(format!(
+            "could not start recorder thread: {err}"
+        )));
+    }
 
     RecordJob {
         stop,

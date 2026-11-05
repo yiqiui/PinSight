@@ -87,10 +87,12 @@ pub enum UiCommand {
 pub fn start(ui_tx: Sender<UiCommand>, save_dir: PathBuf) -> McpHandle {
     let requests = Arc::new(AtomicUsize::new(0));
     let counter = requests.clone();
-    std::thread::Builder::new()
+    let handle = std::thread::Builder::new()
         .name("pinsight-mcp".into())
-        .spawn(move || serve_stdio(ui_tx, save_dir, counter))
-        .expect("spawn MCP thread");
+        .spawn(move || serve_stdio(ui_tx, save_dir, counter));
+    if let Err(err) = handle {
+        tracing::error!(%err, "could not spawn MCP thread");
+    }
     McpHandle { requests }
 }
 

@@ -93,8 +93,12 @@ fn pill_window(
         .corner_radius(16)
         .inner_margin(egui::Margin::symmetric(14, 8));
     ctx.show_viewport_immediate(egui::ViewportId::from_hash_of(id), builder, |ui, _| {
-        let add = body.take().expect("viewport body called once");
-        egui::CentralPanel::default().frame(frame).show(ui, add);
+        // `show_viewport_immediate` may invoke the body more than once across
+        // frames; the one-shot closure is taken on first call and the rest are
+        // no-ops, rather than panicking on a second `take()`.
+        if let Some(add) = body.take() {
+            egui::CentralPanel::default().frame(frame).show(ui, add);
+        }
     });
 }
 
