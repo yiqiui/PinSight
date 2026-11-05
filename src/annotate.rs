@@ -22,10 +22,12 @@ pub enum Tool {
     Text,
     /// Measure a distance and angle: a line with a length/angle label.
     Measure,
+    /// Freeform (lasso) selection: drag to draw an arbitrary region.
+    Lasso,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 11] = [
+    pub const ALL: [Tool; 12] = [
         Tool::Select,
         Tool::Rect,
         Tool::Ellipse,
@@ -37,6 +39,7 @@ impl Tool {
         Tool::Numbered,
         Tool::Text,
         Tool::Measure,
+        Tool::Lasso,
     ];
 
     pub fn shortcut(self) -> &'static str {
@@ -52,6 +55,7 @@ impl Tool {
             Tool::Numbered => "N",
             Tool::Text => "T",
             Tool::Measure => "G",
+            Tool::Lasso => "F",
         }
     }
 }

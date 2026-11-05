@@ -60,6 +60,7 @@ pub enum Icon {
     Film,
     Ruler,
     Qr,
+    Lasso,
 }
 
 /// Paint an icon inside `rect` (a square-ish box) using a 24×24 design grid.
@@ -467,6 +468,25 @@ pub fn paint_icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color3
             line((17.0, 14.0), (21.0, 14.0));
             line((12.0, 17.0), (14.0, 17.0));
             line((15.0, 20.0), (21.0, 20.0));
+        }
+        Icon::Lasso => {
+            // A rope loop with a trailing tail, like a cowboy's lasso.
+            path(
+                &[
+                    (7.0, 6.5),
+                    (11.0, 4.5),
+                    (16.0, 5.5),
+                    (18.5, 9.0),
+                    (17.0, 13.0),
+                    (12.5, 15.0),
+                    (8.5, 13.5),
+                    (6.5, 10.0),
+                    (7.0, 6.5),
+                ],
+                false,
+            );
+            line((7.0, 13.5), (5.0, 19.0));
+            line((5.0, 19.0), (7.5, 18.0));
         }
         Icon::Ocr => {
             // Scan frame with three text lines: the classic "recognise the

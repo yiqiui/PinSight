@@ -92,6 +92,9 @@ enum DragMode {
     Draw {
         start: egui::Pos2,
     },
+    /// Freeform (lasso) selection: the path lives in
+    /// [`CaptureSession::lasso`], the bounding box in `selection`.
+    Lasso,
 }
 
 /// A text annotation being typed: anchor point plus the live buffer.
@@ -205,6 +208,10 @@ pub struct CaptureSession {
     /// Live translation job for the OCR panel plus its settled result.
     ocr_tr_rx: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
     ocr_translation: Option<Result<String, String>>,
+    /// Freeform selection path in image coordinates. `Some` while a lasso
+    /// gesture runs and kept afterwards so the outline shows and the final
+    /// crop is masked to the polygon.
+    lasso: Option<Vec<egui::Pos2>>,
     /// Creation instant, for the wing-unfold entrance of the dim mask.
     born_at: std::time::Instant,
     tr: &'static Strings,
@@ -253,6 +260,7 @@ impl CaptureSession {
             qr_open: false,
             ocr_tr_rx: None,
             ocr_translation: None,
+            lasso: None,
             born_at: std::time::Instant::now(),
             tr,
             palette,
@@ -446,12 +454,36 @@ impl CaptureSession {
                     egui::Color32::WHITE,
                 );
             }
-            ui.painter().rect_stroke(
-                sel_screen,
-                0.0,
-                egui::Stroke::new(self.prefs.border_width, self.palette.accent),
-                egui::StrokeKind::Outside,
-            );
+            // A lasso draws its own path outline; a plain rect keeps the
+            // border stroke.
+            if let Some(pts) = &self.lasso {
+                if pts.len() >= 2 {
+                    let mut screen_pts: Vec<egui::Pos2> = pts
+                        .iter()
+                        .map(|p| {
+                            egui::pos2(screen.min.x + p.x * scale, screen.min.y + p.y * scale)
+                        })
+                        .collect();
+                    // Close the loop so the region reads as one shape.
+                    if pts.len() >= 3 {
+                        screen_pts.push(screen_pts[0]);
+                    }
+                    ui.painter().add(egui::Shape::line(
+                        screen_pts,
+                        egui::Stroke::new(
+                            self.prefs.border_width.max(1.5),
+                            self.palette.accent,
+                        ),
+                    ));
+                }
+            } else {
+                ui.painter().rect_stroke(
+                    sel_screen,
+                    0.0,
+                    egui::Stroke::new(self.prefs.border_width, self.palette.accent),
+                    egui::StrokeKind::Outside,
+                );
+            }
             if self.prefs.anchors {
                 self.paint_handles(ui, sel_screen);
             }
@@ -905,6 +937,7 @@ impl CaptureSession {
             (&keys.tool_numbered, Tool::Numbered),
             (&keys.tool_text, Tool::Text),
             (&keys.tool_measure, Tool::Measure),
+            (&keys.tool_lasso, Tool::Lasso),
         ] {
             if Self::bound(ui, binding) {
                 self.tool = tool;
@@ -955,6 +988,17 @@ impl CaptureSession {
     }
 
     fn begin_drag(&mut self, img: egui::Pos2) {
+        // Freeform always starts a brand-new lasso, inside or outside any
+        // existing selection.
+        if self.tool == Tool::Lasso {
+            self.drag = Some(DragMode::Lasso);
+            self.lasso = Some(vec![img]);
+            self.selection = Some(ImgRect::from_points(img, img));
+            self.annotations.clear();
+            self.history.clear();
+            self.active = None;
+            return;
+        }
         if let Some(sel) = self.selection {
             if self.tool == Tool::Select {
                 if let Some(handle) = hit_handle(sel, img, self.image.width(), 10.0) {
@@ -984,6 +1028,7 @@ impl CaptureSession {
         self.drag = Some(DragMode::NewSelection { anchor: img });
         self.selection = Some(ImgRect::from_points(img, img));
         self.annotations.clear();
+        self.lasso = None;
         // A fresh selection invalidates everything drawn before it.
         self.history.clear();
         self.active = None;
@@ -993,6 +1038,31 @@ impl CaptureSession {
         match self.drag {
             Some(DragMode::NewSelection { anchor }) => {
                 self.selection = Some(ImgRect::from_points(anchor, img));
+            }
+            Some(DragMode::Lasso) => {
+                if let Some(pts) = &mut self.lasso {
+                    if pts.last().is_none_or(|last| last.distance(img) >= 1.5) {
+                        pts.push(img);
+                        // Track the bounding box so the toolbar, handles and
+                        // size label keep working on a freeform region.
+                        let xs = pts.iter().map(|p| p.x);
+                        let ys = pts.iter().map(|p| p.y);
+                        let (min_x, max_x) = (
+                            xs.clone().fold(img.x, f32::min),
+                            xs.fold(img.x, f32::max),
+                        );
+                        let (min_y, max_y) = (
+                            ys.clone().fold(img.y, f32::min),
+                            ys.fold(img.y, f32::max),
+                        );
+                        self.selection = Some(ImgRect::from_min_size(
+                            min_x,
+                            min_y,
+                            (max_x - min_x).max(1.0),
+                            (max_y - min_y).max(1.0),
+                        ));
+                    }
+                }
             }
             Some(DragMode::Move {
                 original,
@@ -1011,6 +1081,12 @@ impl CaptureSession {
                 if let Some(active) = &mut self.active {
                     active.translate(step);
                 }
+                // The lasso path rides along with the selection.
+                if let Some(pts) = &mut self.lasso {
+                    for p in pts.iter_mut() {
+                        *p += step;
+                    }
+                }
                 self.selection = Some(moved);
                 self.drag = Some(DragMode::Move {
                     original,
@@ -1019,6 +1095,9 @@ impl CaptureSession {
                 });
             }
             Some(DragMode::Resize { handle, original }) => {
+                // Scaling a freeform path is not supported: a resize degrades
+                // the region back to a plain rectangle.
+                self.lasso = None;
                 let mut r = original;
                 match handle {
                     Handle::N => {
@@ -1093,6 +1172,18 @@ impl CaptureSession {
                     }
                 }
             }
+            Some(DragMode::Lasso) => {
+                // A path with fewer than three points (or a box under the
+                // minimum) is a stray click: throw the lasso away.
+                let too_small = match (&self.lasso, self.selection) {
+                    (Some(pts), Some(sel)) => pts.len() < 3 || sel.w < 4.0 || sel.h < 4.0,
+                    _ => true,
+                };
+                if too_small {
+                    self.lasso = None;
+                    self.selection = None;
+                }
+            }
             Some(DragMode::Draw { .. }) => {
                 if let Some(annotation) = self.active.take() {
                     if annotation_is_visible(&annotation) {
@@ -1163,6 +1254,14 @@ impl CaptureSession {
             Tool::Measure => Annotation::Measure {
                 from: start,
                 to: end,
+                color: self.color,
+                width: self.width,
+            },
+            // Unreachable in practice: the lasso intercepts its drags in
+            // `begin_drag` and never builds an annotation. A rect keeps the
+            // match exhaustive without a panic path.
+            Tool::Lasso => Annotation::Rect {
+                rect,
                 color: self.color,
                 width: self.width,
             },
@@ -1588,7 +1687,14 @@ impl CaptureSession {
             };
         }
 
-        let image = annotate::rasterize(&self.image, crop, &self.annotations);
+        let mut image = annotate::rasterize(&self.image, crop, &self.annotations);
+        // Freeform selection: everything outside the polygon becomes
+        // transparent, annotations included.
+        if let Some(pts) = &self.lasso {
+            if pts.len() >= 3 {
+                apply_lasso_mask(&mut image, pts, crop.x, crop.y);
+            }
+        }
         OverlayOutcome::Image { action, image }
     }
 
@@ -2015,6 +2121,7 @@ fn tool_label(tool: Tool, t: &Strings) -> &'static str {
         Tool::Numbered => t.tool_numbered,
         Tool::Text => t.tool_text,
         Tool::Measure => t.tool_measure,
+        Tool::Lasso => t.tool_lasso,
     }
 }
 
@@ -2031,6 +2138,7 @@ fn tool_icon(tool: Tool) -> Icon {
         Tool::Numbered => Icon::Numbered,
         Tool::Text => Icon::Type,
         Tool::Measure => Icon::Ruler,
+        Tool::Lasso => Icon::Lasso,
     }
 }
 
@@ -2415,6 +2523,35 @@ fn image_to_screen(rect: ImgRect, screen: egui::Rect, scale: f32) -> egui::Rect 
     )
 }
 
+/// Even-odd point-in-polygon test (ray casting to the right).
+fn point_in_polygon(pts: &[egui::Pos2], x: f32, y: f32) -> bool {
+    let mut inside = false;
+    let n = pts.len();
+    let mut j = n - 1;
+    for i in 0..n {
+        let (xi, yi) = (pts[i].x, pts[i].y);
+        let (xj, yj) = (pts[j].x, pts[j].y);
+        if (yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+/// Clear every pixel of `img` that falls outside the lasso polygon. `ox`/`oy`
+/// is the crop's origin in image coordinates: the polygon lives in the full
+/// screenshot's space, `img` in the crop's.
+fn apply_lasso_mask(img: &mut RgbaImage, pts: &[egui::Pos2], ox: f32, oy: f32) {
+    for y in 0..img.height() {
+        for x in 0..img.width() {
+            if !point_in_polygon(pts, x as f32 + 0.5 + ox, y as f32 + 0.5 + oy) {
+                img.put_pixel(x, y, image::Rgba([0, 0, 0, 0]));
+            }
+        }
+    }
+}
+
 fn paint_size_label(ui: &egui::Ui, p: &Palette, sel: ImgRect, sel_screen: egui::Rect) {
     let text = format!("{} × {}", sel.w.round() as u32, sel.h.round() as u32);
     let galley = ui
@@ -2464,5 +2601,62 @@ fn annotation_is_visible(annotation: &Annotation) -> bool {
         // Drags with the text tool only open the editor, so an empty buffer
         // must never survive.
         Annotation::Text { text, .. } => !text.trim().is_empty(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn point_in_polygon_even_odd() {
+        // Unit square.
+        let square = [
+            egui::pos2(0.0, 0.0),
+            egui::pos2(10.0, 0.0),
+            egui::pos2(10.0, 10.0),
+            egui::pos2(0.0, 10.0),
+        ];
+        assert!(point_in_polygon(&square, 5.0, 5.0));
+        assert!(point_in_polygon(&square, 0.1, 9.9));
+        assert!(!point_in_polygon(&square, 15.0, 5.0));
+        assert!(!point_in_polygon(&square, -1.0, 5.0));
+        // L-shape: full band y<4 plus the right column x>6. The notch
+        // (bottom-left) is outside even though the bbox covers it.
+        let notched = [
+            egui::pos2(0.0, 0.0),
+            egui::pos2(10.0, 0.0),
+            egui::pos2(10.0, 10.0),
+            egui::pos2(6.0, 10.0),
+            egui::pos2(6.0, 4.0),
+            egui::pos2(0.0, 4.0),
+        ];
+        assert!(point_in_polygon(&notched, 2.0, 2.0));
+        assert!(point_in_polygon(&notched, 8.0, 8.0));
+        assert!(!point_in_polygon(&notched, 2.0, 8.0));
+    }
+
+    #[test]
+    fn lasso_mask_clears_outside_keeps_inside() {
+        let mut img = RgbaImage::from_pixel(10, 10, image::Rgba([9, 9, 9, 255]));
+        // A polygon covering the left half (x < 5).
+        let half = [
+            egui::pos2(0.0, 0.0),
+            egui::pos2(5.0, 0.0),
+            egui::pos2(5.0, 10.0),
+            egui::pos2(0.0, 10.0),
+        ];
+        apply_lasso_mask(&mut img, &half, 0.0, 0.0);
+        // Inside stays opaque.
+        assert_eq!(img.get_pixel(2, 5).0, [9, 9, 9, 255]);
+        // Outside is transparent.
+        assert_eq!(img.get_pixel(7, 5).0, [0, 0, 0, 0]);
+        // Offset crop: polygon coordinates are in the full image's space.
+        let mut cropped = RgbaImage::from_pixel(4, 4, image::Rgba([9, 9, 9, 255]));
+        apply_lasso_mask(&mut cropped, &half, 4.0, 3.0);
+        // Crop pixel (0,0) is image (4,3): inside the half-plane.
+        assert_eq!(cropped.get_pixel(0, 0).0, [9, 9, 9, 255]);
+        // Crop pixel (1,1) is image (5,4): on the boundary -> outside.
+        assert_eq!(cropped.get_pixel(1, 1).0, [0, 0, 0, 0]);
     }
 }
