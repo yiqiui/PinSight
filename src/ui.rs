@@ -58,6 +58,7 @@ pub enum Icon {
     EyeOff,
     /// Filmstrip, for the GIF editor.
     Film,
+    Ruler,
 }
 
 /// Paint an icon inside `rect` (a square-ish box) using a 24×24 design grid.
@@ -445,6 +446,13 @@ pub fn paint_icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color3
                 line((4.0, y), (5.6, y));
                 line((18.4, y), (20.0, y));
             }
+        }
+        Icon::Ruler => {
+            // A tilted ruler bar with a few graduation ticks.
+            path(&[(3.0, 12.0), (12.0, 3.0), (20.0, 7.0), (11.0, 16.0)], true);
+            line((6.0, 11.0), (10.0, 7.0));
+            line((9.5, 13.0), (13.5, 9.0));
+            line((13.0, 15.0), (17.0, 11.0));
         }
         Icon::Ocr => {
             // Scan frame with three text lines: the classic "recognise the

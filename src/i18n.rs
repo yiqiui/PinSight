@@ -816,6 +816,7 @@ strings! {
     tool_mosaic { en: "Mosaic", zh: "马赛克", tw: "馬賽克", ja: "モザイク", ko: "모자이크", fr: "Mosaïque", de: "Mosaik" }
     tool_numbered { en: "Numbered", zh: "序号标注", tw: "序號標註", ja: "連番", ko: "번호 표시", fr: "Numérotation", de: "Nummerierung" }
     tool_text { en: "Text", zh: "文字", tw: "文字", ja: "テキスト", ko: "텍스트", fr: "Texte", de: "Text" }
+    tool_measure { en: "Measure", zh: "标尺", tw: "標尺", ja: "測定", ko: "측정", fr: "Mesure", de: "Messung" }
     ov_text_hint { en: "Type, Enter to place", zh: "输入文字，回车放置", tw: "輸入文字，Enter 放置", ja: "入力して Enter で確定", ko: "입력 후 Enter로 배치", fr: "Tapez, Entrée pour valider", de: "Tippen, Enter zum Bestätigen" }
     ov_paste { en: "Paste", zh: "粘贴", tw: "貼上", ja: "貼り付け", ko: "붙여넣기", fr: "Coller", de: "Einfügen" }
     ov_clear { en: "Clear", zh: "清空", tw: "清空", ja: "クリア", ko: "지우기", fr: "Effacer", de: "Leeren" }

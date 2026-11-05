@@ -879,6 +879,7 @@ impl CaptureSession {
             (&keys.tool_mosaic, Tool::Mosaic),
             (&keys.tool_numbered, Tool::Numbered),
             (&keys.tool_text, Tool::Text),
+            (&keys.tool_measure, Tool::Measure),
         ] {
             if Self::bound(ui, binding) {
                 self.tool = tool;
@@ -1134,6 +1135,12 @@ impl CaptureSession {
                     color: self.color,
                 }
             }
+            Tool::Measure => Annotation::Measure {
+                from: start,
+                to: end,
+                color: self.color,
+                width: self.width,
+            },
         }
     }
 
@@ -1193,6 +1200,12 @@ impl CaptureSession {
                 point: egui::pos2(start.x.midpoint(end.x), start.y.midpoint(end.y)),
                 index: *index,
                 color: *color,
+            },
+            Annotation::Measure { color, width, .. } => Annotation::Measure {
+                from: start,
+                to: end,
+                color: *color,
+                width: *width,
             },
         }
     }
@@ -1731,6 +1744,7 @@ fn tool_label(tool: Tool, t: &Strings) -> &'static str {
         Tool::Mosaic => t.tool_mosaic,
         Tool::Numbered => t.tool_numbered,
         Tool::Text => t.tool_text,
+        Tool::Measure => t.tool_measure,
     }
 }
 
@@ -1746,6 +1760,7 @@ fn tool_icon(tool: Tool) -> Icon {
         Tool::Mosaic => Icon::Mosaic,
         Tool::Numbered => Icon::Numbered,
         Tool::Text => Icon::Type,
+        Tool::Measure => Icon::Ruler,
     }
 }
 
@@ -2174,6 +2189,8 @@ fn annotation_is_visible(annotation: &Annotation) -> bool {
         Annotation::Pen { points, .. } => points.len() > 1,
         // A click is a complete marker; there is no minimum drag.
         Annotation::Numbered { .. } => true,
+        // A measurement needs a non-zero span, like a line.
+        Annotation::Measure { from, to, .. } => from.distance(*to) > 3.0,
         // Drags with the text tool only open the editor, so an empty buffer
         // must never survive.
         Annotation::Text { text, .. } => !text.trim().is_empty(),

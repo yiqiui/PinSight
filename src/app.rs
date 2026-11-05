@@ -6257,7 +6257,7 @@ impl PinSightApp {
             );
             ui.add_space(10.0);
 
-            let labels: [&str; 16] = [
+            let labels: [&str; 17] = [
                 t.tool_select,
                 t.tool_rect,
                 t.tool_ellipse,
@@ -6267,6 +6267,7 @@ impl PinSightApp {
                 t.tool_mosaic,
                 t.tool_numbered,
                 t.tool_text,
+                t.tool_measure,
                 t.key_confirm,
                 t.key_pin,
                 t.key_copy,
@@ -6283,9 +6284,9 @@ impl PinSightApp {
                 .map(|(_, v)| (*v).to_string())
                 .collect();
             // Which bindings appear more than once: those rows are flagged red.
-            let mut dup = [false; 16];
-            for i in 0..16 {
-                for j in (i + 1)..16 {
+            let mut dup = [false; 17];
+            for i in 0..17 {
+                for j in (i + 1)..17 {
                     if values[i].eq_ignore_ascii_case(&values[j]) {
                         dup[i] = true;
                         dup[j] = true;
@@ -6385,12 +6386,13 @@ impl PinSightApp {
                         6 => &mut self.config.app_keys.tool_mosaic,
                         7 => &mut self.config.app_keys.tool_numbered,
                         8 => &mut self.config.app_keys.tool_text,
-                        9 => &mut self.config.app_keys.confirm,
-                        10 => &mut self.config.app_keys.pin,
-                        11 => &mut self.config.app_keys.copy,
-                        12 => &mut self.config.app_keys.save,
-                        13 => &mut self.config.app_keys.cancel,
-                        14 => &mut self.config.app_keys.undo,
+                        9 => &mut self.config.app_keys.tool_measure,
+                        10 => &mut self.config.app_keys.confirm,
+                        11 => &mut self.config.app_keys.pin,
+                        12 => &mut self.config.app_keys.copy,
+                        13 => &mut self.config.app_keys.save,
+                        14 => &mut self.config.app_keys.cancel,
+                        15 => &mut self.config.app_keys.undo,
                         _ => &mut self.config.app_keys.redo,
                     };
                     *slot = text;

@@ -665,6 +665,7 @@ pub struct AppKeys {
     pub tool_mosaic: String,
     pub tool_numbered: String,
     pub tool_text: String,
+    pub tool_measure: String,
     pub confirm: String,
     pub pin: String,
     pub copy: String,
@@ -686,6 +687,7 @@ impl Default for AppKeys {
             tool_mosaic: "M".into(),
             tool_numbered: "N".into(),
             tool_text: "T".into(),
+            tool_measure: "G".into(),
             confirm: "Enter".into(),
             pin: "P".into(),
             copy: "Ctrl+C".into(),
@@ -699,7 +701,7 @@ impl Default for AppKeys {
 
 impl AppKeys {
     /// Every binding in settings-row order, for duplicate checks.
-    pub fn all(&self) -> [(&'static str, &str); 16] {
+    pub fn all(&self) -> [(&'static str, &str); 17] {
         [
             ("tool_select", &self.tool_select),
             ("tool_rect", &self.tool_rect),
@@ -710,6 +712,7 @@ impl AppKeys {
             ("tool_mosaic", &self.tool_mosaic),
             ("tool_numbered", &self.tool_numbered),
             ("tool_text", &self.tool_text),
+            ("tool_measure", &self.tool_measure),
             ("confirm", &self.confirm),
             ("pin", &self.pin),
             ("copy", &self.copy),

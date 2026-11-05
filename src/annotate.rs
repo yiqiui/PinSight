@@ -20,10 +20,12 @@ pub enum Tool {
     Mosaic,
     Numbered,
     Text,
+    /// Measure a distance and angle: a line with a length/angle label.
+    Measure,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 10] = [
+    pub const ALL: [Tool; 11] = [
         Tool::Select,
         Tool::Rect,
         Tool::Ellipse,
@@ -34,6 +36,7 @@ impl Tool {
         Tool::Mosaic,
         Tool::Numbered,
         Tool::Text,
+        Tool::Measure,
     ];
 
     pub fn shortcut(self) -> &'static str {
@@ -48,6 +51,7 @@ impl Tool {
             Tool::Mosaic => "M",
             Tool::Numbered => "N",
             Tool::Text => "T",
+            Tool::Measure => "G",
         }
     }
 }
@@ -169,6 +173,15 @@ pub enum Annotation {
         color: [u8; 4],
         size: f32,
     },
+    /// A measurement line: `from` → `to`, annotated with its length (px) and
+    /// the angle it makes with the horizontal. Reuses the line rasteriser and
+    /// burns the readout into the image with the UI font.
+    Measure {
+        from: egui::Pos2,
+        to: egui::Pos2,
+        color: [u8; 4],
+        width: f32,
+    },
 }
 
 impl Annotation {
@@ -182,6 +195,10 @@ impl Annotation {
                 rect.y += delta.y;
             }
             Annotation::Arrow { from, to, .. } | Annotation::Line { from, to, .. } => {
+                *from += delta;
+                *to += delta;
+            }
+            Annotation::Measure { from, to, .. } => {
                 *from += delta;
                 *to += delta;
             }
@@ -376,6 +393,35 @@ pub fn preview(
             painter.line_segment(
                 [map(*from), map(*to)],
                 egui::Stroke::new((*width * scale).max(1.0), color32(*color)),
+            );
+        }
+        Annotation::Measure {
+            from,
+            to,
+            color,
+            width,
+        } => {
+            let a = map(*from);
+            let b = map(*to);
+            painter.line_segment(
+                [a, b],
+                egui::Stroke::new((*width * scale).max(1.0), color32(*color)),
+            );
+            for end in [a, b] {
+                painter.circle_filled(end, 3.0, color32(*color));
+            }
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            let len = (dx * dx + dy * dy).sqrt() / scale;
+            let angle = (dy.atan2(dx).to_degrees() + 360.0) % 360.0;
+            let mid = a + (b - a) * 0.5;
+            let label = format!("{} px  {}°", len.round(), angle.round());
+            painter.text(
+                mid + egui::vec2(8.0, -14.0),
+                egui::Align2::LEFT_TOP,
+                label,
+                egui::FontId::monospace(11.0),
+                color32(*color),
             );
         }
         Annotation::Pen {
@@ -594,6 +640,66 @@ fn draw_annotation(pixmap: &mut Pixmap, annotation: &Annotation, ox: f32, oy: f3
                     None,
                 );
             }
+        }
+        Annotation::Measure {
+            from,
+            to,
+            color,
+            width,
+        } => {
+            let a = tiny_skia::Point::from_xy(from.x - ox, from.y - oy);
+            let b = tiny_skia::Point::from_xy(to.x - ox, to.y - oy);
+            let mut paint = Paint::default();
+            paint.set_color(to_skia_color(*color));
+            paint.anti_alias = true;
+            let mut pb = PathBuilder::new();
+            pb.move_to(a.x, a.y);
+            pb.line_to(b.x, b.y);
+            if let Some(path) = pb.finish() {
+                pixmap.stroke_path(
+                    &path,
+                    &paint,
+                    &Stroke {
+                        width: *width,
+                        ..Default::default()
+                    },
+                    Transform::identity(),
+                    None,
+                );
+            }
+            // Endpoint dots so the exact anchor pixels are visible.
+            for end in [a, b] {
+                if let Some(disc) =
+                    tiny_skia::Rect::from_xywh(end.x - 2.5, end.y - 2.5, 5.0, 5.0)
+                {
+                    if let Some(path) = PathBuilder::from_oval(disc) {
+                        pixmap.fill_path(
+                            &path,
+                            &paint,
+                            FillRule::Winding,
+                            Transform::identity(),
+                            None,
+                        );
+                    }
+                }
+            }
+            // Length (image pixels) and angle from the horizontal, burned in
+            // near the midpoint so the readout survives export.
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            let len = (dx * dx + dy * dy).sqrt();
+            let angle = (dy.atan2(dx).to_degrees() + 360.0) % 360.0;
+            let mid = tiny_skia::Point::from_xy((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+            let size = 13.0_f32;
+            let label = format!("{} px  {}°", len.round(), angle.round());
+            crate::text_font::font().draw(
+                pixmap,
+                &label,
+                mid.x + 8.0,
+                mid.y - size,
+                size,
+                *color,
+            );
         }
         Annotation::Arrow {
             from,
@@ -882,6 +988,27 @@ mod tests {
         assert!(marker_radius(9) < marker_radius(10));
         assert!(marker_radius(10) < marker_radius(100));
         assert!(marker_radius(0) > 0.0);
+    }
+
+    #[test]
+    fn rasterizes_measure_line() {
+        // A horizontal 100 px line must alter pixels along its length and
+        // burn the length/angle readout near the midpoint.
+        let source = RgbaImage::from_pixel(160, 80, Rgba([250, 250, 250, 255]));
+        let annotation = Annotation::Measure {
+            from: egui::pos2(20.0, 40.0),
+            to: egui::pos2(120.0, 40.0),
+            color: [255, 0, 0, 255],
+            width: 2.0,
+        };
+        let out = rasterize(
+            &source,
+            ImgRect::from_min_size(0.0, 0.0, 160.0, 80.0),
+            &[annotation],
+        );
+        assert!(out.get_pixel(70, 40).0[0] > 200 && out.get_pixel(70, 40).0[1] < 100);
+        // The label uses the same colour; some pixel above the line changed.
+        assert!(out.pixels().any(|p| p.0[0] > 200 && p.0[1] < 100));
     }
 
     #[test]
