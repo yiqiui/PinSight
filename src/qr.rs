@@ -40,14 +40,69 @@ pub fn generate(text: &str, module_px: u32) -> Result<RgbaImage, String> {
     Ok(img)
 }
 
+/// Avoid pathological allocations (a 4K frame at 2x is already > 32M pixels).
+const MAX_SCAN_PIXELS: usize = 32_000_000;
+/// Tile size / overlap for the large-frame fallback path.
+const TILE: u32 = 1024;
+const TILE_OVERLAP: u32 = 256;
+
+/// Run rqrr over one scaled/inverted view of a luma buffer. `pixel` maps
+/// output coordinates back to a source sample, so the whole frame and individual
+/// tiles can share the same decoder without copying pixels.
+fn scan<F>(sw: usize, sh: usize, pixel: F, found: &mut Vec<String>)
+where
+    F: FnMut(usize, usize) -> u8,
+{
+    if sw == 0 || sh == 0 || sw.saturating_mul(sh) > MAX_SCAN_PIXELS {
+        return;
+    }
+    let mut prepared = rqrr::PreparedImage::prepare_from_greyscale(sw, sh, pixel);
+    for grid in prepared.detect_grids() {
+        if let Ok((_, text)) = grid.decode() {
+            if !text.is_empty() && !found.contains(&text) {
+                found.push(text);
+            }
+        }
+    }
+}
+
+/// Overlapping square tiles covering a large frame. The overlap matters: a
+/// code straddling a tile boundary must land wholly inside at least one tile.
+fn tile_rects(w: u32, h: u32) -> Vec<(u32, u32, u32, u32)> {
+    if w == 0 || h == 0 {
+        return Vec::new();
+    }
+    let step = TILE - TILE_OVERLAP;
+    let mut out = Vec::new();
+    let mut y = 0u32;
+    loop {
+        let th = TILE.min(h - y);
+        let mut x = 0u32;
+        loop {
+            let tw = TILE.min(w - x);
+            out.push((x, y, tw, th));
+            if x + TILE >= w {
+                break;
+            }
+            x += step;
+        }
+        if y + TILE >= h {
+            break;
+        }
+        y += step;
+    }
+    out
+}
+
 /// Decode every QR code visible in `image`, returning their payloads in the
 /// order the detector found them. An empty vector means "no QR code found"
 /// (not an error); a QR that is present but damaged may also decode empty.
 ///
-/// Screenshots often contain codes drawn small or inverted (light-on-dark),
-/// so we try the native greyscale, an inverted copy, and a 2×/3× nearest
-/// upscale of each. Decoding is done on a `PreparedImage` built from a luma
-/// callback, avoiding any dependency on the `image` feature of `rqrr`.
+/// Screenshots often contain codes drawn small or inverted (light-on-dark).
+/// We first try the whole frame at 1x (plus 2x/3x for small images), then —
+/// for large frames where a full 2x upscale would blow the memory cap — scan
+/// overlapping tiles at 2x. Decoding uses a luma callback, avoiding rqrr's
+/// `image` feature entirely.
 pub fn recognize(image: &RgbaImage) -> Vec<String> {
     let (w, h) = image.dimensions();
     if w == 0 || h == 0 {
@@ -71,28 +126,55 @@ pub fn recognize(image: &RgbaImage) -> Vec<String> {
 
     let mut found: Vec<String> = Vec::new();
     let max_side = w.max(h);
-    let scales: &[u32] = if max_side < 600 { &[1, 2, 3] } else { &[1, 2] };
+    let scales: &[u32] = if max_side < 600 { &[1, 2, 3] } else { &[1] };
     for invert in [false, true] {
         for &scale in scales {
             let sw = (w * scale) as usize;
             let sh = (h * scale) as usize;
-            // Guard against pathological allocations on very large frames.
-            if sw.saturating_mul(sh) > 32_000_000 {
-                continue;
-            }
-            let mut prepared = rqrr::PreparedImage::prepare_from_greyscale(sw, sh, |x, y| {
-                let src = luma[(y / scale as usize) * (w as usize) + (x / scale as usize)];
-                if invert { 255 - src } else { src }
-            });
-            for grid in prepared.detect_grids() {
-                if let Ok((_, text)) = grid.decode() {
-                    if !text.is_empty() && !found.contains(&text) {
-                        found.push(text);
-                    }
-                }
-            }
+            scan(
+                sw,
+                sh,
+                |x, y| {
+                    let src = luma[(y / scale as usize) * (w as usize) + (x / scale as usize)];
+                    if invert { 255 - src } else { src }
+                },
+                &mut found,
+            );
             if !found.is_empty() {
                 return found;
+            }
+        }
+    }
+
+    // Large frame: a whole-frame 2x upscale is skipped by the memory guard, so
+    // small codes hidden in it would be missed. Scan overlapping tiles instead,
+    // with a wall-clock budget so a frame with no codes cannot stall the worker.
+    if max_side >= 600 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(6);
+        for (tx, ty, tw, th) in tile_rects(w, h) {
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            for invert in [false, true] {
+                // One upscale level is enough on a tile (2x already gives
+                // small codes ~2px modules); more would just burn the budget.
+                let scale = 2u32;
+                let sw = (tw * scale) as usize;
+                let sh = (th * scale) as usize;
+                scan(
+                    sw,
+                    sh,
+                    |x, y| {
+                        let sx = tx + x as u32 / scale;
+                        let sy = ty + y as u32 / scale;
+                        let src = luma[sy as usize * w as usize + sx as usize];
+                        if invert { 255 - src } else { src }
+                    },
+                    &mut found,
+                );
+                if !found.is_empty() {
+                    return found;
+                }
             }
         }
     }
@@ -157,6 +239,45 @@ mod tests {
             p.0[2] = 255 - p.0[2];
         }
         let decoded = recognize(&inverted);
+        assert_eq!(decoded, vec![payload.to_string()]);
+    }
+
+    #[test]
+    fn tile_rects_cover_every_pixel_with_overlap() {
+        let (w, h) = (3000u32, 2000u32);
+        let rects = tile_rects(w, h);
+        assert!(!rects.is_empty());
+        let mut covered = vec![false; (w * h) as usize];
+        for &(x, y, tw, th) in &rects {
+            assert!(x + tw <= w && y + th <= h);
+            for py in y..y + th {
+                for px in x..x + tw {
+                    covered[(py * w + px) as usize] = true;
+                }
+            }
+        }
+        assert!(covered.iter().all(|c| *c), "a pixel is left uncovered");
+        // Consecutive columns must overlap, not just abut.
+        assert!(rects.windows(2).any(|pair| {
+            pair[1].1 == pair[0].1
+                && pair[1].0 > pair[0].0
+                && pair[1].0 - pair[0].0 == TILE - TILE_OVERLAP
+        }));
+    }
+
+    #[test]
+    fn recognize_finds_a_small_code_in_a_large_frame() {
+        let payload = "small-code-in-big-frame";
+        // 2px modules: the whole-frame 1x pass may miss it, the tiled 2x pass
+        // must recover it (this is the path large screenshots rely on).
+        let qr = generate(payload, 2).unwrap();
+        let mut big = RgbaImage::from_pixel(1200, 900, Rgba([255, 255, 255, 255]));
+        for sy in 0..qr.height() {
+            for sx in 0..qr.width() {
+                big.put_pixel(700 + sx, 500 + sy, *qr.get_pixel(sx, sy));
+            }
+        }
+        let decoded = recognize(&big);
         assert_eq!(decoded, vec![payload.to_string()]);
     }
 }

@@ -348,6 +348,9 @@ pub struct PinSightApp {
     /// Text the preview was last rendered from, so we only regenerate on change.
     qr_gen_src: String,
     qr_gen_img: Option<Arc<RgbaImage>>,
+    /// Cached egui texture for the preview. Rebuilt only when the rendered
+    /// image changes — uploading a new GPU texture every frame is wasteful.
+    qr_gen_tex: Option<egui::TextureHandle>,
     /// Live tray icon. `None` when the shell refused it or on other platforms.
     #[cfg(windows)]
     tray: Option<crate::tray::Tray>,
@@ -496,6 +499,7 @@ impl PinSightApp {
             qr_gen_text: String::new(),
             qr_gen_src: String::new(),
             qr_gen_img: None,
+            qr_gen_tex: None,
             #[cfg(windows)]
             tray: None,
             #[cfg(windows)]
@@ -719,33 +723,36 @@ impl PinSightApp {
                     } else {
                         crate::qr::generate(&self.qr_gen_text, 8).ok().map(Arc::new)
                     };
+                    // Invalidate the cached texture with the image.
+                    self.qr_gen_tex = None;
                 }
-                match &self.qr_gen_img {
-                    Some(img) => {
+                // Upload only when the rendered image changed. Doing this on
+                // every frame would allocate and free a GPU texture 60x/s.
+                if self.qr_gen_tex.is_none() {
+                    if let Some(img) = &self.qr_gen_img {
                         let color = egui::ColorImage::from_rgba_unmultiplied(
                             [img.width() as usize, img.height() as usize],
                             img.as_raw(),
                         );
                         // NEAREST so each module stays a crisp square.
-                        let tex = ctx.load_texture(
+                        self.qr_gen_tex = Some(ctx.load_texture(
                             "pinsight-qr-preview",
                             color,
                             egui::TextureOptions::NEAREST,
-                        );
-                        let (rect, _) =
-                            ui.allocate_exact_size(egui::vec2(224.0, 224.0), egui::Sense::hover());
-                        ui.painter().image(
-                            tex.id(),
-                            rect,
-                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                            egui::Color32::WHITE,
-                        );
+                        ));
                     }
-                    None => {
-                        if !self.qr_gen_text.trim().is_empty() {
-                            ui.label(t.qr_gen_error);
-                        }
-                    }
+                }
+                if let Some(tex) = &self.qr_gen_tex {
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(224.0, 224.0), egui::Sense::hover());
+                    ui.painter().image(
+                        tex.id(),
+                        rect,
+                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                        egui::Color32::WHITE,
+                    );
+                } else if !self.qr_gen_text.trim().is_empty() && self.qr_gen_img.is_none() {
+                    ui.label(t.qr_gen_error);
                 }
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
@@ -5650,6 +5657,14 @@ impl PinSightApp {
                 }
             });
 
+            // The generator is also in the tray menu; a settings entry makes
+            // it discoverable without hunting through the tray.
+            ui::field_row(ui, p, t.qr_gen_title, |ui| {
+                if ui::link_button(ui, p, Icon::Qr, t.qr_gen_launch).clicked() {
+                    self.qr_gen_open = true;
+                }
+            });
+
             ui::field_row(ui, p, t.gen_log_level, |ui| {
                 let label = |l: config::LogLevel| match l {
                     config::LogLevel::Error => t.log_error,
@@ -5716,6 +5731,7 @@ impl PinSightApp {
             let provider_label = |prov: crate::translate::Provider| match prov {
                 crate::translate::Provider::Google => t.tr_google,
                 crate::translate::Provider::DeepL => t.tr_deepl,
+                crate::translate::Provider::Custom => t.tr_custom,
             };
             ui::field_row(ui, p, t.tr_provider, |ui| {
                 egui::ComboBox::from_id_salt("pinsight-tr-provider")
@@ -5749,26 +5765,42 @@ impl PinSightApp {
                         }
                     });
             });
-            if current == crate::translate::Provider::DeepL {
-                ui::field_row(ui, p, t.tr_key, |ui| {
-                    let mut key = self.config.translate.key.clone();
-                    let response = ui.add(
-                        egui::TextEdit::singleline(&mut key)
-                            .password(true)
-                            .desired_width(168.0),
-                    );
-                    // Commit when the field loses focus.
-                    if response.lost_focus() {
-                        self.config.translate.key = key.trim().to_string();
+            if current == crate::translate::Provider::Custom {
+                ui::field_row(ui, p, t.tr_endpoint, |ui| {
+                    if ui
+                        .add(
+                            egui::TextEdit::singleline(&mut self.config.translate.endpoint)
+                                .desired_width(220.0)
+                                .hint_text(t.tr_endpoint_hint),
+                        )
+                        .changed()
+                    {
                         let _ = self.config.save();
                     }
                 });
             }
-            ui.label(
-                egui::RichText::new(t.tr_hint)
-                    .small()
-                    .color(egui::Color32::from_gray(128)),
-            );
+            // DeepL requires a key; custom endpoints accept an optional one.
+            if current == crate::translate::Provider::DeepL
+                || current == crate::translate::Provider::Custom
+            {
+                ui::field_row(ui, p, t.tr_key, |ui| {
+                    // Bind the config field directly: egui keeps the text in
+                    // the caller's buffer, so a per-frame clone would discard
+                    // every keystroke. Commit on each change like the other
+                    // text fields on this page.
+                    if ui
+                        .add(
+                            egui::TextEdit::singleline(&mut self.config.translate.key)
+                                .password(true)
+                                .desired_width(168.0),
+                        )
+                        .changed()
+                    {
+                        let _ = self.config.save();
+                    }
+                });
+            }
+            ui.label(egui::RichText::new(t.tr_hint).small().color(p.text_weak));
         });
     }
 
@@ -6438,7 +6470,7 @@ impl PinSightApp {
         });
     }
 
-    /// The 16 overlay shortcuts, each with a record button.
+    /// The overlay shortcuts (one row per tool plus the command keys).
     fn app_keys_card(&mut self, ui: &mut egui::Ui, p: &Palette) {
         let t = self.tr.tr;
         ui::card(ui, p, |ui| {
@@ -6451,11 +6483,12 @@ impl PinSightApp {
             );
             ui.add_space(10.0);
 
-            let labels: [&str; 18] = [
+            let labels: [&str; 19] = [
                 t.tool_select,
                 t.tool_rect,
                 t.tool_ellipse,
                 t.tool_arrow,
+                t.tool_line,
                 t.tool_pen,
                 t.tool_highlight,
                 t.tool_mosaic,
@@ -6479,9 +6512,9 @@ impl PinSightApp {
                 .map(|(_, v)| (*v).to_string())
                 .collect();
             // Which bindings appear more than once: those rows are flagged red.
-            let mut dup = [false; 18];
-            for i in 0..18 {
-                for j in (i + 1)..18 {
+            let mut dup = [false; 19];
+            for i in 0..19 {
+                for j in (i + 1)..19 {
                     if values[i].eq_ignore_ascii_case(&values[j]) {
                         dup[i] = true;
                         dup[j] = true;
@@ -6509,7 +6542,7 @@ impl PinSightApp {
                     let button = if recording {
                         ui::link_button(ui, p, Icon::Close, t.key_cancel)
                     } else {
-                        ui::link_button(ui, p, Icon::Keyboard, t.hk_record)
+                        ui::link_button(ui, p, Icon::Keyboard, t.hk_press)
                     };
                     if button.clicked() {
                         self.recording_app_key = if recording { None } else { Some(i) };
@@ -6576,19 +6609,20 @@ impl PinSightApp {
                         1 => &mut self.config.app_keys.tool_rect,
                         2 => &mut self.config.app_keys.tool_ellipse,
                         3 => &mut self.config.app_keys.tool_arrow,
-                        4 => &mut self.config.app_keys.tool_pen,
-                        5 => &mut self.config.app_keys.tool_highlight,
-                        6 => &mut self.config.app_keys.tool_mosaic,
-                        7 => &mut self.config.app_keys.tool_numbered,
-                        8 => &mut self.config.app_keys.tool_text,
-                        9 => &mut self.config.app_keys.tool_measure,
-                        10 => &mut self.config.app_keys.tool_lasso,
-                        11 => &mut self.config.app_keys.confirm,
-                        12 => &mut self.config.app_keys.pin,
-                        13 => &mut self.config.app_keys.copy,
-                        14 => &mut self.config.app_keys.save,
-                        15 => &mut self.config.app_keys.cancel,
-                        16 => &mut self.config.app_keys.undo,
+                        4 => &mut self.config.app_keys.tool_line,
+                        5 => &mut self.config.app_keys.tool_pen,
+                        6 => &mut self.config.app_keys.tool_highlight,
+                        7 => &mut self.config.app_keys.tool_mosaic,
+                        8 => &mut self.config.app_keys.tool_numbered,
+                        9 => &mut self.config.app_keys.tool_text,
+                        10 => &mut self.config.app_keys.tool_measure,
+                        11 => &mut self.config.app_keys.tool_lasso,
+                        12 => &mut self.config.app_keys.confirm,
+                        13 => &mut self.config.app_keys.pin,
+                        14 => &mut self.config.app_keys.copy,
+                        15 => &mut self.config.app_keys.save,
+                        16 => &mut self.config.app_keys.cancel,
+                        17 => &mut self.config.app_keys.undo,
                         _ => &mut self.config.app_keys.redo,
                     };
                     *slot = text;
@@ -7536,12 +7570,10 @@ impl PinSightApp {
                         p.accent,
                     );
                 } else {
-                    let mut shown = current.clone();
-                    ui.add(
-                        egui::TextEdit::singleline(&mut shown)
-                            .desired_width(140.0)
-                            .font(egui::TextStyle::Monospace),
-                    );
+                    // Read-only: the value only changes through the Record
+                    // button below. An editable TextEdit that drops every
+                    // keystroke is just a trap for the user.
+                    ui.monospace(current.as_str());
                 }
                 ui.add_space(4.0);
                 if ui::link_button(ui, p, Icon::Keyboard, t.hk_press).clicked() {

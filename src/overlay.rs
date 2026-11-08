@@ -926,6 +926,7 @@ impl CaptureSession {
             (&keys.tool_rect, Tool::Rect),
             (&keys.tool_ellipse, Tool::Ellipse),
             (&keys.tool_arrow, Tool::Arrow),
+            (&keys.tool_line, Tool::Line),
             (&keys.tool_pen, Tool::Pen),
             (&keys.tool_highlight, Tool::Highlight),
             (&keys.tool_mosaic, Tool::Mosaic),
@@ -1408,7 +1409,7 @@ impl CaptureSession {
             self.image.height() as f32,
         ));
         let sel_screen = image_to_screen(sel, screen, scale);
-        let area_size = self.toolbar_size.unwrap_or(egui::vec2(680.0, 84.0));
+        let area_size = self.toolbar_size.unwrap_or(egui::vec2(740.0, 84.0));
         let mut pos = if self.selection.is_some() {
             // Dock under the selection, or above it when there is no room.
             let mut pos = egui::pos2(sel_screen.left(), sel_screen.bottom() + 12.0);
@@ -1434,6 +1435,12 @@ impl CaptureSession {
         let p = self.palette;
         let t = self.tr;
         let mut action = None;
+        // Snapshot the configured shortcuts before the mutable closure below.
+        let bindings: Vec<String> = Tool::ALL
+            .iter()
+            .map(|&tool| tool_binding(tool, &self.prefs.keys).to_string())
+            .collect();
+        let active_binding = tool_binding(self.tool, &self.prefs.keys).to_string();
 
         let area = egui::Area::new(egui::Id::new(("pinsight-toolbar", self.monitor.id)))
             .order(egui::Order::Foreground)
@@ -1460,16 +1467,21 @@ impl CaptureSession {
                         // at wildly different sizes — visually noisy, with dead
                         // space in the middle. Groups now read left to right:
                         // tools | colours | stroke + history  /  hint | actions.
-                        const BAR_W: f32 = 660.0;
+                        const BAR_W: f32 = 720.0;
                         ui.set_width(BAR_W);
 
                         // ---- row 1: editing tools --------------------------
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing = egui::vec2(3.0, 0.0);
-                            for tool in Tool::ALL {
+                            for (i, tool) in Tool::ALL.iter().enumerate() {
+                                let tool = *tool;
                                 let selected = self.tool == tool;
-                                let label =
-                                    format!("{} ({})", tool_label(tool, t), tool.shortcut());
+                                let binding = if bindings[i].is_empty() {
+                                    "—"
+                                } else {
+                                    bindings[i].as_str()
+                                };
+                                let label = format!("{} ({})", tool_label(tool, t), binding);
                                 if ui::icon_button(ui, &p, tool_icon(tool), selected, &label)
                                     .clicked()
                                 {
@@ -1550,7 +1562,7 @@ impl CaptureSession {
                                 egui::RichText::new(format!(
                                     "{} ({})",
                                     tool_label(self.tool, t),
-                                    self.tool.shortcut()
+                                    active_binding
                                 ))
                                 .size(11.0)
                                 .color(p.text_weak),
@@ -1619,13 +1631,13 @@ impl CaptureSession {
                                             action = Some(OverlayAction::Save);
                                         }
                                         if pill_button(ui, &p, t.ov_ocr, Some(Icon::Ocr), false)
-                                            .on_hover_text(t.ov_ocr_unavailable)
+                                            .on_hover_text(t.ov_ocr_hint)
                                             .clicked()
                                         {
                                             self.start_ocr();
                                         }
                                         if pill_button(ui, &p, t.ov_qr, Some(Icon::Qr), false)
-                                            .on_hover_text(t.ov_qr_running)
+                                            .on_hover_text(t.ov_qr_hint)
                                             .clicked()
                                         {
                                             self.start_qr();
@@ -1735,6 +1747,14 @@ impl CaptureSession {
         self.ocr_rect = Some(rect);
         self.ocr_words = None;
         self.ocr_open = true;
+        // A fresh scan must not keep showing the previous text's translation,
+        // and an in-flight translation must not write back over the new result.
+        self.ocr_translation = None;
+        self.ocr_tr_rx = None;
+        // Only one results panel is shown at a time: both anchor to the same
+        // spot on the selection and would otherwise sit exactly on top of each
+        // other. The other panel's data is kept, just hidden.
+        self.qr_open = false;
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let res = crate::ocr::recognize(crop).map_err(|e| e.to_string());
@@ -1756,6 +1776,8 @@ impl CaptureSession {
         self.qr_rect = Some(rect);
         self.qr_result = None;
         self.qr_open = true;
+        // See start_ocr: the two panels share an anchor, so show one at a time.
+        self.ocr_open = false;
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let res = crate::qr::recognize(&crop);
@@ -1825,6 +1847,7 @@ impl CaptureSession {
                 &prefs.target,
                 crate::translate::Provider::parse(&prefs.provider),
                 &prefs.key,
+                &prefs.endpoint,
                 proxy.as_deref(),
             );
             let _ = tx.send(res);
@@ -1970,7 +1993,7 @@ impl CaptureSession {
                                         Err(e) => {
                                             ui.colored_label(
                                                 egui::Color32::from_rgb(255, 120, 120),
-                                                e,
+                                                translate_error_text(e, t),
                                             );
                                         }
                                     }
@@ -2131,6 +2154,45 @@ fn tool_icon(tool: Tool) -> Icon {
         Tool::Text => Icon::Type,
         Tool::Measure => Icon::Ruler,
         Tool::Lasso => Icon::Lasso,
+    }
+}
+
+/// Turn a tagged translate error (`TAG: detail`) into a localised message.
+/// The detail is kept so a network failure still shows the underlying cause.
+fn translate_error_text(error: &str, t: &Strings) -> String {
+    let (tag, detail) = error.split_once(':').unwrap_or((error, ""));
+    let detail = detail.trim();
+    let message = match tag.trim() {
+        crate::translate::ERR_EMPTY => t.ov_tr_err_empty,
+        crate::translate::ERR_KEY => t.ov_tr_err_key,
+        crate::translate::ERR_URL => t.ov_tr_err_url,
+        crate::translate::ERR_NETWORK => t.ov_tr_err_network,
+        crate::translate::ERR_RESPONSE => t.ov_tr_err_response,
+        _ => return error.to_string(),
+    };
+    if detail.is_empty() {
+        message.to_string()
+    } else {
+        format!("{message} ({detail})")
+    }
+}
+
+/// The shortcut actually configured for a tool. Settings let users rebind
+/// these, so the toolbar must not keep printing the built-in defaults.
+fn tool_binding(tool: Tool, keys: &crate::config::AppKeys) -> &str {
+    match tool {
+        Tool::Select => &keys.tool_select,
+        Tool::Rect => &keys.tool_rect,
+        Tool::Ellipse => &keys.tool_ellipse,
+        Tool::Arrow => &keys.tool_arrow,
+        Tool::Line => &keys.tool_line,
+        Tool::Pen => &keys.tool_pen,
+        Tool::Highlight => &keys.tool_highlight,
+        Tool::Mosaic => &keys.tool_mosaic,
+        Tool::Numbered => &keys.tool_numbered,
+        Tool::Text => &keys.tool_text,
+        Tool::Measure => &keys.tool_measure,
+        Tool::Lasso => &keys.tool_lasso,
     }
 }
 
@@ -2515,10 +2577,16 @@ fn image_to_screen(rect: ImgRect, screen: egui::Rect, scale: f32) -> egui::Rect 
     )
 }
 
-/// Even-odd point-in-polygon test (ray casting to the right).
+/// Reference even-odd point-in-polygon test (ray casting to the right). The
+/// production mask uses the scanline path below; this one exists to verify the
+/// scanline result pixel-by-pixel in tests.
+#[cfg(test)]
 fn point_in_polygon(pts: &[egui::Pos2], x: f32, y: f32) -> bool {
     let mut inside = false;
     let n = pts.len();
+    if n == 0 {
+        return false;
+    }
     let mut j = n - 1;
     for i in 0..n {
         let (xi, yi) = (pts[i].x, pts[i].y);
@@ -2534,13 +2602,57 @@ fn point_in_polygon(pts: &[egui::Pos2], x: f32, y: f32) -> bool {
 /// Clear every pixel of `img` that falls outside the lasso polygon. `ox`/`oy`
 /// is the crop's origin in image coordinates: the polygon lives in the full
 /// screenshot's space, `img` in the crop's.
+///
+/// A per-pixel ray cast is O(width * height * vertices) — on a 4K frame with a
+/// few thousand lasso points that is billions of operations on the GUI thread.
+/// Instead intersect the polygon with each scanline once (O(height * vertices
+/// log vertices)), sort the crossings and keep only the even-odd spans.
 fn apply_lasso_mask(img: &mut RgbaImage, pts: &[egui::Pos2], ox: f32, oy: f32) {
-    for y in 0..img.height() {
-        for x in 0..img.width() {
-            if !point_in_polygon(pts, x as f32 + 0.5 + ox, y as f32 + 0.5 + oy) {
-                img.put_pixel(x, y, image::Rgba([0, 0, 0, 0]));
-            }
+    let (w, h) = (img.width(), img.height());
+    if w == 0 || h == 0 || pts.len() < 3 {
+        return;
+    }
+    let clear_row = |img: &mut RgbaImage, py: u32, from: u32, to: u32| {
+        for px in from..to.min(w) {
+            img.put_pixel(px, py, image::Rgba([0, 0, 0, 0]));
         }
+    };
+    // Rows the polygon never reaches are cleared in one pass without sorting.
+    let min_y = pts.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
+    let max_y = pts.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
+
+    let mut crossings: Vec<f32> = Vec::with_capacity(pts.len());
+    for py in 0..h {
+        let y = py as f32 + 0.5 + oy;
+        if y < min_y || y >= max_y {
+            clear_row(img, py, 0, w);
+            continue;
+        }
+        crossings.clear();
+        let mut j = pts.len() - 1;
+        for i in 0..pts.len() {
+            let (xi, yi) = (pts[i].x, pts[i].y);
+            let (xj, yj) = (pts[j].x, pts[j].y);
+            if (yi > y) != (yj > y) {
+                crossings.push(xi + (y - yi) * (xj - xi) / (yj - yi));
+            }
+            j = i;
+        }
+        if crossings.len() < 2 {
+            clear_row(img, py, 0, w);
+            continue;
+        }
+        crossings.sort_unstable_by(f32::total_cmp);
+        // A pixel centre sits at `px + 0.5 + ox`; convert full-image span
+        // bounds into crop pixel indices and clear everything between spans.
+        let mut cursor = 0u32;
+        for span in crossings.chunks_exact(2) {
+            let start = (span[0] - ox - 0.5).ceil().max(0.0) as u32;
+            let end = (span[1] - ox - 0.5).ceil().max(0.0) as u32;
+            clear_row(img, py, cursor, start.min(w));
+            cursor = cursor.max(end.min(w));
+        }
+        clear_row(img, py, cursor, w);
     }
 }
 
@@ -2650,5 +2762,37 @@ mod tests {
         assert_eq!(cropped.get_pixel(0, 0).0, [9, 9, 9, 255]);
         // Crop pixel (1,1) is image (5,4): on the boundary -> outside.
         assert_eq!(cropped.get_pixel(1, 1).0, [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn lasso_scanline_matches_point_in_polygon() {
+        // A concave star-ish path with many vertices: exercises multiple
+        // crossings per row, crop offsets and the row-skip fast path.
+        let w = 120u32;
+        let h = 90u32;
+        let mut pts = Vec::new();
+        for i in 0..60 {
+            let a = (i as f32) * std::f32::consts::TAU / 60.0;
+            let radius = if i % 2 == 0 { 40.0 } else { 18.0 };
+            pts.push(egui::pos2(60.0 + radius * a.cos(), 45.0 + radius * a.sin()));
+        }
+        let (ox, oy) = (7.0, 5.0);
+        let mut img = RgbaImage::from_pixel(w, h, image::Rgba([7, 7, 7, 255]));
+        apply_lasso_mask(&mut img, &pts, ox, oy);
+        for py in 0..h {
+            for px in 0..w {
+                let expected = point_in_polygon(&pts, px as f32 + 0.5 + ox, py as f32 + 0.5 + oy);
+                let actual = img.get_pixel(px, py).0[3] == 255;
+                assert_eq!(actual, expected, "mismatch at ({px},{py}) ox={ox} oy={oy}");
+            }
+        }
+    }
+
+    #[test]
+    fn lasso_empty_path_is_a_noop() {
+        let mut img = RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255]));
+        apply_lasso_mask(&mut img, &[], 0.0, 0.0);
+        assert_eq!(img.get_pixel(1, 1).0, [1, 2, 3, 255]);
+        assert!(!point_in_polygon(&[], 1.0, 1.0));
     }
 }

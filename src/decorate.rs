@@ -158,8 +158,10 @@ fn round_corners(image: &RgbaImage, radius: u32) -> RgbaImage {
     for &(bx, by, cx, cy) in &corners {
         for y in by..(by + bw).min(h as i32) {
             for x in bx.max(0)..(bx + bw).min(w as i32) {
-                let dx = x as f32 - cx;
-                let dy = y as f32 - cy;
+                // Sample the pixel centre, not its corner, so the arc is
+                // symmetric about the true circle boundary.
+                let dx = x as f32 + 0.5 - cx;
+                let dy = y as f32 + 0.5 - cy;
                 let d2 = dx * dx + dy * dy;
                 if d2 >= r2 {
                     out.put_pixel(x as u32, y as u32, Rgba([0, 0, 0, 0]));

@@ -487,13 +487,17 @@ pub struct Config {
 
 /// Translation settings for the OCR panel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TranslatePrefs {
     /// Provider id: `google` or `deepl` (see `translate::Provider::parse`).
     pub provider: String,
     /// Target language, a BCP-47 code such as `zh-CN`, `en`, `ja`.
     pub target: String,
-    /// DeepL auth key; ignored by the Google provider.
+    /// DeepL auth key; also used as the optional key for custom endpoints.
     pub key: String,
+    /// Full URL of a LibreTranslate-compatible endpoint for the custom
+    /// provider (e.g. `https://translate.example.com/translate`).
+    pub endpoint: String,
 }
 
 impl Default for TranslatePrefs {
@@ -502,6 +506,7 @@ impl Default for TranslatePrefs {
             provider: "google".into(),
             target: "zh-CN".into(),
             key: String::new(),
+            endpoint: String::new(),
         }
     }
 }
@@ -684,6 +689,7 @@ pub struct AppKeys {
     pub tool_rect: String,
     pub tool_ellipse: String,
     pub tool_arrow: String,
+    pub tool_line: String,
     pub tool_pen: String,
     pub tool_highlight: String,
     pub tool_mosaic: String,
@@ -702,18 +708,23 @@ pub struct AppKeys {
 
 impl Default for AppKeys {
     fn default() -> Self {
+        use crate::annotate::Tool;
+        // Keep the built-in shortcuts in one place: `Tool::shortcut()` is the
+        // source of truth for the defaults, this struct only stores overrides.
+        let key = |tool: Tool| tool.shortcut().to_string();
         Self {
-            tool_select: "V".into(),
-            tool_rect: "R".into(),
-            tool_ellipse: "E".into(),
-            tool_arrow: "A".into(),
-            tool_pen: "D".into(),
-            tool_highlight: "H".into(),
-            tool_mosaic: "M".into(),
-            tool_numbered: "N".into(),
-            tool_text: "T".into(),
-            tool_measure: "G".into(),
-            tool_lasso: "F".into(),
+            tool_select: key(Tool::Select),
+            tool_rect: key(Tool::Rect),
+            tool_ellipse: key(Tool::Ellipse),
+            tool_arrow: key(Tool::Arrow),
+            tool_line: key(Tool::Line),
+            tool_pen: key(Tool::Pen),
+            tool_highlight: key(Tool::Highlight),
+            tool_mosaic: key(Tool::Mosaic),
+            tool_numbered: key(Tool::Numbered),
+            tool_text: key(Tool::Text),
+            tool_measure: key(Tool::Measure),
+            tool_lasso: key(Tool::Lasso),
             confirm: "Enter".into(),
             pin: "P".into(),
             copy: "Ctrl+C".into(),
@@ -727,12 +738,13 @@ impl Default for AppKeys {
 
 impl AppKeys {
     /// Every binding in settings-row order, for duplicate checks.
-    pub fn all(&self) -> [(&'static str, &str); 18] {
+    pub fn all(&self) -> [(&'static str, &str); 19] {
         [
             ("tool_select", &self.tool_select),
             ("tool_rect", &self.tool_rect),
             ("tool_ellipse", &self.tool_ellipse),
             ("tool_arrow", &self.tool_arrow),
+            ("tool_line", &self.tool_line),
             ("tool_pen", &self.tool_pen),
             ("tool_highlight", &self.tool_highlight),
             ("tool_mosaic", &self.tool_mosaic),
@@ -1237,4 +1249,52 @@ pub fn default_save_dir() -> PathBuf {
         .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(APP_DIR)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_config_missing_new_fields_still_loads() {
+        // A config written before `endpoint`, `tool_line` and `tool_lasso`
+        // existed must not fail to deserialize on upgrade.
+        let legacy_translate = r#"{"provider":"deepl","target":"zh-CN","key":"secret"}"#;
+        let prefs: TranslatePrefs = serde_json::from_str(legacy_translate).unwrap();
+        assert_eq!(prefs.provider, "deepl");
+        assert_eq!(prefs.key, "secret");
+        assert_eq!(prefs.endpoint, "");
+
+        let legacy_keys = r#"{"tool_select":"V","tool_rect":"R","confirm":"Enter"}"#;
+        let keys: AppKeys = serde_json::from_str(legacy_keys).unwrap();
+        assert_eq!(keys.tool_select, "V");
+        assert_eq!(keys.tool_line, "L");
+        assert_eq!(keys.tool_lasso, "F");
+        assert_eq!(keys.confirm, "Enter");
+    }
+
+    #[test]
+    fn app_keys_cover_every_tool_once() {
+        use crate::annotate::Tool;
+        // Each tool has exactly one configurable binding, and the defaults in
+        // AppKeys must match Tool::shortcut() (the toolbar shows the bindings).
+        let keys = AppKeys::default();
+        let bindings = [
+            keys.tool_select,
+            keys.tool_rect,
+            keys.tool_ellipse,
+            keys.tool_arrow,
+            keys.tool_line,
+            keys.tool_pen,
+            keys.tool_highlight,
+            keys.tool_mosaic,
+            keys.tool_numbered,
+            keys.tool_text,
+            keys.tool_measure,
+            keys.tool_lasso,
+        ];
+        for (i, tool) in Tool::ALL.iter().enumerate() {
+            assert_eq!(bindings[i], tool.shortcut(), "binding for {tool:?}");
+        }
+    }
 }
