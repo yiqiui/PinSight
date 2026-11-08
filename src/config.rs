@@ -1297,4 +1297,19 @@ mod tests {
             assert_eq!(bindings[i], tool.shortcut(), "binding for {tool:?}");
         }
     }
+
+    #[test]
+    fn shipped_example_config_deserializes() {
+        // The example file is documentation users copy directly: it must stay
+        // loadable as a real Config, including all the newly added sections.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("config.example.json");
+        let text = std::fs::read_to_string(path).unwrap();
+        let cfg: Config = serde_json::from_str(&text).unwrap();
+        assert_eq!(cfg.hotkeys.pick_color, "Ctrl+Shift+K");
+        assert_eq!(cfg.app_keys.tool_line, "L");
+        assert_eq!(cfg.app_keys.tool_lasso, "F");
+        assert_eq!(cfg.decorations.rounded, Some(12));
+        assert_eq!(cfg.translate.provider, "google");
+        assert_eq!(cfg.translate.endpoint, "");
+    }
 }

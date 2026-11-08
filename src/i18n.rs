@@ -877,6 +877,18 @@ strings! {
     qr_gen_input { en: "Text / URL", zh: "文字 / 网址", tw: "文字 / 網址", ja: "テキスト / URL", ko: "텍스트 / URL", fr: "Texte / URL", de: "Text / URL" }
     qr_gen_copy { en: "Copy image", zh: "复制图片", tw: "複製圖片", ja: "画像をコピー", ko: "이미지 복사", fr: "Copier l'image", de: "Bild kopieren" }
     qr_gen_error { en: "The text is too long for a QR code.", zh: "内容过长，无法生成二维码。", tw: "內容過長，無法產生二維碼。", ja: "テキストが長すぎて QR コードにできません。", ko: "텍스트가 너무 길어 QR 코드를 만들 수 없습니다.", fr: "Le texte est trop long pour un code QR.", de: "Der Text ist zu lang für einen QR-Code." }
+    trim_title { en: "Trim recording", zh: "裁剪录屏", tw: "裁剪錄影", ja: "録画をトリミング", ko: "녹화 자르기", fr: "Rogner l'enregistrement", de: "Aufnahme zuschneiden" }
+    trim_hint { en: "Cut the beginning and end. The original file is kept; the trimmed clip is saved beside it.", zh: "裁掉头尾。原文件保留，裁剪结果另存到同目录。", tw: "裁掉頭尾。原檔保留，裁剪結果另存到同目錄。", ja: "先頭と末尾をカットします。元ファイルは残り、結果は同じフォルダーに別名で保存されます。", ko: "앞뒤를 자릅니다. 원본은 유지되고 결과는 같은 폴더에 별도로 저장됩니다.", fr: "Coupez le début et la fin. L'original est conservé, le résultat est enregistré à côté.", de: "Anfang und Ende abschneiden. Das Original bleibt erhalten, das Ergebnis wird daneben gespeichert." }
+    trim_start { en: "Start", zh: "起点", tw: "起點", ja: "開始", ko: "시작", fr: "Début", de: "Start" }
+    trim_end { en: "End", zh: "终点", tw: "終點", ja: "終了", ko: "끝", fr: "Fin", de: "Ende" }
+    trim_keep { en: "Keep", zh: "保留", tw: "保留", ja: "保持", ko: "유지", fr: "Conserver", de: "Behalten" }
+    trim_apply { en: "Trim & save as", zh: "裁剪并另存", tw: "裁剪並另存", ja: "切り出して保存", ko: "잘라서 저장", fr: "Rogner et enregistrer", de: "Zuschneiden & speichern" }
+    trim_skip { en: "Skip", zh: "跳过", tw: "跳過", ja: "スキップ", ko: "건너뛰기", fr: "Ignorer", de: "Überspringen" }
+    trim_running { en: "Trimming…", zh: "正在裁剪…", tw: "正在裁剪…", ja: "切り出し中…", ko: "자르는 중…", fr: "Rognage…", de: "Zuschneiden…" }
+    trim_done { en: "Trimmed clip saved", zh: "裁剪结果已保存", tw: "裁剪結果已儲存", ja: "切り出し結果を保存しました", ko: "잘라낸 클립을 저장했습니다", fr: "Clip rogné enregistré", de: "Zugeschnittener Clip gespeichert" }
+    trim_failed { en: "Trim failed", zh: "裁剪失败", tw: "裁剪失敗", ja: "切り出しに失敗しました", ko: "자르기 실패", fr: "Échec du rognage", de: "Zuschneiden fehlgeschlagen" }
+    trim_no_video { en: "No recording available to trim yet.", zh: "还没有可裁剪的录屏。", tw: "還沒有可裁剪的錄影。", ja: "切り出せる録画がまだありません。", ko: "자를 수 있는 녹화가 아직 없습니다.", fr: "Aucun enregistrement à rogner.", de: "Noch keine Aufnahme zum Zuschneiden vorhanden." }
+    tray_trim_video { en: "Trim last recording", zh: "裁剪上一段录屏", tw: "裁剪上一段錄影", ja: "前回の録画をトリミング", ko: "마지막 녹화 자르기", fr: "Rogner le dernier enregistrement", de: "Letzte Aufnahme zuschneiden" }
 
     // ---- GIF editor ------------------------------------------------------
     nav_gif { en: "GIF", zh: "GIF", tw: "GIF", ja: "GIF", ko: "GIF", fr: "GIF", de: "GIF" }

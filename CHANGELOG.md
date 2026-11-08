@@ -8,6 +8,27 @@ All notable changes to PinSight are documented here. The format follows
 
 ### Added
 
+- **Rounded-corner captures**: optional radius (0–100 px) in Settings, applied
+  last so borders and shadows are rounded too; anti-aliased 1 px corner edge.
+- **Global colour-picker hotkey** (`Ctrl+Shift+K`): opens the eyedropper from
+  anywhere; rebindable in Settings > Controls.
+- **Measure tool** (`G`): drag a line to read its pixel length and angle; the
+  readout is burned into the saved image with the UI font.
+- **QR codes**: a toolbar button decodes every QR code in the selection on a
+  worker thread (copy / open-link actions), and a tray + Settings entry opens a
+  generator window with live preview and copy / save / pin actions. Uses the
+  pure-Rust `qrcode` + `rqrr` crates — no OS dependency, works on every target.
+- **OCR translation**: a Translate button on the OCR panel, with three
+  providers — the free Google endpoint, DeepL (API key), and a custom
+  LibreTranslate-compatible endpoint for networks where the first two are
+  unreachable. Network failures show localised, actionable messages.
+- **Freeform (lasso) selection** (`F`): drag any polygon; the bounding box
+  drives the toolbar and handles while the saved image is masked to the path
+  with a scanline fill, so copy / save / pin / decorations all honour it.
+- **Post-recording trim**: after a recording ends (or from the tray), a dialog
+  picks the `[start, end)` window in seconds and writes a new `*-trim.*` file
+  beside the original — ffmpeg re-encode for MP4, the pure-Rust GIF editor for
+  GIF recordings. The source file is never modified.
 - **Repeat last area** (`Ctrl+Shift+P`): re-grabs the previous overlay
   selection straight to the clipboard without re-selecting; falls back to a
   normal region capture when nothing has been selected yet.
@@ -39,6 +60,35 @@ All notable changes to PinSight are documented here. The format follows
 
 ### Fixed
 
+- Review pass (code / UI / features):
+  - The **Line** tool had no configurable shortcut — `Tool::ALL` advertised
+    `(L)` but `AppKeys`, the keyboard handler and Settings all omitted it.
+    Added end-to-end; the toolbar now prints the *user's* bindings and
+    `AppKeys::default()` derives them from `Tool::shortcut()`.
+  - The DeepL/API-key field cloned its buffer every frame and only committed
+    on focus loss, so typed characters were discarded; it now binds the config
+    field directly.
+  - Lasso masking was `O(width × height × vertices)` on the GUI thread and
+    could freeze on a 4K frame. Replaced with a per-scanline even-odd fill and
+    verified pixel-for-pixel against the reference implementation.
+  - `TranslatePrefs` lacked `#[serde(default)]`: configs written before the
+    new `endpoint` field would fail to load on upgrade. Added a regression test.
+  - Re-running OCR kept the previous translation (and an in-flight job could
+    overwrite it); OCR and QR panels shared one anchor and overlapped exactly;
+    the QR button's hover text was a "scanning…" status string.
+  - The QR generator uploaded a GPU texture every frame; it now caches the
+    texture and rebuilds only when the code changes.
+  - QR decoding skipped the 2× upscale on 4K frames due to the pixel cap,
+    missing small codes. Added overlapping tiled 2× scanning with a time budget.
+  - DeepL `target_lang` rejects bare `EN`/`PT`/`ZH`; mapped to `EN-US`,
+    `EN-GB`, `PT-BR`, `PT-PT`, `ZH-HANS`, `ZH-HANT` and kept valid region codes.
+  - Misc UI: the per-group hotkey box looked editable but discarded input, the
+    app-key record button said "Record/stop recording", the translation hint
+    used a hardcoded grey, the toolbar was too narrow for 12 tools, and the
+    rounded-corner arc sampled pixel corners instead of centres.
+- The **annotation toolbar** window is now excluded from WGC like the HUD
+  pills, so a full-screen recording no longer bakes the toolbar into the video
+  (the annotation canvas stays visible so marks are still recorded).
 - The pin-group rename box could panic (`unwrap` on a slot the same frame
   had just cleared); the draft now lives in a local variable.
 

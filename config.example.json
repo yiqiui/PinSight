@@ -6,7 +6,9 @@
     "long_capture": "Ctrl+Shift+L",
     "record": "Ctrl+Shift+R",
     "save_last": "Ctrl+Shift+S",
-    "toggle_pins": "Ctrl+Shift+H"
+    "toggle_pins": "Ctrl+Shift+H",
+    "repeat_capture": "Ctrl+Shift+P",
+    "pick_color": "Ctrl+Shift+K"
   },
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
   "gif_fps": 12,
@@ -56,6 +58,36 @@
   "capture_magnifier_size": 15,
   "color_format": "hex",
   "capture_pointer": false,
+  "decorations": {
+    "rounded": 12
+  },
+  "app_keys": {
+    "tool_select": "V",
+    "tool_rect": "R",
+    "tool_ellipse": "E",
+    "tool_arrow": "A",
+    "tool_line": "L",
+    "tool_pen": "D",
+    "tool_highlight": "H",
+    "tool_mosaic": "M",
+    "tool_numbered": "N",
+    "tool_text": "T",
+    "tool_measure": "G",
+    "tool_lasso": "F",
+    "confirm": "Enter",
+    "pin": "P",
+    "copy": "Ctrl+C",
+    "save": "Ctrl+S",
+    "cancel": "Esc",
+    "undo": "Ctrl+Z",
+    "redo": "Ctrl+Y"
+  },
+  "translate": {
+    "provider": "google",
+    "target": "zh-CN",
+    "key": "",
+    "endpoint": ""
+  },
   "pin_restore_limit": 5,
   "pin_gestures": {
     "zoom": {

@@ -20,6 +20,10 @@ use crate::util::PhysRect;
 
 const CANVAS_ID: &str = "pinsight-mark-canvas";
 const TOOLBAR_ID: &str = "pinsight-mark-toolbar";
+/// Native title of the toolbar window. Like the HUD pills it must stay out of
+/// the WGC capture, otherwise the toolbar itself is baked into the recording;
+/// the *canvas* window is deliberately NOT excluded so the marks are recorded.
+pub const TOOLBAR_TITLE: &str = "PinSight — annotation tools";
 const TOOLBAR_WIDTH: f32 = 520.0;
 const TOOLBAR_HEIGHT: f32 = 150.0;
 
@@ -606,7 +610,7 @@ impl MarkLayer {
             top + 14.0 + 96.0 + 8.0,
         );
         let builder = egui::ViewportBuilder::default()
-            .with_title("PinSight — annotation tools")
+            .with_title(TOOLBAR_TITLE)
             .with_decorations(false)
             .with_transparent(true)
             .with_always_on_top()

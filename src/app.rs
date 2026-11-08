@@ -49,6 +49,29 @@ struct Toast {
     at: Instant,
 }
 
+/// State of the "trim the recording" dialog shown after a recording ends.
+struct TrimDialog {
+    path: PathBuf,
+    /// Estimated length in seconds (`frames / fps`) of the source video.
+    duration: f64,
+    start: f64,
+    end: f64,
+    /// Some(receiver) while ffmpeg / the GIF editor works off-thread.
+    busy: Option<std::sync::mpsc::Receiver<Result<PathBuf, String>>>,
+}
+
+impl TrimDialog {
+    fn new(path: PathBuf, duration: f64) -> Self {
+        Self {
+            path,
+            duration,
+            start: 0.0,
+            end: duration,
+            busy: None,
+        }
+    }
+}
+
 enum AreaJob {
     Overlay(Intent),
     FullCopy,
@@ -147,6 +170,8 @@ pub(crate) enum TrayCommand {
     RecordVoice,
     /// Open the QR code generator window.
     QrGenerator,
+    /// Reopen the post-recording trim dialog for the last video.
+    TrimLastVideo,
 }
 
 /// A pin that was closed: enough to recreate it exactly where it was.
@@ -275,6 +300,10 @@ pub struct PinSightApp {
     /// stopped: calling `SetWindowDisplayAffinity` every frame made the pill
     /// jitter and the hovered cursor flicker.
     hud_exclude_frames: u32,
+    /// Frames spent re-asserting capture exclusion for the annotation toolbar.
+    /// The layer can open mid-recording, so it needs its own counter rather
+    /// than the HUD's "first second of the job" window.
+    mark_exclude_frames: u32,
     /// Updates tab state machine.
     update_state: UpdateUi,
     /// Pending GitHub release check (runs on a worker thread).
@@ -289,6 +318,10 @@ pub struct PinSightApp {
     config_move: Option<ConfigMove>,
     /// Annotation layer over the running recording, open while the user draws.
     mark_layer: Option<crate::marklayer::MarkLayer>,
+    /// Post-recording trim dialog and the last video (path + estimated length)
+    /// so the tray can reopen the dialog later.
+    trim_dialog: Option<TrimDialog>,
+    last_video: Option<(PathBuf, f64)>,
     toast: Option<Toast>,
     last_image: Option<Arc<RgbaImage>>,
     /// Recent captures, newest first. Bounded so a long session cannot grow
@@ -459,6 +492,7 @@ impl PinSightApp {
             long_job: None,
             record_job: None,
             hud_exclude_frames: 0,
+            mark_exclude_frames: 0,
             update_state: UpdateUi::Idle,
             update_check_rx: None,
             update_report: None,
@@ -466,6 +500,8 @@ impl PinSightApp {
             update_startup_checked: false,
             config_move: None,
             mark_layer: None,
+            trim_dialog: None,
+            last_video: None,
             toast: None,
             last_image: None,
             history: Vec::new(),
@@ -802,6 +838,140 @@ impl PinSightApp {
         }
     }
 
+    /// Post-recording trim dialog. Two sliders pick the `[start, end)` window;
+    /// the actual ffmpeg/GIF work happens on a worker thread and the receiver
+    /// is polled here every frame.
+    fn show_trim_dialog(&mut self, ctx: &egui::Context, p: &Palette) {
+        let t = self.tr.tr;
+        // Collect a finished job before drawing, so the dialog closes on the
+        // same frame the output is ready.
+        let mut finished: Option<Result<PathBuf, String>> = None;
+        if let Some(d) = &self.trim_dialog {
+            if let Some(rx) = &d.busy {
+                match rx.try_recv() {
+                    Ok(res) => finished = Some(res),
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        finished = Some(Err("trim thread crashed".into()))
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                }
+            }
+        }
+        if let Some(res) = finished {
+            self.trim_dialog = None;
+            match res {
+                Ok(path) => {
+                    self.last_saved = Some(path.clone());
+                    self.toast(format!("{}: {}", t.trim_done, path.display()), false);
+                }
+                Err(err) => self.toast(format!("{}: {err}", t.trim_failed), true),
+            }
+            return;
+        }
+
+        // Snapshot into locals: the window closure borrows `self` mutably, so
+        // it cannot also read other dialog fields for slider ranges.
+        let Some((path, duration, mut start, mut end, busy)) = self
+            .trim_dialog
+            .as_ref()
+            .map(|d| (d.path.clone(), d.duration, d.start, d.end, d.busy.is_some()))
+        else {
+            return;
+        };
+        let mut apply = false;
+        let mut skip = false;
+        let mut open = true;
+        egui::Window::new(t.trim_title)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(380.0)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.label(
+                    egui::RichText::new(path.file_name().unwrap_or_default().to_string_lossy())
+                        .strong()
+                        .color(p.text),
+                );
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(t.trim_hint).small().color(p.text_weak));
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(format!("{:.1} s · {:.1}–{:.1} s", duration, start, end))
+                        .monospace()
+                        .color(p.text_weak),
+                );
+                ui.add_enabled_ui(!busy, |ui| {
+                    ui.add(
+                        egui::Slider::new(&mut start, 0.0..=duration)
+                            .text(t.trim_start)
+                            .show_value(true),
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut end, 0.0..=duration)
+                            .text(t.trim_end)
+                            .show_value(true),
+                    );
+                });
+                // Keep a small, non-empty window whichever slider was dragged.
+                start = start.clamp(0.0, (duration - 0.2).max(0.0));
+                end = end.clamp((start + 0.2).min(duration), duration);
+                start = start.min(end - 0.2);
+                ui.add_space(6.0);
+                ui.label(format!("{} {:.1} s", t.trim_keep, end - start));
+                ui.add_space(8.0);
+                if busy {
+                    ui.label(t.trim_running);
+                }
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(!busy, egui::Button::new(t.trim_apply))
+                        .clicked()
+                    {
+                        apply = true;
+                    }
+                    if ui::link_button(ui, p, ui::Icon::Close, t.trim_skip).clicked() {
+                        skip = true;
+                    }
+                });
+            });
+        if !open {
+            skip = true;
+        }
+        if skip {
+            self.trim_dialog = None;
+            return;
+        }
+        // Write the (possibly clamped) slider values back.
+        if let Some(d) = self.trim_dialog.as_mut() {
+            d.start = start;
+            d.end = end;
+        }
+        if apply {
+            if let Err(err) = crate::trim::validate(start, end, duration) {
+                self.toast(format!("{}: {err}", t.trim_failed), true);
+                return;
+            }
+            let fps = self.config.record_fps.clamp(1, 60);
+            let src = path.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            let spawned = std::thread::Builder::new()
+                .name("pinsight-trim".into())
+                .spawn(move || {
+                    let res = crate::trim::trim(&src, start, end, fps);
+                    let _ = tx.send(res);
+                });
+            match spawned {
+                Ok(_) => {
+                    if let Some(d) = self.trim_dialog.as_mut() {
+                        d.busy = Some(rx);
+                    }
+                }
+                Err(err) => self.toast(format!("{}: {err}", t.trim_failed), true),
+            }
+        }
+    }
+
     fn capture_window_now(&mut self, id: u32) {
         match capture::grab_window(id) {
             Ok(image) => {
@@ -880,6 +1050,17 @@ impl PinSightApp {
             }
         } else {
             self.hud_exclude_frames = 0;
+        }
+        // The annotation toolbar can be opened at any point during a recording,
+        // so re-assert its exclusion for ~1 s from when the layer appears. The
+        // canvas window stays visible to WGC — that is how marks reach the video.
+        if self.mark_layer.is_some() && self.record_job.is_some() {
+            if self.mark_exclude_frames < 30 {
+                crate::capture::set_capture_exclusion(crate::marklayer::TOOLBAR_TITLE);
+                self.mark_exclude_frames += 1;
+            }
+        } else {
+            self.mark_exclude_frames = 0;
         }
 
         if let Some(job) = self.record_job.as_mut() {
@@ -1551,6 +1732,21 @@ impl PinSightApp {
                         ),
                         false,
                     );
+                    // Offer a head/tail trim. `frames / fps` is a good enough
+                    // duration estimate (the recorder writes one frame per
+                    // tick); ffprobe is not required. GIF needs no ffmpeg.
+                    let fps = self.config.record_fps.clamp(1, 60) as f64;
+                    let duration = frames as f64 / fps;
+                    self.last_video = Some((path.clone(), duration));
+                    let ext = path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
+                    let can_trim = (ext == "mp4" && self.ffmpeg) || ext == "gif";
+                    if can_trim && duration >= 0.5 {
+                        self.trim_dialog = Some(TrimDialog::new(path, duration));
+                    }
                 }
                 Some(RecordUpdate::Failed(err)) => {
                     self.restore_root(ctx);
@@ -3000,6 +3196,11 @@ impl PinSightApp {
                 command: TrayCommand::QrGenerator,
             },
             TrayItem::Command {
+                id: 21,
+                label: t.tray_trim_video.to_string(),
+                command: TrayCommand::TrimLastVideo,
+            },
+            TrayItem::Command {
                 id: 6,
                 label: row(t.tray_save_last, &hk.save_last),
                 command: TrayCommand::SaveLast,
@@ -3214,6 +3415,19 @@ impl PinSightApp {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                     self.qr_gen_open = true;
+                }
+                TrayCommand::TrimLastVideo => {
+                    if let Some((path, duration)) = self.last_video.clone() {
+                        if path.exists() && duration >= 0.5 {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                            self.trim_dialog = Some(TrimDialog::new(path, duration));
+                        } else {
+                            self.toast(self.tr.tr.trim_no_video, true);
+                        }
+                    } else {
+                        self.toast(self.tr.tr.trim_no_video, true);
+                    }
                 }
                 TrayCommand::Quit => {
                     // Mark the intent first: the close we are about to ask for
@@ -7758,6 +7972,7 @@ impl eframe::App for PinSightApp {
         self.show_config_move_dialog(&ctx, &p);
         self.show_window_picker(&ctx, &p);
         self.show_qr_generator(&ctx, &p);
+        self.show_trim_dialog(&ctx, &p);
 
         if let Some(toast) = &self.toast {
             if toast.at.elapsed() > TOAST_LIFETIME {
