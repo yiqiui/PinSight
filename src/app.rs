@@ -1672,7 +1672,7 @@ impl PinSightApp {
     fn poll_jobs(&mut self, ctx: &egui::Context) {
         if let Some(mut job) = self.long_job.take() {
             match job.poll() {
-                Some(LongShotUpdate::Finished(image)) => {
+                Some(LongShotUpdate::Finished { image, truncated }) => {
                     self.restore_root(ctx);
                     match longshot::save(&image, &self.config.save_dir, &self.save_options()) {
                         Ok(path) => {
@@ -1684,10 +1684,22 @@ impl PinSightApp {
                             // viewer instead, where the full image can be
                             // scrolled and zoomed.
                             util::open_path(&path);
-                            self.toast(
-                                format!("{}: {}", self.tr.tr.long_saved, path.display()),
-                                false,
-                            );
+                            // A capture that hit the frame/height cap is only a
+                            // *prefix* of the page. Say so in the same toast
+                            // (toasts are single-slot, so a second one would
+                            // overwrite the saved path) and give it the warning
+                            // colour instead of reporting it as complete.
+                            let text = if truncated {
+                                format!(
+                                    "{}: {} · {}",
+                                    self.tr.tr.long_saved,
+                                    path.display(),
+                                    self.tr.tr.long_truncated,
+                                )
+                            } else {
+                                format!("{}: {}", self.tr.tr.long_saved, path.display())
+                            };
+                            self.toast(text, truncated);
                         }
                         Err(err) => self.toast(format!("{}: {err}", self.tr.tr.save_failed), true),
                     }

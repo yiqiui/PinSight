@@ -354,7 +354,7 @@ fn call_tool(
             );
             loop {
                 match job.rx.recv_timeout(Duration::from_secs(90)) {
-                    Ok(crate::longshot::LongShotUpdate::Finished(image)) => {
+                    Ok(crate::longshot::LongShotUpdate::Finished { image, truncated }) => {
                         let options = crate::util::SaveOptions {
                             template: crate::naming::DEFAULT_TEMPLATE.to_string(),
                             quality: 90,
@@ -364,10 +364,14 @@ fn call_tool(
                         };
                         let path = crate::longshot::save(&image, save_dir, &options)
                             .map_err(|e| e.to_string())?;
+                        // Expose the cap hit so an agent can retry with a larger
+                        // max_height instead of silently treating a prefix as
+                        // the whole page.
                         return Ok(json!({
                             "path": path.display().to_string(),
                             "width": image.width(),
-                            "height": image.height()
+                            "height": image.height(),
+                            "truncated": truncated
                         })
                         .to_string());
                     }

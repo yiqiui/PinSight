@@ -106,9 +106,39 @@ use crate::capture;
 use crate::util;
 
 pub enum LongShotUpdate {
-    Progress { frames: u32, height: u32 },
-    Finished(RgbaImage),
+    Progress {
+        frames: u32,
+        height: u32,
+    },
+    /// The capture finished. `truncated` is true when a hard cap (max frames or
+    /// max height) was hit before the page stopped scrolling, so the image is a
+    /// *prefix* of the full page rather than the whole thing. Callers must warn
+    /// the user instead of presenting it as complete — previously a capped
+    /// capture was reported as `Finished` with no hint that it was cut short.
+    Finished {
+        image: RgbaImage,
+        truncated: bool,
+    },
     Failed(String),
+}
+
+/// Whether a finished capture is only a *prefix* of the page because a hard cap
+/// or an abnormal stop ended it early. `clean_finish` is true only for the two
+/// ways a capture legitimately ends: the user pressed stop/Esc, or the page
+/// reached its bottom (idle timeout / scrollbar at bottom). Every other exit —
+/// running out of the `max_frames` budget, hitting `max_height`, a failed grab,
+/// too many unalignable frames — means there was still content left, so the
+/// result must be flagged as truncated instead of reported as complete.
+fn capture_truncated(clean_finish: bool, height_cap: bool) -> bool {
+    !clean_finish || height_cap
+}
+
+/// How many of the `new_rows` a frame contributes can still be appended without
+/// pushing the stitched image past `max_height`. Returns 0 once the cap is
+/// reached, which is the signal the caller uses to stop and flag truncation.
+/// `saturating_sub` keeps this safe even if a previous append overshot the cap.
+fn capped_append(new_rows: u32, current_height: u32, max_height: u32) -> u32 {
+    new_rows.min(max_height.saturating_sub(current_height))
 }
 
 /// Tunables for one scrolling capture. They live in the settings page because
@@ -290,11 +320,21 @@ fn run(
     let mut unaligned_rounds = 0u32;
     // Fixed footer lifted out of the stitched body, re-attached at the very end.
     let mut footer: Option<RgbaImage> = None;
+    // Stop tracking for the truncation hint. `height_cap` is set when a
+    // `max_height` limit forces an early end; `clean_finish` is set when
+    // the user stops or the page reaches its bottom. Anything else — running out
+    // of the frame budget, a capture error, too many unalignable frames — means
+    // the stitched image is a *prefix* of the page and must be flagged as
+    // truncated so the UI warns instead of presenting it as complete.
+    let mut height_cap = false;
+    let mut clean_finish = false;
     for _ in 0..options.max_frames.max(10) {
         if stop.load(Ordering::Relaxed) {
+            clean_finish = true;
             break;
         }
         if output.height() >= max_height {
+            height_cap = true;
             break;
         }
 
@@ -351,6 +391,9 @@ fn run(
             // scrollbar thumb has reached the end; stop after a short
             // confirmation instead of waiting out the long reading-pause timeout.
             if idle_rounds > idle_limit || (idle_rounds >= 3 && scrollbar_at_bottom(&next)) {
+                // Page reached its bottom (or was still long enough to confirm
+                // the end) — a natural, complete capture.
+                clean_finish = true;
                 break;
             }
             std::thread::sleep(Duration::from_millis(120));
@@ -461,8 +504,9 @@ fn run(
 
         // Append the rows the frame adds below what the output already holds,
         // starting past the fixed header.
-        let append_height = new_rows.min(max_height.saturating_sub(output.height()));
+        let append_height = capped_append(new_rows, output.height(), max_height);
         if append_height == 0 {
+            height_cap = true;
             break;
         }
         output.push_rows(&next, append_from, append_height);
@@ -471,6 +515,7 @@ fn run(
             height: output.height(),
         });
         if output.height() >= max_height {
+            height_cap = true;
             break;
         }
     }
@@ -489,7 +534,10 @@ fn run(
             if let Some(band) = footer {
                 image = append_band(&image, &band, true);
             }
-            let _ = tx.send(LongShotUpdate::Finished(image));
+            let _ = tx.send(LongShotUpdate::Finished {
+                image,
+                truncated: capture_truncated(clean_finish, height_cap),
+            });
         } else {
             let _ = tx.send(LongShotUpdate::Failed("cancelled".into()));
         }
@@ -512,7 +560,10 @@ fn run(
     if let Some(band) = footer {
         image = append_band(&image, &band, true);
     }
-    let _ = tx.send(LongShotUpdate::Finished(image));
+    let _ = tx.send(LongShotUpdate::Finished {
+        image,
+        truncated: capture_truncated(clean_finish, height_cap),
+    });
     Ok(())
 }
 
@@ -1777,6 +1828,37 @@ mod tests {
                     "row {yy} does not match the source"
                 );
             }
+        }
+    }
+
+    // ---- hard-cap / truncation boundaries ---------------------------------
+
+    #[test]
+    fn capture_truncated_truth_table() {
+        // Clean finish (user stop or page bottom), no cap → complete.
+        assert!(!capture_truncated(true, false));
+        // Frame budget exhausted / failed grab / too many unalignable frames.
+        assert!(capture_truncated(false, false));
+        // max_height hit.
+        assert!(capture_truncated(false, true));
+        // Defensive: a height cap wins even if a clean finish was also flagged.
+        assert!(capture_truncated(true, true));
+    }
+
+    #[test]
+    fn capped_append_never_overshoots_max_height() {
+        let max = 20_000u32;
+        assert_eq!(capped_append(300, 0, max), 300);
+        assert_eq!(capped_append(300, 19_900, max), 100);
+        assert_eq!(capped_append(300, 19_999, max), 1);
+        assert_eq!(capped_append(300, max, max), 0);
+        // Saturating, not wrapping: an already-over-cap buffer adds nothing.
+        assert_eq!(capped_append(300, max + 50, max), 0);
+        assert_eq!(capped_append(0, 10, max), 0);
+        // Starting at or below the cap, the append never pushes past it.
+        // (An already-over-cap buffer is covered above: it appends nothing.)
+        for current in [0u32, 1, 5_000, 19_999, 20_000] {
+            assert!(current.saturating_add(capped_append(900, current, max)) <= max);
         }
     }
 }
