@@ -400,12 +400,22 @@ fn run(
             Ok(image) => image,
             Err(err) => {
                 if frames == 0 {
+                    // No frames written yet: kill ffmpeg (if any) and drop the
+                    // empty/corrupt output file rather than leaving it behind.
+                    sink.abort();
+                    let _ = std::fs::remove_file(path);
                     return Err(format!("capture failed: {err}"));
                 }
                 break;
             }
         };
-        sink.write(&image, fps)?;
+        if let Err(e) = sink.write(&image, fps) {
+            // ffmpeg crashed or its stdin closed mid-stream: abandon it and
+            // delete the partial output so we don't ship a broken file.
+            sink.abort();
+            let _ = std::fs::remove_file(path);
+            return Err(e);
+        }
         held = Some(image);
         frames += 1;
 
@@ -421,6 +431,8 @@ fn run(
 
     sink.finish()?;
     if frames == 0 {
+        // Finished cleanly but produced nothing usable: drop the empty file.
+        let _ = std::fs::remove_file(path);
         return Err("no frames were captured".into());
     }
     let _ = tx.send(RecordUpdate::Finished {
@@ -699,6 +711,31 @@ impl Sink {
                     Err(format!("ffmpeg exited with {status}"))
                 }
             }
+        }
+    }
+
+    /// Best-effort abandon used on early error returns. Kills the ffmpeg child
+    /// (MP4) so it cannot linger as an orphan process holding the output file;
+    /// the GIF path needs no special handling. The caller is responsible for
+    /// deleting the partial output file afterwards.
+    fn abort(&mut self) {
+        if let Sink::Mp4 { child, stdin, .. } = self {
+            let _ = stdin.take();
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+impl Drop for Sink {
+    fn drop(&mut self) {
+        // If we are dropped before `finish()` ran (any early error return),
+        // the MP4 child is still alive. `Child::drop` does not terminate it on
+        // Windows, so kill it explicitly to avoid an orphan process and a
+        // half-written file the next launch would trip over.
+        if let Sink::Mp4 { child, stdin, .. } = self {
+            let _ = stdin.take();
+            let _ = child.kill();
         }
     }
 }

@@ -219,6 +219,10 @@ pub fn start(monitor_id: u32, region: ImgRect, options: LongShotOptions) -> Long
             }
         });
     if let Err(err) = spawn_res {
+        // The capture thread never ran, so it can never set `done` to release
+        // the Esc/Mouse watcher. Signal it here, otherwise the low-level hooks
+        // stay installed forever (and the watcher thread never exits).
+        done.store(true, Ordering::Relaxed);
         let _ = fail_tx.send(LongShotUpdate::Failed(format!(
             "could not start capture thread: {err}"
         )));

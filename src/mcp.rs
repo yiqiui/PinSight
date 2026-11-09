@@ -102,7 +102,13 @@ fn serve_stdio(ui_tx: Sender<UiCommand>, save_dir: PathBuf, requests: Arc<Atomic
     let mut stdout = std::io::stdout();
 
     for line in stdin.lock().lines() {
-        let Ok(line) = line else { break };
+        let Ok(line) = line else {
+            // A single invalid UTF-8 byte must not take the whole server down:
+            // `lines()` resumes on the next line after a decode error, so we
+            // skip the bad one and keep serving subsequent requests.
+            tracing::warn!("MCP stdio: dropping a non-UTF-8 line");
+            continue;
+        };
         if line.trim().is_empty() {
             continue;
         }
