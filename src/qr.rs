@@ -46,6 +46,54 @@ const MAX_SCAN_PIXELS: usize = 32_000_000;
 const TILE: u32 = 1024;
 const TILE_OVERLAP: u32 = 256;
 
+/// Conditional speckle removal over the luma buffer. Salt-and-pepper specks
+/// (single pixels flipped to the opposite extreme, plus the spurious edges they
+/// draw in the quiet zone) are the one degradation rqrr's grid finder is
+/// fragile to. A *plain* 3×3 median would also erase genuinely small modules
+/// (a 2px-module code has features narrower than the kernel), so instead we
+/// only rewrite a pixel when it is an isolated outlier: its 8 neighbours agree
+/// on the opposite tone with at least 6 of 8 votes. That kills lone specks
+/// while leaving module interiors and edges intact (they always keep ≥3
+/// same-tone neighbours), and on a perfectly clean capture nothing changes.
+fn despeckle(luma: &mut [u8], w: usize, h: usize) {
+    if w < 3 || h < 3 {
+        return;
+    }
+    let src = luma.to_vec(); // snapshot so we read neighbours from the old frame
+    for y in 0..h {
+        for x in 0..w {
+            let c = src[y * w + x];
+            let c_dark = c < 128;
+            let mut dark = 0u32;
+            let mut light = 0u32;
+            let mut dark_sum = 0u32;
+            let mut light_sum = 0u32;
+            for dy in -1i32..=1i32 {
+                for dx in -1i32..=1i32 {
+                    if dx == 0 && dy == 0 {
+                        continue;
+                    }
+                    let nx = (x as i32 + dx).clamp(0, w as i32 - 1) as usize;
+                    let ny = (y as i32 + dy).clamp(0, h as i32 - 1) as usize;
+                    let v = src[ny * w + nx];
+                    if v < 128 {
+                        dark += 1;
+                        dark_sum += v as u32;
+                    } else {
+                        light += 1;
+                        light_sum += v as u32;
+                    }
+                }
+            }
+            if c_dark && light >= 6 {
+                luma[y * w + x] = (light_sum / light) as u8;
+            } else if !c_dark && dark >= 6 {
+                luma[y * w + x] = (dark_sum / dark) as u8;
+            }
+        }
+    }
+}
+
 /// Run rqrr over one scaled/inverted view of a luma buffer. `pixel` maps
 /// output coordinates back to a source sample, so the whole frame and individual
 /// tiles can share the same decoder without copying pixels.
@@ -123,6 +171,8 @@ pub fn recognize(image: &RgbaImage) -> Vec<String> {
                 ((r * 299 + g * 587 + b * 114) / 1000) as u8;
         }
     }
+    // Drop isolated salt-and-pepper specks before detection (see `despeckle`).
+    despeckle(&mut luma, w as usize, h as usize);
 
     let mut found: Vec<String> = Vec::new();
     let max_side = w.max(h);
@@ -279,5 +329,158 @@ mod tests {
         }
         let decoded = recognize(&big);
         assert_eq!(decoded, vec![payload.to_string()]);
+    }
+
+    // ---- robustness under realistic capture degradations ----
+    //
+    // Screenshots are rarely pristine: they pick up defocus/motion blur, washed
+    // out low-contrast UIs, tilted phone photos, JPEG compression noise and the
+    // occasional finger/reflection. These tests lock the decoder's behaviour on
+    // *moderate* versions of each so a future refactor cannot silently regress
+    // recognition, and document (via comments) how far rqrr carries us.
+
+    /// Deterministic xorshift RNG so noise tests are reproducible.
+    fn rng(seed: u64) -> impl FnMut() -> u64 {
+        let mut s = seed;
+        move || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s
+        }
+    }
+
+    /// Shrink the dynamic range by pulling every channel toward mid-gray (128).
+    /// `factor = 1.0` is the original; `0.5` halves the departure from grey.
+    fn degrade_low_contrast(img: &RgbaImage, factor: f32) -> RgbaImage {
+        let mut out = img.clone();
+        for p in out.pixels_mut() {
+            for c in 0..3 {
+                let v = p.0[c] as f32;
+                p.0[c] = (128.0 + (v - 128.0) * factor).clamp(0.0, 255.0) as u8;
+            }
+        }
+        out
+    }
+
+    /// Flip `density` fraction of pixels to the opposite extreme — a stand-in
+    /// for salt-and-pepper / heavy JPEG-artifact damage. Seeded for stability.
+    fn degrade_salt_pepper(img: &RgbaImage, density: f32, seed: u64) -> RgbaImage {
+        let mut out = img.clone();
+        let mut rnd = rng(seed);
+        let span = u64::MAX as f64;
+        for p in out.pixels_mut() {
+            if (rnd() as f64) / span < density as f64 {
+                let light = p.0[0] > 127;
+                let v = if light { 0u8 } else { 255u8 };
+                p.0[0] = v;
+                p.0[1] = v;
+                p.0[2] = v;
+            }
+        }
+        out
+    }
+
+    /// Paint a solid white block over a data region of the symbol (avoiding the
+    /// three finder patterns) to emulate occlusion by a finger or reflection.
+    fn occlude_data_block(img: &RgbaImage, modules: u32, module_px: u32) -> RgbaImage {
+        let mut out = img.clone();
+        let n = img.width() / module_px; // modules per side (incl. quiet zone)
+        let center = n / 2;
+        let x0 = (center - modules / 2) * module_px;
+        let y0 = (center - modules / 2) * module_px;
+        for py in y0..(y0 + modules * module_px).min(out.height()) {
+            for px in x0..(x0 + modules * module_px).min(out.width()) {
+                out.put_pixel(px, py, Rgba([255, 255, 255, 255]));
+            }
+        }
+        out
+    }
+
+    /// Rotate by `deg` degrees about the centre into a white-background canvas
+    /// sized to the image diagonal (no clipping). Nearest-neighbour sampling;
+    /// this avoids depending on the affine feature and keeps the test offline.
+    fn rotate_nearest(img: &RgbaImage, deg: f32) -> RgbaImage {
+        let (w, h) = img.dimensions();
+        let diag = (w as f32).hypot(h as f32).ceil() as u32;
+        let mut out = RgbaImage::from_pixel(diag, diag, Rgba([255, 255, 255, 255]));
+        let cx = w as f32 / 2.0;
+        let cy = h as f32 / 2.0;
+        let ocx = diag as f32 / 2.0;
+        let ocy = diag as f32 / 2.0;
+        let rad = deg.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        for oy in 0..diag {
+            for ox in 0..diag {
+                let dx = ox as f32 - ocx;
+                let dy = oy as f32 - ocy;
+                let sx = cx + dx * cos + dy * sin;
+                let sy = cy - dx * sin + dy * cos;
+                if sx >= 0.0 && sy >= 0.0 && sx < w as f32 && sy < h as f32 {
+                    *out.get_pixel_mut(ox, oy) = *img.get_pixel(sx as u32, sy as u32);
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn recognize_survives_mild_gaussian_blur() {
+        // Defocus / motion blur on a 10px-module code (sigma 2.0 px ≈ 0.2 module).
+        let payload = "blur-resilience-check-abc123";
+        let img = generate(payload, 10).unwrap();
+        let blurred = image::imageops::blur(&img, 2.0);
+        assert_eq!(recognize(&blurred), vec![payload.to_string()]);
+    }
+
+    #[test]
+    fn recognize_survives_low_contrast() {
+        // A washed-out / dark-mode UI where black-on-white has collapsed toward grey.
+        let payload = "low-contrast-abc123";
+        let img = generate(payload, 10).unwrap();
+        let faded = degrade_low_contrast(&img, 0.5);
+        assert_eq!(recognize(&faded), vec![payload.to_string()]);
+    }
+
+    #[test]
+    fn recognize_survives_rotation_90() {
+        let payload = "rotation-90-abc123";
+        let img = generate(payload, 10).unwrap();
+        assert_eq!(
+            recognize(&image::imageops::rotate90(&img)),
+            vec![payload.to_string()]
+        );
+    }
+
+    #[test]
+    fn recognize_survives_small_tilt() {
+        // A tilted phone photo of a screen (~10°); rqrr samples the grid via a
+        // homography so mild rotation must not break it.
+        let payload = "tilt-10deg-abc123";
+        let img = generate(payload, 10).unwrap();
+        assert_eq!(
+            recognize(&rotate_nearest(&img, 10.0)),
+            vec![payload.to_string()]
+        );
+    }
+
+    #[test]
+    fn recognize_survives_salt_and_pepper_noise() {
+        // Heavy JPEG-style speckle: 5% of pixels flipped to the opposite extreme.
+        let payload = "noise-5pct-abc123";
+        let img = generate(payload, 10).unwrap();
+        let noisy = degrade_salt_pepper(&img, 0.05, 0x9E3779B9);
+        assert_eq!(recognize(&noisy), vec![payload.to_string()]);
+    }
+
+    #[test]
+    fn recognize_survives_data_occlusion() {
+        // A 5×5-module white block over the centre data area (finder patterns
+        // untouched) — emulates a finger/reflection; Reed-Solomon covers it.
+        let payload = "occlusion-5x5-abc123";
+        let img = generate(payload, 10).unwrap();
+        let blocked = occlude_data_block(&img, 5, 10);
+        assert_eq!(recognize(&blocked), vec![payload.to_string()]);
     }
 }

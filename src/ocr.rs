@@ -410,4 +410,60 @@ mod tests {
     fn empty_input_yields_empty_string() {
         assert_eq!(words_to_text(&[]), "");
     }
+
+    // ---- robustness of the line-reassembly logic ----
+    //
+    // `words_to_text` receives a flat word list and must rebuild reading order
+    // purely from bounding boxes. The OCR engines return words in *some* order
+    // (not necessarily reading order) and their boxes are noisy; these tests
+    // lock the reassembly against those realities so a refactor cannot quietly
+    // scramble output. (Engine-level blur/low-contrast/tilt resilience is
+    // platform-dependent and validated on-device, not here.)
+
+    #[test]
+    fn recovers_reading_order_from_unsorted_input() {
+        // An engine that returns words in arbitrary order must still yield the
+        // correct left-to-right, top-to-bottom text.
+        let mut words = vec![
+            word("World", 40.0, 0.0),
+            word("Hello", 0.0, 0.0),
+            word("Line", 60.0, 20.0),
+            word("Rust", 0.0, 20.0),
+        ];
+        words.reverse(); // deliberately not in reading order
+        assert_eq!(words_to_text(&words), "Hello World\nRust Line");
+    }
+
+    #[test]
+    fn tolerates_small_baseline_jitter() {
+        // Real boxes are rarely pixel-aligned; a few px of vertical jitter must
+        // neither split a line apart nor merge two lines together.
+        let words = vec![
+            word("Hello", 0.0, 1.0),
+            word("World", 40.0, -2.0),
+            word("Rust", 0.0, 22.0),
+        ];
+        assert_eq!(words_to_text(&words), "Hello World\nRust");
+    }
+
+    #[test]
+    fn groups_words_with_varied_heights() {
+        // A tall word next to a short one on the same baseline stays one line;
+        // the next baseline starts a new line.
+        let words = vec![
+            OcrWord {
+                text: "Big".into(),
+                rect: (0.0, 0.0, 30.0, 24.0),
+            },
+            OcrWord {
+                text: "small".into(),
+                rect: (40.0, 4.0, 30.0, 10.0),
+            },
+            OcrWord {
+                text: "Next".into(),
+                rect: (0.0, 30.0, 30.0, 24.0),
+            },
+        ];
+        assert_eq!(words_to_text(&words), "Big small\nNext");
+    }
 }
