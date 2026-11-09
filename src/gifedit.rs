@@ -26,21 +26,16 @@ pub fn load_gif(path: &Path) -> Result<Vec<GifFrame>> {
     let file = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let decoder = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(file))
         .context("creating GIF decoder")?;
-    let frames = decoder
-        .into_frames()
-        .collect_frames()
-        .context("decoding GIF frames")?;
-    // A hostile or simply enormous GIF (tens of thousands of full-HD frames)
-    // would exhaust memory before any transform runs. 4000 frames at any
-    // plausible size is far beyond interactive use.
-    if frames.len() > 4000 {
-        anyhow::bail!(
-            "GIF has {} frames; the editor accepts at most 4000",
-            frames.len()
-        );
-    }
-    let mut out = Vec::with_capacity(frames.len());
-    for frame in frames {
+    // Stream the frames lazily so a hostile or simply enormous GIF (tens of
+    // thousands of full-HD frames) is rejected *before* it is fully decoded and
+    // exhausts memory. 4000 frames at any plausible size is far beyond
+    // interactive use.
+    let mut out = Vec::new();
+    for frame in decoder.into_frames() {
+        if out.len() >= 4000 {
+            anyhow::bail!("GIF has more than 4000 frames; the editor accepts at most 4000");
+        }
+        let frame = frame.context("decoding GIF frames")?;
         let delay_ms = frame.delay().numer_denom_ms().0;
         // Clamp to the GIF-legal range so a broken source cannot produce 0.
         let delay_cs = ((delay_ms + 5) / 10).clamp(1, 600) as u16;

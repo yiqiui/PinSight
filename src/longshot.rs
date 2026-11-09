@@ -1213,15 +1213,17 @@ impl Stitch {
     }
 
     /// Detach and return the last `rows` rows (used to lift a fixed footer out of
-    /// the body), shrinking the buffer.
+    /// the body), shrinking the buffer. If `rows` exceeds the current height,
+    /// returns whatever rows are present rather than underflowing.
     fn take_tail_rows(&mut self, rows: u32) -> RgbaImage {
+        let take = rows.min(self.h);
         let row_bytes = self.w as usize * 4;
-        let start = self.h.saturating_sub(rows) as usize * row_bytes;
+        let start = (self.h - take) as usize * row_bytes;
         let data = self.data.split_off(start);
-        self.h -= rows;
+        self.h -= take;
         // `from_raw` only fails if the buffer length is wrong; guard it so a
         // math slip degrades to an empty strip instead of panicking mid-stitch.
-        RgbaImage::from_raw(self.w, rows, data).unwrap_or_else(|| RgbaImage::new(self.w, 0))
+        RgbaImage::from_raw(self.w, take, data).unwrap_or_else(|| RgbaImage::new(self.w, 0))
     }
 
     fn into_image(self) -> RgbaImage {
@@ -1600,5 +1602,181 @@ mod tests {
         assert_eq!(tail.dimensions(), (120, 40));
         assert_eq!(s.height(), 160);
         assert_eq!(tail.get_pixel(0, 0), b.get_pixel(0, 160));
+    }
+
+    /// Asking for more rows than the buffer holds must not underflow `h`
+    /// (which panicked in debug / wrapped in release) — it returns what is there.
+    #[test]
+    fn take_tail_rows_more_than_height_is_safe() {
+        let mut s = Stitch::from_image(&gradient(120, 100));
+        let tail = s.take_tail_rows(250);
+        assert_eq!(tail.dimensions(), (120, 100));
+        assert_eq!(s.height(), 0);
+    }
+
+    /// The static-detection gate must call a one-pixel caret "not moving" but a
+    /// fully-white frame "moving" — these are the two ends of the real signal.
+    #[test]
+    fn frame_difference_separates_tiny_from_huge_change() {
+        let a = gradient(120, 300);
+        let mut caret = a.clone();
+        caret.put_pixel(60, 150, Rgba([0, 0, 0, 255]));
+        assert!(
+            frame_difference(&a, &caret) < 1.5,
+            "a single dark pixel must read as still (got {})",
+            frame_difference(&a, &caret)
+        );
+        let mut white = a.clone();
+        for y in 0..300u32 {
+            for x in 0..120u32 {
+                white.put_pixel(x, y, Rgba([255, 255, 255, 255]));
+            }
+        }
+        assert!(
+            frame_difference(&a, &white) > 50.0,
+            "a wholly different frame must read as moved (got {})",
+            frame_difference(&a, &white)
+        );
+    }
+
+    /// A page that scrolled by a full frame — the next window shares nothing
+    /// with the previous one — must be reported as `Unknown`, not stitched as a
+    /// duplicate. This is the "content jumped too far in one step" extreme.
+    #[test]
+    fn classify_scroll_unknown_when_page_jumps_past_a_frame() {
+        // Non-periodic content (a periodic gradient would fake an overlap at a
+        // multiple of its period). Two windows that share no rows must be
+        // reported as `Unknown`, never stitched as a duplicate.
+        let source = text_page(120, 1200);
+        let prev = image::imageops::crop_imm(&source, 0, 0, 120, 600).to_image();
+        let next = image::imageops::crop_imm(&source, 0, 600, 120, 600).to_image();
+        assert!(matches!(classify_scroll(&prev, &next), Scroll::Unknown));
+    }
+
+    /// Two identical frames are caught by the static gate before classification,
+    /// but the classifier itself must never panic or report a bogus scroll.
+    #[test]
+    fn classify_scroll_identical_frames_is_down_not_unknown() {
+        let prev = gradient(120, 300);
+        let next = prev.clone();
+        assert!(matches!(classify_scroll(&prev, &next), Scroll::Down(_)));
+    }
+
+    /// Deterministic per-pixel noise (±10), bounded well inside the aligner's
+    /// per-pixel tolerance. A naive exact-match aligner would fail every pixel;
+    /// the voting aligner must still recover the true overlap.
+    fn noisy(img: &RgbaImage, seed: u64) -> RgbaImage {
+        let mut out = img.clone();
+        let (w, h) = out.dimensions();
+        let mut s = seed;
+        for y in 0..h {
+            for x in 0..w {
+                s = s
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                let n = ((s >> 33) % 21) as i32 - 10;
+                let p = out.get_pixel(x, y);
+                let clamp = |v: u8| (v as i32 + n).clamp(0, 255) as u8;
+                out.put_pixel(x, y, Rgba([clamp(p[0]), clamp(p[1]), clamp(p[2]), 255]));
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn find_overlap_is_robust_to_noise() {
+        let source = text_page(220, 1400);
+        let prev = image::imageops::crop_imm(&source, 0, 0, 220, 600).to_image();
+        let next = image::imageops::crop_imm(&source, 0, 200, 220, 600).to_image();
+        // True overlap is 400 rows.
+        let nprev = noisy(&prev, 1);
+        let nnext = noisy(&next, 2);
+        let ov = find_overlap(&nprev, &nnext).expect("overlap under noise");
+        assert!(
+            (ov as i32 - 400).abs() <= 6,
+            "overlap {ov} drifted from 400 under noise"
+        );
+    }
+
+    /// Real scrolling jitters the grab by a pixel or two. A 7px shift (instead
+    /// of a clean 8) must still resolve to ~593, not collapse to Unknown.
+    #[test]
+    fn find_overlap_tolerates_small_jitter() {
+        let source = text_page(220, 1400);
+        let prev = image::imageops::crop_imm(&source, 0, 0, 220, 600).to_image();
+        let next = image::imageops::crop_imm(&source, 0, 7, 220, 600).to_image();
+        let ov = find_overlap(&prev, &next).expect("overlap under jitter");
+        assert!(
+            (ov as i32 - 593).abs() <= 4,
+            "overlap {ov} drifted from 593 under jitter"
+        );
+    }
+
+    /// Both a sticky header and a sticky footer at once — a browser with a nav
+    /// bar and a status bar — must be reported together so neither is repeated.
+    #[test]
+    fn fixed_bands_detects_header_and_footer_together() {
+        let w = 120u32;
+        let head = 30u32;
+        let foot = 25u32;
+        let content = gradient(w, 1400);
+        let make = |offset: u32| -> RgbaImage {
+            let mut img = RgbaImage::new(w, 700);
+            for y in 0..head {
+                for x in 0..w {
+                    img.put_pixel(x, y, Rgba([20, 20, 20, 255]));
+                }
+            }
+            let body = 700 - head - foot;
+            for y in head..head + body {
+                for x in 0..w {
+                    img.put_pixel(x, y, *content.get_pixel(x, offset + y - head));
+                }
+            }
+            for y in head + body..700 {
+                for x in 0..w {
+                    img.put_pixel(x, y, Rgba([30, 40, 60, 255]));
+                }
+            }
+            img
+        };
+        let prev = make(0);
+        let next = make(120);
+        let (top, bottom) = fixed_bands(&prev, &next);
+        assert_eq!(top, head);
+        assert_eq!(bottom, foot);
+    }
+
+    /// Full capture walk: stitch a whole page by stepping a fixed amount per
+    /// frame, exactly as the worker does. Every source row must appear exactly
+    /// once — this catches any regression that duplicates or drops a band.
+    #[test]
+    fn stitches_a_full_scroll_through_without_duplication_or_gaps() {
+        let source = text_page(220, 3000);
+        let w = source.width();
+        let frame_h = 600u32;
+        let step = 300u32; // scroll 300px/frame → 300px overlap
+        let first = image::imageops::crop_imm(&source, 0, 0, w, frame_h).to_image();
+        let mut out = Stitch::from_image(&first);
+        let mut prev = first;
+        let mut y = step;
+        while y + frame_h <= source.height() {
+            let next = image::imageops::crop_imm(&source, 0, y, w, frame_h).to_image();
+            let overlap = find_overlap(&prev, &next).expect("overlap");
+            out.push_rows(&next, overlap, frame_h - overlap);
+            prev = next;
+            y += step;
+        }
+        let stitched = out.into_image();
+        assert_eq!(stitched.dimensions(), (w, source.height()));
+        for yy in 0..source.height() {
+            for xx in 0..w {
+                assert_eq!(
+                    stitched.get_pixel(xx, yy),
+                    source.get_pixel(xx, yy),
+                    "row {yy} does not match the source"
+                );
+            }
+        }
     }
 }
