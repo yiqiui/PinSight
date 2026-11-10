@@ -587,7 +587,17 @@ impl PinSightApp {
     // ---- plumbing ---------------------------------------------------------
 
     fn busy_with_capture(&self) -> bool {
-        self.capture.is_some() || self.pending_area.is_some() || self.pending_mcp.is_some()
+        // A capture/selection overlay, a pending (delayed) capture, an in-flight
+        // MCP capture, an active recording, or an active long-capture session.
+        // Every entry point that *starts* a new capture/record/longshot consults
+        // this, so a second session can never be layered on top of one that is
+        // already running — which would otherwise leave a frozen-screen overlay
+        // fighting an active recording, or two encoders writing at once.
+        self.capture.is_some()
+            || self.pending_area.is_some()
+            || self.pending_mcp.is_some()
+            || self.record_job.is_some()
+            || self.long_job.is_some()
     }
 
     fn toast(&mut self, text: impl Into<String>, error: bool) {
@@ -1981,6 +1991,14 @@ impl PinSightApp {
                     if let Some(job) = &self.long_job {
                         job.stop();
                         self.toast(self.tr.tr.long_cancelled, false);
+                    } else if self.record_job.is_some() {
+                        // A recording is running: the long-capture hotkey
+                        // cancels it rather than starting a second session on
+                        // top of it.
+                        if let Some(job) = &self.record_job {
+                            job.stop();
+                            self.toast(self.tr.tr.stopping_recording, false);
+                        }
                     } else {
                         self.begin_area(Intent::LongShot, ctx);
                     }
@@ -1990,6 +2008,13 @@ impl PinSightApp {
                         if let Some(job) = &self.record_job {
                             job.stop();
                             self.toast(self.tr.tr.stopping_recording, false);
+                        }
+                    } else if self.long_job.is_some() {
+                        // A long capture is running: the record hotkey cancels
+                        // it rather than starting a recording over the scroll.
+                        if let Some(job) = &self.long_job {
+                            job.stop();
+                            self.toast(self.tr.tr.long_cancelled, false);
                         }
                     } else {
                         self.begin_area(Intent::Record, ctx);
@@ -3346,6 +3371,11 @@ impl PinSightApp {
                     if let Some(job) = &self.long_job {
                         job.stop();
                         self.toast(self.tr.tr.long_cancelled, false);
+                    } else if self.record_job.is_some() {
+                        if let Some(job) = &self.record_job {
+                            job.stop();
+                            self.toast(self.tr.tr.stopping_recording, false);
+                        }
                     } else {
                         self.begin_area(Intent::LongShot, ctx);
                     }
@@ -3355,6 +3385,11 @@ impl PinSightApp {
                         if let Some(job) = &self.record_job {
                             job.stop();
                             self.toast(self.tr.tr.stopping_recording, false);
+                        }
+                    } else if self.long_job.is_some() {
+                        if let Some(job) = &self.long_job {
+                            job.stop();
+                            self.toast(self.tr.tr.long_cancelled, false);
                         }
                     } else {
                         self.begin_area(Intent::Record, ctx);
