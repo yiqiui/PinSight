@@ -351,7 +351,21 @@ fn run(
     #[cfg(windows)]
     let _ = crate::capture::set_capture_exclusion(crate::hud::RECORD_WINDOW_TITLE);
 
-    let mut sink = Sink::create(path, rw, rh, fps, opts)?;
+    // Write to a side `.part` file and publish it onto the final path only after
+    // the clip is fully finalised. Under `panic = "abort"` a crash mid-write
+    // therefore leaves only a clearly-incomplete `.part` instead of a corrupt
+    // final file the next launch would trip over.
+    //
+    // Note: we deliberately do NOT sweep the directory for other `*.part`
+    // files. The save folder is user-owned and may contain unrelated partial
+    // downloads from other programs; deleting those would be data loss. This
+    // guard only ever removes the single `.part` it created.
+    let mut part_path = path.as_os_str().to_os_string();
+    part_path.push(".part");
+    let mut part = PartGuard::new(PathBuf::from(part_path));
+    // `path` decides the container from its real extension (`.mp4` -> ffmpeg,
+    // otherwise GIF); `part.path()` is where the bytes are actually written.
+    let mut sink = Sink::create(path, part.path(), rw, rh, fps, opts)?;
     let frame_time = Duration::from_secs_f64(1.0 / fps as f64);
     let start = Instant::now();
     // The cap comes from the settings page (0 = no limit) and is clamped so a
@@ -409,10 +423,9 @@ fn run(
             Ok(image) => image,
             Err(err) => {
                 if frames == 0 {
-                    // No frames written yet: kill ffmpeg (if any) and drop the
-                    // empty/corrupt output file rather than leaving it behind.
+                    // No frames written yet: kill ffmpeg (if any). The
+                    // PartGuard removes our `.part` file on the way out.
                     sink.abort();
-                    let _ = std::fs::remove_file(path);
                     return Err(format!("capture failed: {err}"));
                 }
                 // Frames were already written: remember why we stopped so the
@@ -423,10 +436,9 @@ fn run(
             }
         };
         if let Err(e) = sink.write(&image, fps) {
-            // ffmpeg crashed or its stdin closed mid-stream: abandon it and
-            // delete the partial output so we don't ship a broken file.
+            // ffmpeg crashed or its stdin closed mid-stream: abandon it. The
+            // PartGuard drops the partial `.part` output so we ship nothing.
             sink.abort();
-            let _ = std::fs::remove_file(path);
             return Err(e);
         }
         held = Some(image);
@@ -442,12 +454,17 @@ fn run(
         }
     }
 
+    // `finish` consumes the sink: ffmpeg is waited on (MP4) / the GIF encoder
+    // writes its trailer, so the `.part` file is complete and closed here.
     sink.finish()?;
     if frames == 0 {
-        // Finished cleanly but produced nothing usable: drop the empty file.
-        let _ = std::fs::remove_file(path);
+        // Finished cleanly but produced nothing usable. PartGuard drops the
+        // empty `.part` on the way out; nothing is published.
         return Err("no frames were captured".into());
     }
+    // Atomic publish: the final name only ever refers to a fully finalised
+    // clip. Until this rename succeeds, no player can open a half-written file.
+    part.publish(path)?;
     let _ = tx.send(RecordUpdate::Finished {
         path: path.to_path_buf(),
         frames,
@@ -462,6 +479,59 @@ fn frames_owed(elapsed: Duration, frames_done: u32, fps: u32) -> u32 {
     ((elapsed.as_secs_f64() * fps as f64) as u32)
         .saturating_sub(frames_done)
         .min(3600 * fps.max(1))
+}
+
+/// Owns the temporary `.part` output for one recording.
+///
+/// Every normal error return (`?` included) drops this guard and removes the
+/// partial file, so failed recordings leave no debris. A successful
+/// [`PartGuard::publish`] atomically renames the finished clip onto its real
+/// name and disarms the cleanup.
+///
+/// Under `panic = "abort"` Drop never runs — which is exactly the point: a
+/// crash mid-write leaves a clearly-labelled, incomplete `.part` instead of a
+/// truncated file bearing the final name that a player (or the next launch)
+/// would try to open.
+struct PartGuard {
+    path: PathBuf,
+    armed: bool,
+}
+
+impl PartGuard {
+    fn new(path: PathBuf) -> Self {
+        Self { path, armed: true }
+    }
+
+    fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
+    /// Publish a fully finalised clip. On failure the finished-but-unpublished
+    /// `.part` is deliberately kept (it is a valid file) and its location is
+    /// reported, rather than silently discarding the whole recording.
+    fn publish(&mut self, final_path: &std::path::Path) -> Result<(), String> {
+        match std::fs::rename(&self.path, final_path) {
+            Ok(()) => {
+                self.armed = false;
+                Ok(())
+            }
+            Err(err) => {
+                self.armed = false;
+                Err(format!(
+                    "could not publish recording (finished clip kept at {}): {err}",
+                    self.path.display()
+                ))
+            }
+        }
+    }
+}
+
+impl Drop for PartGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
 }
 
 enum Sink {
@@ -479,8 +549,12 @@ enum Sink {
 }
 
 impl Sink {
+    /// `final_path` is the published recording (its extension selects the
+    /// container); `out_path` is the temporary `.part` file the encoder writes
+    /// into. They differ because the clip is only renamed once complete.
     fn create(
-        path: &std::path::Path,
+        final_path: &std::path::Path,
+        out_path: &std::path::Path,
         w: u32,
         h: u32,
         fps: u32,
@@ -493,7 +567,7 @@ impl Sink {
             .watermark
             .as_ref()
             .and_then(|wm| crate::decorate::WatermarkStamp::prepare(wm, w, h));
-        if path.extension().and_then(|e| e.to_str()) == Some("mp4") {
+        if final_path.extension().and_then(|e| e.to_str()) == Some("mp4") {
             // Input 0 is the raw RGBA screen pipe fed by the recorder thread.
             // A webcam (picture-in-picture) and audio tracks are additional
             // ffmpeg inputs; everything is composited/muxed in filter_complex.
@@ -634,7 +708,12 @@ impl Sink {
             // End as soon as the screen pipe (the shortest input) reaches EOF so
             // persistent device inputs do not keep ffmpeg alive after we stop.
             args.push("-shortest".into());
-            args.push(path.to_string_lossy().into_owned());
+            // The muxer can no longer be inferred from the extension: the
+            // output is a `.part` file. State the container explicitly, or
+            // ffmpeg fails with "Unable to find a suitable output format".
+            args.push("-f".into());
+            args.push("mp4".into());
+            args.push(out_path.to_string_lossy().into_owned());
 
             let mut child = Command::new("ffmpeg")
                 .args(args)
@@ -657,7 +736,7 @@ impl Sink {
 
         // GIF fallback: silent, source-sized, no camera (the gif encoder writes
         // raw frames from the screen pipe only).
-        let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+        let file = std::fs::File::create(out_path).map_err(|e| e.to_string())?;
         let mut encoder =
             gif::Encoder::new(file, w as u16, h as u16, &[]).map_err(|e| e.to_string())?;
         encoder
@@ -942,8 +1021,16 @@ fn windows_default_dshow_video_device() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::frames_owed;
+    use super::{PartGuard, frames_owed};
+    use std::path::PathBuf;
     use std::time::Duration;
+
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("ps-record-part-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     #[test]
     fn owes_frames_for_the_paused_span() {
@@ -955,5 +1042,72 @@ mod tests {
         assert_eq!(frames_owed(Duration::from_secs(100_000), 0, 10), 3600 * 10);
         // fps 0 encodes no frames whatever the elapsed time.
         assert_eq!(frames_owed(Duration::from_secs(1), 0, 0), 0);
+    }
+
+    #[test]
+    fn part_guard_deletes_unpublished_part_on_drop() {
+        let dir = scratch("drop");
+        let part = dir.join("clip.mp4.part");
+        std::fs::write(&part, b"half").unwrap();
+        {
+            let _guard = PartGuard::new(part.clone());
+        }
+        assert!(!part.exists(), "an aborted recording must leave no debris");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn part_guard_publish_moves_the_finished_clip() {
+        let dir = scratch("publish");
+        let part = dir.join("clip.mp4.part");
+        let final_path = dir.join("clip.mp4");
+        std::fs::write(&part, b"complete").unwrap();
+        {
+            let mut guard = PartGuard::new(part.clone());
+            guard.publish(&final_path).unwrap();
+        }
+        assert!(!part.exists(), "the .part must be gone after publish");
+        assert_eq!(std::fs::read(&final_path).unwrap(), b"complete");
+        // Dropping a disarmed guard must not delete the published clip.
+        assert!(final_path.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn part_guard_publish_replaces_an_existing_clip() {
+        // A naming template without a timestamp can produce the same final
+        // path twice. The old `-y` / File::create path overwrote it, so the
+        // atomic rename must do the same or a second recording would fail.
+        let dir = scratch("overwrite");
+        let part = dir.join("clip.mp4.part");
+        let final_path = dir.join("clip.mp4");
+        std::fs::write(&final_path, b"old").unwrap();
+        std::fs::write(&part, b"new").unwrap();
+        {
+            let mut guard = PartGuard::new(part.clone());
+            guard.publish(&final_path).unwrap();
+        }
+        assert_eq!(std::fs::read(&final_path).unwrap(), b"new");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn part_guard_keeps_the_clip_when_publish_fails() {
+        let dir = scratch("fail");
+        let part = dir.join("clip.mp4.part");
+        std::fs::write(&part, b"complete").unwrap();
+        // Renaming into a non-existent directory reliably fails.
+        let bad_target = dir.join("no-such-dir").join("clip.mp4");
+        let err = {
+            let mut guard = PartGuard::new(part.clone());
+            guard.publish(&bad_target).unwrap_err()
+        };
+        assert!(err.contains("could not publish recording"), "{err}");
+        assert_eq!(
+            std::fs::read(&part).unwrap(),
+            b"complete",
+            "a finished but unpublished clip must be kept, not discarded"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
