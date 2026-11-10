@@ -257,6 +257,7 @@ strings! {
     history_deleted { en: "deleted", zh: "张已删除", tw: "張已刪除", ja: "件を削除しました", ko: "개 삭제됨", fr: "supprimés", de: "gelöscht" }
     history_delete_failed { en: "failed", zh: "张删除失败", tw: "張刪除失敗", ja: "件削除に失敗", ko: "개 삭제 실패", fr: "échecs", de: "fehlgeschlagen" }
     history_exported { en: "images exported to PDF", zh: "张图片已导出为 PDF", tw: "張圖片已匯出為 PDF", ja: "枚を PDF に書き出し", ko: "개 이미지 PDF 내보냄", fr: "images exportées en PDF", de: "Bilder als PDF exportiert" }
+    history_export_busy { en: "A PDF export is still running", zh: "上一次 PDF 导出仍在进行中", tw: "上一次 PDF 匯出仍在進行中", ja: "前回の PDF 書き出しが進行中です", ko: "이전 PDF 내보내기가 아직 진행 중입니다", fr: "Un export PDF est encore en cours", de: "Ein PDF-Export läuft noch" }
     nav_settings { en: "Settings", zh: "设置", tw: "設定", ja: "設定", ko: "설정", fr: "Réglages", de: "Einstellungen" }
     mcp_on { en: "MCP on", zh: "MCP 已启用", tw: "MCP 已啟用", ja: "MCP 有効", ko: "MCP 켜짐", fr: "MCP actif", de: "MCP aktiv" }
     mcp_off { en: "MCP off", zh: "MCP 未启用", tw: "MCP 未啟用", ja: "MCP 無効", ko: "MCP 꺼짐", fr: "MCP inactif", de: "MCP aus" }

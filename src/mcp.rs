@@ -96,18 +96,121 @@ pub fn start(ui_tx: Sender<UiCommand>, save_dir: PathBuf) -> McpHandle {
     McpHandle { requests }
 }
 
+/// Hard cap for a single NDJSON request. MCP requests are small JSON objects;
+/// 4 MiB is generous even for a request carrying a large region description.
+/// Without a cap, a client that never sends a newline makes `read_line` grow a
+/// `String` without bound and, with `panic = "abort"`, kills the whole process.
+const MAX_LINE_BYTES: usize = 4 * 1024 * 1024;
+
+enum LineOutcome {
+    Line(String),
+    TooLong,
+    InvalidUtf8,
+    Eof,
+}
+
+enum Step {
+    Eof,
+    Done(usize),
+    More(usize),
+}
+
+/// Read one newline-terminated request with a hard byte cap. Uses
+/// `fill_buf`/`consume` so an over-long line is drained in fixed-size chunks
+/// without ever accumulating it — `BufRead::read_line` / `lines()` have no such
+/// bound. Pure over `BufRead`, so it is unit-testable with a `Cursor`.
+fn read_line_bounded<R: BufRead>(reader: &mut R, limit: usize) -> std::io::Result<LineOutcome> {
+    let mut buf: Vec<u8> = Vec::new();
+    let mut too_long = false;
+    loop {
+        let step = {
+            let chunk = reader.fill_buf()?;
+            if chunk.is_empty() {
+                Step::Eof
+            } else if let Some(pos) = chunk.iter().position(|&b| b == b'\n') {
+                if !too_long {
+                    if buf.len() + pos <= limit {
+                        buf.extend_from_slice(&chunk[..pos]);
+                    } else {
+                        too_long = true;
+                        buf.clear();
+                    }
+                }
+                Step::Done(pos + 1)
+            } else {
+                let len = chunk.len();
+                if !too_long {
+                    if buf.len() + len <= limit {
+                        buf.extend_from_slice(chunk);
+                    } else {
+                        too_long = true;
+                        buf.clear();
+                    }
+                }
+                Step::More(len)
+            }
+        };
+        match step {
+            Step::Eof => return Ok(finish_line(buf, too_long, true)),
+            Step::Done(n) => {
+                reader.consume(n);
+                return Ok(finish_line(buf, too_long, false));
+            }
+            Step::More(n) => reader.consume(n),
+        }
+    }
+}
+
+fn finish_line(mut buf: Vec<u8>, too_long: bool, eof: bool) -> LineOutcome {
+    if too_long {
+        return LineOutcome::TooLong;
+    }
+    if eof && buf.is_empty() {
+        return LineOutcome::Eof;
+    }
+    // `BufRead::lines()` strips a trailing CR as well as the newline.
+    if buf.last() == Some(&b'\r') {
+        buf.pop();
+    }
+    match String::from_utf8(buf) {
+        Ok(line) => LineOutcome::Line(line),
+        Err(_) => LineOutcome::InvalidUtf8,
+    }
+}
+
 fn serve_stdio(ui_tx: Sender<UiCommand>, save_dir: PathBuf, requests: Arc<AtomicUsize>) {
     tracing::info!("MCP stdio server listening");
     let stdin = std::io::stdin();
+    let mut reader = stdin.lock();
     let mut stdout = std::io::stdout();
 
-    for line in stdin.lock().lines() {
-        let Ok(line) = line else {
-            // A single invalid UTF-8 byte must not take the whole server down:
-            // `lines()` resumes on the next line after a decode error, so we
-            // skip the bad one and keep serving subsequent requests.
-            tracing::warn!("MCP stdio: dropping a non-UTF-8 line");
-            continue;
+    loop {
+        let line = match read_line_bounded(&mut reader, MAX_LINE_BYTES) {
+            Ok(LineOutcome::Line(line)) => line,
+            Ok(LineOutcome::Eof) => break,
+            Ok(LineOutcome::TooLong) => {
+                tracing::warn!(
+                    limit = MAX_LINE_BYTES,
+                    "MCP stdio: dropping an over-long request"
+                );
+                let err = json!({
+                    "jsonrpc": "2.0",
+                    "id": Value::Null,
+                    "error": {"code": -32700, "message": "request too large"}
+                });
+                write_message(&mut stdout, &err);
+                continue;
+            }
+            Ok(LineOutcome::InvalidUtf8) => {
+                // A single invalid UTF-8 byte must not take the whole server
+                // down: skip that one frame and keep serving later requests.
+                tracing::warn!("MCP stdio: dropping a non-UTF-8 line");
+                continue;
+            }
+            Err(err) => {
+                tracing::warn!(%err, "MCP stdio: read failed, stopping");
+                break;
+            }
         };
         if line.trim().is_empty() {
             continue;
@@ -121,6 +224,19 @@ fn serve_stdio(ui_tx: Sender<UiCommand>, save_dir: PathBuf, requests: Arc<Atomic
             write_message(&mut stdout, &err);
             continue;
         };
+
+        // JSON-RPC envelopes are objects. A top-level scalar or a batch array
+        // (which this server does not implement) must be answered with an
+        // Invalid Request error, not silently treated as a notification.
+        if !message.is_object() {
+            let err = json!({
+                "jsonrpc": "2.0",
+                "id": Value::Null,
+                "error": {"code": -32600, "message": "invalid request (expected a JSON-RPC object)"}
+            });
+            write_message(&mut stdout, &err);
+            continue;
+        }
 
         let is_notification = message.get("id").is_none();
         let id = message.get("id").cloned().unwrap_or(Value::Null);
@@ -551,3 +667,72 @@ const _: fn() = || {
     _assert_send::<UiCommand>();
     _assert_sync::<McpHandle>();
 };
+
+#[cfg(test)]
+mod tests {
+    use super::{LineOutcome, MAX_LINE_BYTES, read_line_bounded};
+    use std::io::Cursor;
+
+    fn next<R: std::io::BufRead>(r: &mut R, cap: usize) -> LineOutcome {
+        read_line_bounded(r, cap).unwrap()
+    }
+
+    #[test]
+    fn reads_ordinary_lines_and_eof() {
+        let mut input = Cursor::new(b"{\"a\":1}\nping\n".to_vec());
+        assert!(
+            matches!(next(&mut input, MAX_LINE_BYTES), LineOutcome::Line(s) if s == "{\"a\":1}")
+        );
+        assert!(matches!(next(&mut input, MAX_LINE_BYTES), LineOutcome::Line(s) if s == "ping"));
+        assert!(matches!(next(&mut input, MAX_LINE_BYTES), LineOutcome::Eof));
+    }
+
+    #[test]
+    fn strips_a_trailing_cr() {
+        let mut input = Cursor::new(b"hello\r\n".to_vec());
+        assert!(matches!(next(&mut input, MAX_LINE_BYTES), LineOutcome::Line(s) if s == "hello"));
+    }
+
+    #[test]
+    fn over_long_line_is_rejected_and_server_keeps_serving() {
+        // A client writes a huge frame with no newline, then a valid request.
+        // The over-long frame must be drained (not buffered) and the following
+        // request must still be readable.
+        let mut data = vec![b'x'; 64];
+        data.push(b'\n');
+        data.extend_from_slice(b"{\"ok\":true}\n");
+        // cap=16: the 64-byte frame is over-long, but the 11-byte valid
+        // request after it must still be delivered normally.
+        let mut input = Cursor::new(data);
+        assert!(matches!(next(&mut input, 16), LineOutcome::TooLong));
+        assert!(matches!(next(&mut input, 16), LineOutcome::Line(s) if s == "{\"ok\":true}"));
+        assert!(matches!(next(&mut input, 16), LineOutcome::Eof));
+    }
+
+    #[test]
+    fn over_long_line_without_newline_does_not_grow_memory() {
+        // 32 MiB of no-newline bytes with a 4 MiB cap. The reader must report
+        // TooLong without ever accumulating the whole line.
+        let mut input = Cursor::new(vec![b'x'; 32 * 1024 * 1024]);
+        assert!(matches!(
+            next(&mut input, MAX_LINE_BYTES),
+            LineOutcome::TooLong
+        ));
+    }
+
+    #[test]
+    fn invalid_utf8_is_reported_instead_of_panicking() {
+        let mut input = Cursor::new(b"\xff\xfe\nvalid\n".to_vec());
+        assert!(matches!(
+            next(&mut input, MAX_LINE_BYTES),
+            LineOutcome::InvalidUtf8
+        ));
+        assert!(matches!(next(&mut input, MAX_LINE_BYTES), LineOutcome::Line(s) if s == "valid"));
+    }
+
+    #[test]
+    fn empty_input_is_eof() {
+        let mut input = Cursor::new(Vec::new());
+        assert!(matches!(next(&mut input, MAX_LINE_BYTES), LineOutcome::Eof));
+    }
+}

@@ -272,6 +272,10 @@ pub struct PinSightApp {
     gif_rx: Option<std::sync::mpsc::Receiver<Result<std::path::PathBuf, String>>>,
     /// Background voice-note recording result channel.
     voice_rx: Option<std::sync::mpsc::Receiver<Result<std::path::PathBuf, String>>>,
+    /// Background history->PDF export. Decoding every selected capture and
+    /// building the PDF is far too heavy for the UI thread; the worker sends
+    /// back the number of exported pages (or an error) for a toast.
+    pdf_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
     next_pin_id: u64,
     root_restore: Option<egui::Pos2>,
     pending_area: Option<PendingArea>,
@@ -476,6 +480,7 @@ impl PinSightApp {
             gif_editor: GifEditorState::default(),
             gif_rx: None,
             voice_rx: None,
+            pdf_rx: None,
             next_pin_id: 1,
             root_restore: None,
             pending_area: None,
@@ -4248,9 +4253,15 @@ impl PinSightApp {
     }
 
     /// Collect the ticked gallery items (newest-first, matching the grid) and
-    /// write them to a PDF the user picks with a save dialog.
+    /// write them to a PDF the user picks with a save dialog. The file dialog
+    /// must stay on the UI thread, but decoding + PDF assembly runs on a worker
+    /// so a batch of 4K / stitched captures cannot freeze the window.
     fn export_history_pdf(&mut self, files: &[HistoryFile]) {
         let t = self.tr.tr;
+        if self.pdf_rx.is_some() {
+            self.toast(t.history_export_busy, false);
+            return;
+        }
         let chosen: Vec<PathBuf> = files
             .iter()
             .filter(|f| self.history_selection.contains(&f.path))
@@ -4266,9 +4277,39 @@ impl PinSightApp {
         else {
             return;
         };
-        match crate::pdf::export_paths(&chosen, &out) {
-            Ok(()) => self.toast(format!("{} {}", chosen.len(), t.history_exported), false),
-            Err(err) => self.toast(format!("{}: {err}", t.history_export_pdf), true),
+        let count = chosen.len();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let res = crate::pdf::export_paths(&chosen, &out)
+                .map(|()| count)
+                .map_err(|err| err.to_string());
+            let _ = tx.send(res);
+        });
+        self.pdf_rx = Some(rx);
+    }
+
+    /// Report a finished background PDF export.
+    fn poll_pdf(&mut self, ctx: &egui::Context) {
+        let Some(rx) = self.pdf_rx.as_ref() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(Ok(count)) => {
+                self.toast(format!("{} {}", count, self.tr.tr.history_exported), false);
+                self.pdf_rx = None;
+            }
+            Ok(Err(err)) => {
+                self.toast(format!("{}: {err}", self.tr.tr.history_export_pdf), true);
+                self.pdf_rx = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                // The worker cannot wake egui itself; keep polling at a short
+                // cadence so the toast appears promptly when it finishes.
+                ctx.request_repaint_after(std::time::Duration::from_millis(120));
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.pdf_rx = None;
+            }
         }
     }
 
@@ -8010,6 +8051,7 @@ impl eframe::App for PinSightApp {
         self.poll_upload();
         self.poll_gif();
         self.poll_voice();
+        self.poll_pdf(&ctx);
         self.poll_update(&ctx);
         self.show_overlay(&ctx);
         self.show_pins(&ctx);

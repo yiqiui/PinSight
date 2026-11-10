@@ -181,12 +181,22 @@ fn round_corners(image: &RgbaImage, radius: u32) -> RgbaImage {
     out
 }
 
+/// Hard caps for decoration values. `config.json` is deserialised without
+/// validation, so a hand-edited `u32::MAX` width / blur or `i32::MIN` offset
+/// would overflow `w * 2` / `r * 3` (or panic inside `i32::MIN.abs()`) and,
+/// under `panic = "abort"`, take down the whole process on the next capture.
+/// The settings sliders only allow 1..=40 / 2..=48 / ±24; these caps leave
+/// generous headroom while keeping every allocation bounded.
+const MAX_BORDER_WIDTH: u32 = 256;
+const MAX_SHADOW_BLUR: u32 = 256;
+const MAX_SHADOW_OFFSET: i32 = 512;
+
 /// Wrap the image in a solid frame.
 fn add_border(image: &RgbaImage, border: &BorderDeco) -> RgbaImage {
-    let w = border.width.max(1);
+    let w = border.width.clamp(1, MAX_BORDER_WIDTH);
     let (iw, ih) = (image.width(), image.height());
-    let ow = iw + w * 2;
-    let oh = ih + w * 2;
+    let ow = iw.saturating_add(w.saturating_mul(2));
+    let oh = ih.saturating_add(w.saturating_mul(2));
     let mut out = RgbaImage::from_pixel(ow, oh, Rgba(border.color));
     for y in 0..ih {
         for x in 0..iw {
@@ -198,13 +208,17 @@ fn add_border(image: &RgbaImage, border: &BorderDeco) -> RgbaImage {
 
 /// Drop a soft shadow behind the image on a transparent, expanded canvas.
 fn add_shadow(image: &RgbaImage, shadow: &ShadowDeco) -> RgbaImage {
-    let r = shadow.blur.max(1);
+    let r = shadow.blur.clamp(1, MAX_SHADOW_BLUR);
+    // Clamp BEFORE `.abs()`: i32::MIN.abs() panics in debug and stays negative
+    // in release, which would corrupt every offset calculation below.
+    let ox = shadow.offset_x.clamp(-MAX_SHADOW_OFFSET, MAX_SHADOW_OFFSET);
+    let oy = shadow.offset_y.clamp(-MAX_SHADOW_OFFSET, MAX_SHADOW_OFFSET);
     // Three box passes reach `r * 3` pixels, so the silhouette mask needs that
     // much transparent padding for the falloff to actually happen. Blurring a
     // mask that touches the array edge would clamp and stay fully opaque.
-    let spread = (r * 3) as i32;
+    let spread = r.saturating_mul(3) as i32;
     let (iw, ih) = (image.width() as i32, image.height() as i32);
-    let pad = spread + shadow.offset_x.abs().max(shadow.offset_y.abs()) + 2;
+    let pad = spread + ox.abs().max(oy.abs()) + 2;
     let ow = (iw + pad * 2) as u32;
     let oh = (ih + pad * 2) as u32;
 
@@ -223,8 +237,8 @@ fn add_shadow(image: &RgbaImage, shadow: &ShadowDeco) -> RgbaImage {
 
     // 3. Composite shadow then content into the output canvas.
     let mut out = RgbaImage::new(ow, oh);
-    let mx = pad + shadow.offset_x - spread;
-    let my = pad + shadow.offset_y - spread;
+    let mx = pad + ox - spread;
+    let my = pad + oy - spread;
     for y in 0..mh {
         for x in 0..mw {
             let a = blurred[(y * mw + x) as usize];
@@ -524,6 +538,49 @@ mod tests {
         let out = decorate_image(&img, &Decorations::default());
         assert_eq!(out.dimensions(), (10, 10));
         assert_eq!(out.get_pixel(0, 0), &Rgba([1, 2, 3, 255]));
+    }
+
+    #[test]
+    fn hostile_config_values_are_clamped_instead_of_crashing() {
+        // A hand-edited config.json can contain values the sliders never
+        // produce. They must not overflow dimensions or panic on i32::MIN.abs().
+        let img = RgbaImage::from_pixel(8, 6, Rgba([9, 9, 9, 255]));
+        let deco = Decorations {
+            border: Some(BorderDeco {
+                width: u32::MAX,
+                color: [255, 0, 0, 255],
+            }),
+            shadow: Some(ShadowDeco {
+                blur: u32::MAX,
+                offset_x: i32::MIN,
+                offset_y: i32::MAX,
+                color: [0, 0, 0],
+                opacity: 120,
+            }),
+            ..Default::default()
+        };
+        let out = decorate_image(&img, &deco);
+        // Bounded: 8 + 2*256 border, then shadow padding of 3*256*2 + 2*512 + 4.
+        assert!(
+            out.width() < 5000 && out.height() < 5000,
+            "{:?}",
+            out.dimensions()
+        );
+        assert!(out.width() > img.width() && out.height() > img.height());
+    }
+
+    #[test]
+    fn zero_border_width_still_draws_a_frame() {
+        let img = RgbaImage::from_pixel(8, 6, Rgba([9, 9, 9, 255]));
+        let deco = Decorations {
+            border: Some(BorderDeco {
+                width: 0,
+                color: [255, 0, 0, 255],
+            }),
+            ..Default::default()
+        };
+        let out = decorate_image(&img, &deco);
+        assert_eq!(out.dimensions(), (10, 8), "clamp(1, ..) keeps a 1px frame");
     }
 
     #[test]

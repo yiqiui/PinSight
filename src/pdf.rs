@@ -50,8 +50,26 @@ pub fn export(images: &[RgbaImage], path: &Path) -> Result<()> {
             std::fs::create_dir_all(parent)?;
         }
     }
-    std::fs::write(path, bytes).with_context(|| format!("writing {}", path.display()))?;
-    Ok(())
+    write_pdf_atomic(path, &bytes)
+}
+
+/// Write to a sibling `.part` file and rename it onto the final path. A disk
+/// full / interrupted write then leaves only a clearly-incomplete `.part`,
+/// never a truncated PDF under a name the user would try to open.
+fn write_pdf_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+    let mut part_os = path.as_os_str().to_os_string();
+    part_os.push(".part");
+    let part = PathBuf::from(part_os);
+
+    let result = std::fs::write(&part, bytes)
+        .with_context(|| format!("writing {}", part.display()))
+        .and_then(|()| {
+            std::fs::rename(&part, path).with_context(|| format!("publishing {}", path.display()))
+        });
+    if result.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    result
 }
 
 /// Load image files and export them in the given order.
@@ -283,5 +301,39 @@ mod tests {
         let plans = plan_pages(&[img]);
         assert_eq!(plans.len(), 1);
         assert!(plans[0].pw > plans[0].ph, "wide image should be landscape");
+    }
+
+    #[test]
+    fn export_publishes_atomically_without_leaving_a_part_file() {
+        let dir = std::env::temp_dir().join(format!("pinsight-pdf-atomic-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let out = dir.join("out.pdf");
+
+        let img = RgbaImage::from_pixel(20, 10, Rgba([9, 8, 7, 255]));
+        export(&[img], &out).expect("export");
+        assert!(out.exists(), "final PDF must exist");
+        assert!(!dir.join("out.pdf.part").exists(), "no .part debris");
+        assert!(std::fs::read(&out).unwrap().starts_with(b"%PDF-1.4"));
+
+        // Re-exporting to the same path (user overwrites) must still work.
+        let img2 = RgbaImage::from_pixel(20, 10, Rgba([1, 2, 3, 255]));
+        export(&[img2], &out).expect("re-export over existing file");
+        assert!(std::fs::read(&out).unwrap().starts_with(b"%PDF-1.4"));
+        assert!(!dir.join("out.pdf.part").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn empty_export_is_rejected() {
+        let out =
+            std::env::temp_dir().join(format!("pinsight-pdf-empty-{}.pdf", std::process::id()));
+        assert!(
+            export(&[], &out).is_err(),
+            "an empty image list must not write a PDF"
+        );
+        assert!(!out.exists());
+        let _ = std::fs::remove_file(&out);
     }
 }
