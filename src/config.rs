@@ -1187,21 +1187,23 @@ impl Config {
         paths().config.clone()
     }
 
-    pub fn load() -> Self {
+    /// Load the configuration from disk. Returns the parsed config plus — when
+    /// the on-disk file existed but failed to parse — the path the malformed
+    /// file was moved to so it is not lost. `None` on the second element means
+    /// the file was missing (fresh install; defaults are materialised) or parsed
+    /// cleanly. The caller uses that path to tell the user their settings were
+    /// reset and where the bad file went.
+    pub fn load_detailed() -> (Self, Option<PathBuf>) {
         let path = Self::path();
-        let mut config = match std::fs::read_to_string(&path) {
-            Ok(text) => serde_json::from_str(&text).unwrap_or_else(|err| {
-                tracing::warn!(?path, %err, "failed to parse config, using defaults");
-                Self::default()
-            }),
-            Err(_) => {
-                let config = Self::default();
-                if let Err(err) = config.save() {
-                    tracing::warn!(%err, "failed to write default config");
-                }
-                config
+        let (mut config, corrupt) = read_config(&path);
+        // A fresh install (or a config that was reset) has no file yet; write
+        // the defaults so the settings page and future saves have something to
+        // read back.
+        if !path.exists() {
+            if let Err(err) = config.save() {
+                tracing::warn!(%err, "failed to write default config");
             }
-        };
+        }
         // Migrate the legacy single audio toggle into the new microphone field
         // so existing users keep recording audio without reconfiguring. The
         // legacy default capture device (Windows dshow) is a microphone, so the
@@ -1212,14 +1214,32 @@ impl Config {
                 config.mic_device = config.audio_device.clone();
             }
         }
-        config
+        (config, corrupt)
+    }
+
+    /// Load the configuration, discarding where the malformed file was kept.
+    pub fn load() -> Self {
+        Self::load_detailed().0
+    }
+
+    /// Load the configuration for a headless (CLI) subcommand. Behaves like
+    /// [`Self::load`] but prints a warning to stderr when the on-disk file was
+    /// corrupt and had to be reset, so a script or pipeline operator is not
+    /// left wondering why every setting came back as a default.
+    pub fn load_or_warn() -> Self {
+        let (cfg, corrupt) = Self::load_detailed();
+        if let Some(path) = corrupt {
+            eprintln!(
+                "pinsight: config file was corrupt and has been reset to defaults; \
+                 the bad file was moved to {}",
+                path.display()
+            );
+        }
+        cfg
     }
 
     pub fn save(&self) -> std::io::Result<()> {
         let path = Self::path();
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         // Keep the previous file around so a bad edit is recoverable.
         if self.auto_backup_config && path.exists() {
             let backup = path.with_extension("json.bak");
@@ -1227,13 +1247,68 @@ impl Config {
         }
         let text = serde_json::to_string_pretty(self)
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
-        std::fs::write(path, text)
+        // Write to a sibling `*.tmp` first, then rename over the target. Rename
+        // is atomic on a single volume, so a crash or power loss mid-write can
+        // no longer leave a half-written config that the next launch would fail
+        // to parse and silently discard — which would wipe every setting.
+        write_json_atomic(&path, &text)
     }
 
     pub fn ensure_save_dir(&self) -> std::io::Result<PathBuf> {
         std::fs::create_dir_all(&self.save_dir)?;
         Ok(self.save_dir.clone())
     }
+}
+
+/// Read and parse the config at `path`. On a parse error the existing file is
+/// moved aside to `<path>.corrupt-<timestamp>` — never overwritten in place — so
+/// the user can recover their settings; defaults are returned instead, together
+/// with the path the bad file was moved to. A missing file yields defaults with
+/// no disk side effect. Kept as a free function so it can be unit-tested with an
+/// arbitrary path, independent of the global resolved config location.
+fn read_config(path: &Path) -> (Config, Option<PathBuf>) {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return (Config::default(), None);
+    };
+    match serde_json::from_str::<Config>(&text) {
+        Ok(cfg) => (cfg, None),
+        Err(err) => {
+            tracing::warn!(
+                ?path, %err,
+                "config failed to parse; resetting to defaults and preserving the bad file"
+            );
+            let corrupt = preserve_corrupt(path);
+            (Config::default(), corrupt)
+        }
+    }
+}
+
+/// Move a malformed config file aside so a subsequent save does not destroy it,
+/// returning the new path (or `None` if it could not be moved).
+fn preserve_corrupt(path: &Path) -> Option<PathBuf> {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_millis();
+    let corrupt = path.with_extension(format!("json.corrupt-{ts}"));
+    std::fs::rename(path, &corrupt).ok()?;
+    Some(corrupt)
+}
+
+/// Write `text` to `path` atomically: the bytes go to a `*.tmp` sibling first,
+/// then it is renamed over the target. Rename is atomic on a single volume, so
+/// the file is never observed half-written. Any temp file left behind on failure
+/// is removed.
+fn write_json_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let result = std::fs::write(&tmp, text).and_then(|()| std::fs::rename(&tmp, path));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 pub fn default_save_dir() -> PathBuf {
@@ -1311,5 +1386,59 @@ mod tests {
         assert_eq!(cfg.decorations.rounded, Some(12));
         assert_eq!(cfg.translate.provider, "google");
         assert_eq!(cfg.translate.endpoint, "");
+    }
+
+    #[test]
+    fn read_config_returns_defaults_when_missing() {
+        let dir = std::env::temp_dir().join(format!("ps-cfg-missing-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("config.json");
+        let (cfg, corrupt) = read_config(&path);
+        assert!(corrupt.is_none());
+        assert_eq!(cfg.image_quality, 90, "default survived");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_config_preserves_a_corrupt_file_and_resets() {
+        let dir = std::env::temp_dir().join(format!("ps-cfg-corrupt-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("config.json");
+        std::fs::write(&path, "{ this is not valid json ").unwrap();
+        let (cfg, corrupt) = read_config(&path);
+        // Defaults, and the bad file was moved aside rather than overwritten.
+        assert_eq!(cfg.image_quality, 90);
+        let Some(bad) = corrupt else {
+            panic!("expected the corrupt file to be preserved");
+        };
+        assert!(bad.exists(), "preserved file should exist");
+        assert!(!path.exists(), "original should have been moved aside");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_config_parses_a_valid_override() {
+        let dir = std::env::temp_dir().join(format!("ps-cfg-valid-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("config.json");
+        std::fs::write(&path, r#"{"image_quality":55}"#).unwrap();
+        let (cfg, corrupt) = read_config(&path);
+        assert!(corrupt.is_none());
+        assert_eq!(cfg.image_quality, 55);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_json_atomic_roundtrips_and_cleans_temp() {
+        let dir = std::env::temp_dir().join(format!("ps-cfg-atomic-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("config.json");
+        write_json_atomic(&path, r#"{"a":1}"#).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), r#"{"a":1}"#);
+        assert!(
+            !path.with_extension("json.tmp").exists(),
+            "temp file must be cleaned up"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

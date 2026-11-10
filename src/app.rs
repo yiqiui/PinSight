@@ -399,6 +399,7 @@ impl PinSightApp {
         config: Config,
         mcp_mode: bool,
         instance_guard: Option<crate::single_instance::Guard>,
+        config_reset: Option<PathBuf>,
     ) -> Self {
         let tr = Translator::new(config.lang);
         // HDR-aware capture routing is a capture-pipeline decision, so it is
@@ -545,6 +546,18 @@ impl PinSightApp {
             app.toast(app.tr.tr.ready, false);
         } else {
             let msg = app.hotkey_failure_message();
+            app.toast(msg, true);
+        }
+
+        // Surface a corrupt-config reset so the user knows their settings were
+        // dropped and where the bad file was preserved. This overwrites the
+        // hotkey toast above (both are rare; the reset is the more urgent one).
+        if let Some(path) = config_reset {
+            let msg = app
+                .tr
+                .tr
+                .cfg_reset
+                .replace("{path}", &path.display().to_string());
             app.toast(msg, true);
         }
         app

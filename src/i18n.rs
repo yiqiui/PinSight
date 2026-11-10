@@ -236,6 +236,10 @@ macro_rules! strings {
 strings! {
     // ---- chrome -----------------------------------------------------------
     tagline { en: "native capture · pin · record", zh: "原生截图 · 贴图 · 录屏", tw: "原生截圖 · 貼圖 · 錄影", ja: "ネイティブ撮影 · ピン · 録画", ko: "네이티브 캡처 · 핀 · 녹화", fr: "capture · épinglage · enregistrement natifs", de: "Nativ aufnehmen · anheften · aufzeichnen" }
+    // Shown once at startup when the on-disk `config.json` could not be parsed:
+    // the app reset to defaults and kept the bad file aside. `{path}` is the
+    // location the malformed file was moved to (a `config.json.corrupt-<ts>`).
+    cfg_reset { en: "Settings file was corrupt and reset to defaults. Backup kept at {path}", zh: "配置文件已损坏，已恢复为默认设置。原文件已另存为 {path}", tw: "設定檔已損壞，已恢復為預設設定。原檔案已另存為 {path}", ja: "設定ファイルが破損していたため既定値に戻しました。バックアップを {path} に保存しました", ko: "설정 파일이 손상되어 기본값으로 초기화되었습니다. 백업이 {path}에 저장되었습니다", fr: "Le fichier de configuration était corrompu et a été réinitialisé aux valeurs par défaut. Une copie est conservée dans {path}", de: "Die Konfigurationsdatei war beschädigt und wurde auf die Standardwerte zurückgesetzt. Eine Kopie liegt in {path}" }
     nav_capture { en: "Capture", zh: "截图", tw: "截圖", ja: "キャプチャ", ko: "캡처", fr: "Capturer", de: "Aufnehmen" }
     nav_pins { en: "Pins", zh: "贴图", tw: "貼圖", ja: "ピン", ko: "핀", fr: "Épingles", de: "Angeheftet" }
     nav_history { en: "History", zh: "图库", tw: "圖庫", ja: "履歴", ko: "기록", fr: "Historique", de: "Verlauf" }

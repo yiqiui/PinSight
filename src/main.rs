@@ -137,7 +137,7 @@ fn main() -> eframe::Result {
         }
     };
 
-    let config = config::Config::load();
+    let (config, config_reset) = config::Config::load_detailed();
 
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("PinSight")
@@ -163,6 +163,7 @@ fn main() -> eframe::Result {
                 config,
                 mcp_mode,
                 instance_guard,
+                config_reset,
             )))
         }),
     )

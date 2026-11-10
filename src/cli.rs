@@ -77,7 +77,7 @@ pub fn maybe_run(args: &[String]) -> Option<Result<()>> {
 /// scripts) without opening the window.
 fn run_update_check(args: &[String]) -> Result<()> {
     let download = args.iter().any(|a| a == "--download" || a == "-d");
-    let cfg = crate::config::Config::load();
+    let cfg = crate::config::Config::load_or_warn();
     let report = crate::update::fetch(&cfg).map_err(|e| anyhow!("{e}"))?;
     let target = report.available().or_else(|| report.newest());
     match &target {
@@ -231,7 +231,7 @@ fn run(args: &[String]) -> Result<()> {
     }
 
     if upload {
-        let config = crate::config::Config::load();
+        let config = crate::config::Config::load_or_warn();
         let mut upload_cfg = config.upload.clone();
         if upload_cfg.backend == crate::config::UploadBackend::Local
             && upload_cfg.local.folder.as_os_str().is_empty()
@@ -260,7 +260,7 @@ fn run(args: &[String]) -> Result<()> {
                 path
             }
             None => {
-                let config = crate::config::Config::load();
+                let config = crate::config::Config::load_or_warn();
                 util::save_image(
                     &image,
                     &config.save_dir,
