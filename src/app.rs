@@ -600,6 +600,28 @@ impl PinSightApp {
             || self.long_job.is_some()
     }
 
+    /// True when a capture/record/longshot session must NOT be started because
+    /// the user is busy with one of our own UI surfaces. Global hotkeys are
+    /// registered at the OS level (`global-hotkey` → `RegisterHotKey`) and
+    /// consume the keystroke, so without this guard pressing a capture shortcut
+    /// while typing in Settings both swallows the character and pops a
+    /// fullscreen overlay over the app; and the trim / config-move modal must
+    /// not let a second capture session layer on top of it.
+    fn capture_blocked_by_ui(&self, ctx: &egui::Context) -> bool {
+        if self.trim_dialog.is_some() || self.config_move.is_some() {
+            return true;
+        }
+        // Our own window is focused AND one of its widgets (a text field, a
+        // button, …) holds focus: starting a desktop-wide capture overlay here
+        // would hijack the screen, and the global hotkey has already eaten the
+        // keypress. The `raw.focused` gate keeps the capture working when the
+        // window is *not* focused — e.g. the user clicked the tray — even though
+        // egui may still remember a previously focused widget after a blur.
+        let window_focused = ctx.input(|i| i.raw.focused);
+        let widget_focused = ctx.memory(|m| m.focused().is_some());
+        window_focused && widget_focused
+    }
+
     fn toast(&mut self, text: impl Into<String>, error: bool) {
         self.toast = Some(Toast {
             text: text.into(),
@@ -1982,10 +2004,24 @@ impl PinSightApp {
         if !actions.is_empty() {
             tracing::debug!(?actions, "global hotkey fired");
         }
+        // Don't let a capture/record/longshot shortcut fire while the user is
+        // typing in our own window or a modal owns the screen (the OS-level
+        // hotkey would otherwise both swallow the keystroke and hijack it).
+        let blocked = self.capture_blocked_by_ui(ctx);
         for action in actions {
             match action {
-                Action::CaptureArea => self.begin_area(Intent::Copy, ctx),
-                Action::CaptureFull => self.begin_full_copy(ctx),
+                Action::CaptureArea => {
+                    if blocked {
+                        continue;
+                    }
+                    self.begin_area(Intent::Copy, ctx)
+                }
+                Action::CaptureFull => {
+                    if blocked {
+                        continue;
+                    }
+                    self.begin_full_copy(ctx)
+                }
                 Action::PinClipboard => self.pin_clipboard(),
                 Action::LongCapture => {
                     if let Some(job) = &self.long_job {
@@ -1999,6 +2035,9 @@ impl PinSightApp {
                             job.stop();
                             self.toast(self.tr.tr.stopping_recording, false);
                         }
+                    } else if blocked {
+                        // Our window/modal owns the input; not a real request
+                        // to start a session.
                     } else {
                         self.begin_area(Intent::LongShot, ctx);
                     }
@@ -2016,14 +2055,27 @@ impl PinSightApp {
                             job.stop();
                             self.toast(self.tr.tr.long_cancelled, false);
                         }
+                    } else if blocked {
+                        // Our window/modal owns the input; not a real request
+                        // to start a session.
                     } else {
                         self.begin_area(Intent::Record, ctx);
                     }
                 }
                 Action::SaveLast => self.save_last(),
                 Action::TogglePins => self.toggle_all_pins(),
-                Action::RepeatCapture => self.repeat_capture(RepeatAction::Copy, ctx),
-                Action::PickColor => self.begin_area(Intent::PickColor, ctx),
+                Action::RepeatCapture => {
+                    if blocked {
+                        continue;
+                    }
+                    self.repeat_capture(RepeatAction::Copy, ctx)
+                }
+                Action::PickColor => {
+                    if blocked {
+                        continue;
+                    }
+                    self.begin_area(Intent::PickColor, ctx)
+                }
                 Action::ToggleGroup(id) => self.toggle_group(id),
             }
             ctx.request_repaint();
@@ -3362,10 +3414,26 @@ impl PinSightApp {
             return;
         }
 
+        // Same guard as the hotkey path: don't start a capture/record/longshot
+        // while a modal owns the screen, or while our own window (and a widget
+        // in it) has focus. The tray is usually clicked while the window is
+        // unfocused, so `capture_blocked_by_ui` leaves those clicks working.
+        let blocked = self.capture_blocked_by_ui(ctx);
+
         for command in commands {
             match command {
-                TrayCommand::CaptureArea => self.begin_area(Intent::Copy, ctx),
-                TrayCommand::CaptureFull => self.begin_full_copy(ctx),
+                TrayCommand::CaptureArea => {
+                    if blocked {
+                        continue;
+                    }
+                    self.begin_area(Intent::Copy, ctx)
+                }
+                TrayCommand::CaptureFull => {
+                    if blocked {
+                        continue;
+                    }
+                    self.begin_full_copy(ctx)
+                }
                 TrayCommand::PinClipboard => self.pin_clipboard(),
                 TrayCommand::LongCapture => {
                     if let Some(job) = &self.long_job {
@@ -3376,6 +3444,9 @@ impl PinSightApp {
                             job.stop();
                             self.toast(self.tr.tr.stopping_recording, false);
                         }
+                    } else if blocked {
+                        // Our window/modal owns the input; not a real request
+                        // to start a session.
                     } else {
                         self.begin_area(Intent::LongShot, ctx);
                     }
@@ -3391,12 +3462,20 @@ impl PinSightApp {
                             job.stop();
                             self.toast(self.tr.tr.long_cancelled, false);
                         }
+                    } else if blocked {
+                        // Our window/modal owns the input; not a real request
+                        // to start a session.
                     } else {
                         self.begin_area(Intent::Record, ctx);
                     }
                 }
                 TrayCommand::SaveLast => self.save_last(),
-                TrayCommand::RepeatLast(action) => self.repeat_capture(action, ctx),
+                TrayCommand::RepeatLast(action) => {
+                    if blocked {
+                        continue;
+                    }
+                    self.repeat_capture(action, ctx)
+                }
                 TrayCommand::TogglePins => self.toggle_all_pins(),
                 TrayCommand::FocusPin(id) => {
                     if let Some(pin) = self.pins.iter().find(|p| p.id == id) {
