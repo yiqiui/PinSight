@@ -75,7 +75,7 @@ fn copy_as_file(_config: &Config, image: &RgbaImage) -> anyhow::Result<()> {
 #[cfg(windows)]
 fn set_clipboard_file(path: &Path) -> anyhow::Result<()> {
     use std::os::windows::ffi::OsStrExt;
-    use windows::Win32::Foundation::{HANDLE, POINT};
+    use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, POINT};
     use windows::Win32::System::DataExchange::{
         CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
     };
@@ -115,10 +115,18 @@ fn set_clipboard_file(path: &Path) -> anyhow::Result<()> {
 
         OpenClipboard(None)?;
         EmptyClipboard()?;
-        // SetClipboardData takes ownership of the handle; do not free it.
+        // SetClipboardData takes ownership of the handle on SUCCESS only; on
+        // failure it does not, so we must free it ourselves to avoid leaking.
         let result = SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(hglobal.0)));
         let _ = CloseClipboard();
-        result?;
-        Ok(())
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                // SetClipboardData did not take ownership on failure; release the
+                // handle ourselves so it does not leak.
+                let _ = GlobalFree(Some(HGLOBAL(hglobal.0)));
+                Err(e.into())
+            }
+        }
     }
 }
