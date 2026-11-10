@@ -14,7 +14,7 @@
 
 <br />
 
-[![Release](https://img.shields.io/badge/release-v0.1.0-2EA043)](https://github.com/yiqiui/PinSight/releases)
+[![Release](https://img.shields.io/badge/release-v0.1.1-2EA043)](https://github.com/yiqiui/PinSight/releases)
 [![Stars](https://img.shields.io/github/stars/yiqiui/PinSight?style=social)](https://github.com/yiqiui/PinSight/stargazers)
 [![License](https://img.shields.io/badge/license-Apache--2.0-2EA043)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-stdio-6B5BFF)](https://github.com/yiqiui/PinSight/blob/main/README.md#mcp-integration)
@@ -36,7 +36,7 @@
   <img src="docs/images/main.png" width="720" alt="PinSight main window" />
 </div>
 
-> **Status: v0.1.0 / usable.** Capture, annotation (text / numbered steps / undo-redo / mosaic / highlight), pin-to-screen, long capture, GIF/MP4 recording, offline OCR, GIF editing (trim / crop / add text / convert to MP4), image upload, voice notes (recording works; click-to-play pending), MCP, tray menu, custom background and in-app hotkey recording all work. Long capture is still sensitive to sticky headers and animations.
+> **Status: v0.1.1 / usable.** Capture, annotation (text / numbered steps / undo-redo / mosaic / highlight), pin-to-screen, long capture, GIF/MP4 recording, offline OCR, GIF editing (trim / crop / add text / convert to MP4), image upload, voice notes (recording works; click-to-play pending), MCP, tray menu, custom background and in-app hotkey recording all work. Long capture is still sensitive to sticky headers and animations.
 > The UI ships dark/light themes, 6 accent colours, 7 languages and font switching; the settings window has multiple tabs and remembers where you left off.
 > PinSight draws with native Win32 windows and GDI — no Electron, no Tauri, no WebView. It also builds and runs on macOS and Linux (pins fall back to an egui viewport).
 

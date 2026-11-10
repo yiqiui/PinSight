@@ -6,6 +6,15 @@ All notable changes to PinSight are documented here. The format follows
 
 ## [Unreleased]
 
+_Nothing yet — changes land here until the next tagged release._
+
+## [0.1.1] - 2026-11-10
+
+Maintenance release: a long series of correctness and hardening fixes since
+0.1.0 (config recovery, hotkey/tray input boundaries, recording truncation
+reporting, `.part` atomic publishing, MCP/PDF/decorate input validation, and
+moving PDF export off the UI thread), plus an automatic per-commit dev build.
+
 ### Added
 
 - **Rounded-corner captures**: optional radius (0–100 px) in Settings, applied
@@ -532,4 +541,5 @@ All notable changes to PinSight are documented here. The format follows
 - Text annotations, OCR, tray icon and single-instance mode are not implemented.
 - Long screenshots are sensitive to fixed headers, sticky elements and animation.
 
-[0.1.0]: https://github.com/your-org/PinSight/releases/tag/v0.1.0
+[0.1.0]: https://github.com/yiqiui/PinSight/releases/tag/v0.1.0
+[0.1.1]: https://github.com/yiqiui/PinSight/releases/tag/v0.1.1

@@ -1,6 +1,6 @@
 [package]
 name = "pinsight"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Native screenshot, annotation, pinboard, long-capture and recording tool with an MCP server — no WebView."
 license = "Apache-2.0"
