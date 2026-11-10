@@ -58,6 +58,21 @@ pub fn save_gif(frames: &[GifFrame], path: &Path, speed: i32) -> Result<()> {
     if w > u16::MAX as u32 || h > u16::MAX as u32 {
         anyhow::bail!("frame size {w}x{h} exceeds the GIF limit of 65535");
     }
+    // Every frame must share the first frame's dimensions. A GIF's logical
+    // screen is a single canvas, and `gif::Frame::from_rgba_speed` reads exactly
+    // `w*h*4` bytes from each buffer; a source with variable frame sizes (a
+    // legal GIF — frames may be sub-rectangle updates or different resolutions)
+    // would otherwise make the encoder read past the buffer and panic.
+    for (i, f) in frames.iter().enumerate() {
+        if f.image.width() != w || f.image.height() != h {
+            anyhow::bail!(
+                "frame {i} is {}x{} but the GIF canvas is {w}x{h}; \
+                 variable-size frames are not supported",
+                f.image.width(),
+                f.image.height()
+            );
+        }
+    }
     let file =
         std::fs::File::create(path).with_context(|| format!("creating {}", path.display()))?;
     let mut encoder = gif::Encoder::new(file, w as u16, h as u16, &[])
@@ -197,6 +212,8 @@ pub fn to_mp4(input: &Path, output: &Path) -> Result<()> {
     if status.success() {
         Ok(())
     } else {
+        // Don't leave a half-written MP4 behind on a failed conversion.
+        let _ = std::fs::remove_file(output);
         anyhow::bail!("ffmpeg exited with {status}")
     }
 }
@@ -293,6 +310,34 @@ mod tests {
             (24, 24)
         );
         let _ = std::fs::remove_file(&src);
+        let _ = std::fs::remove_file(&out);
+    }
+
+    #[test]
+    fn save_gif_rejects_variable_frame_sizes() {
+        // A legal GIF may carry frames of differing size (sub-rectangle
+        // updates, different resolutions). The editor writes a single canvas,
+        // so it must reject such sources with an error rather than letting the
+        // encoder read past a frame buffer and panic.
+        let out = tmp("var-size.gif");
+        let _ = std::fs::remove_file(&out);
+        let frames = vec![
+            GifFrame {
+                image: image::RgbaImage::from_pixel(24, 24, Rgba([1, 2, 3, 255])),
+                delay_cs: 10,
+            },
+            GifFrame {
+                image: image::RgbaImage::from_pixel(12, 12, Rgba([4, 5, 6, 255])),
+                delay_cs: 10,
+            },
+        ];
+        let err = save_gif(&frames, &out, 10).unwrap_err();
+        assert!(
+            err.to_string().contains("variable-size"),
+            "unexpected error: {err}"
+        );
+        // No partial file left behind on the rejected save.
+        assert!(!out.exists());
         let _ = std::fs::remove_file(&out);
     }
 }

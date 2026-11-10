@@ -787,3 +787,24 @@ impl MarkLayer {
         outcome
     }
 }
+
+/// Close the canvas and toolbar viewports.
+///
+/// The layer shows them with `show_viewport_immediate`, which only keeps a
+/// viewport alive while it is shown every frame. When the layer is dismissed
+/// (the user closes it) or the recording it was drawing on ends, `app` stops
+/// showing it, so send an explicit close to mirror `hud::close_record` and to
+/// guarantee no stale transparent window lingers over the desktop. Relying on
+/// egui to reap an un-shown immediate viewport is not guaranteed across
+/// versions, and an orphan canvas/toolbar window floating on top of everything
+/// is exactly the kind of residue this guard exists to prevent.
+pub fn close(ctx: &egui::Context) {
+    ctx.send_viewport_cmd_to(
+        egui::ViewportId::from_hash_of(CANVAS_ID),
+        egui::ViewportCommand::Close,
+    );
+    ctx.send_viewport_cmd_to(
+        egui::ViewportId::from_hash_of(TOOLBAR_ID),
+        egui::ViewportCommand::Close,
+    );
+}

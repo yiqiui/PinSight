@@ -300,10 +300,6 @@ pub struct PinSightApp {
     /// stopped: calling `SetWindowDisplayAffinity` every frame made the pill
     /// jitter and the hovered cursor flicker.
     hud_exclude_frames: u32,
-    /// Frames spent re-asserting capture exclusion for the annotation toolbar.
-    /// The layer can open mid-recording, so it needs its own counter rather
-    /// than the HUD's "first second of the job" window.
-    mark_exclude_frames: u32,
     /// Updates tab state machine.
     update_state: UpdateUi,
     /// Pending GitHub release check (runs on a worker thread).
@@ -492,7 +488,6 @@ impl PinSightApp {
             long_job: None,
             record_job: None,
             hud_exclude_frames: 0,
-            mark_exclude_frames: 0,
             update_state: UpdateUi::Idle,
             update_check_rx: None,
             update_report: None,
@@ -1051,16 +1046,16 @@ impl PinSightApp {
         } else {
             self.hud_exclude_frames = 0;
         }
-        // The annotation toolbar can be opened at any point during a recording,
-        // so re-assert its exclusion for ~1 s from when the layer appears. The
-        // canvas window stays visible to WGC — that is how marks reach the video.
+        // The annotation toolbar must stay out of the WGC capture, or it would
+        // be baked into the recording as a solid card. Unlike the HUD pill (a
+        // deferred viewport with a stable HWND that keeps its display affinity),
+        // the toolbar is an immediate viewport whose exclusion is therefore
+        // re-asserted every frame it is open rather than relying on a one-time
+        // attribute that may not survive window recreation. The canvas window is
+        // deliberately left visible to WGC — that is how the marks reach the
+        // video.
         if self.mark_layer.is_some() && self.record_job.is_some() {
-            if self.mark_exclude_frames < 30 {
-                crate::capture::set_capture_exclusion(crate::marklayer::TOOLBAR_TITLE);
-                self.mark_exclude_frames += 1;
-            }
-        } else {
-            self.mark_exclude_frames = 0;
+            crate::capture::set_capture_exclusion(crate::marklayer::TOOLBAR_TITLE);
         }
 
         if let Some(job) = self.record_job.as_mut() {
@@ -1080,6 +1075,7 @@ impl PinSightApp {
             // tray, MCP).
             crate::hud::close_record(ctx);
             if self.mark_layer.is_some() {
+                crate::marklayer::close(ctx);
                 self.mark_layer = None;
             }
         }
@@ -1099,6 +1095,7 @@ impl PinSightApp {
                 self.toast(self.tr.tr.mk_cleared, false);
             }
             if outcome.close {
+                crate::marklayer::close(ctx);
                 self.mark_layer = None;
             }
         }

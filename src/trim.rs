@@ -115,8 +115,14 @@ pub fn trim(input: &Path, start: f64, end: f64, fps: u32) -> Result<PathBuf, Str
             return Err(format!("ffmpeg: {}", detail.join(" ").trim()));
         }
     }
-    if !output.exists() {
-        return Err("no output file was produced".into());
+    // ffmpeg can occasionally leave a zero-length file behind even when it
+    // reports success, so reject both a missing file and an empty one.
+    match std::fs::metadata(&output) {
+        Ok(meta) if meta.len() > 0 => {}
+        _ => {
+            let _ = std::fs::remove_file(&output);
+            return Err("no usable output file was produced".into());
+        }
     }
     Ok(output)
 }
