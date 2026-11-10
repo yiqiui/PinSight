@@ -1773,19 +1773,39 @@ impl PinSightApp {
 
         if let Some(mut job) = self.record_job.take() {
             match job.poll() {
-                Some(RecordUpdate::Finished { path, frames }) => {
+                Some(RecordUpdate::Finished {
+                    path,
+                    frames,
+                    truncated,
+                }) => {
                     self.restore_root(ctx);
                     self.last_saved = Some(path.clone());
-                    self.toast(
-                        format!(
-                            "{}: {} ({} {})",
-                            self.tr.tr.saved,
-                            path.display(),
-                            frames,
-                            self.tr.tr.frames
-                        ),
-                        false,
-                    );
+                    if truncated {
+                        // The clip was cut short by a capture failure (monitor
+                        // unplugged, device lost, …): keep the partial file but
+                        // warn instead of claiming a clean save.
+                        self.toast(
+                            format!(
+                                "{}: {} ({} {})",
+                                self.tr.tr.rec_truncated,
+                                path.display(),
+                                frames,
+                                self.tr.tr.frames
+                            ),
+                            true,
+                        );
+                    } else {
+                        self.toast(
+                            format!(
+                                "{}: {} ({} {})",
+                                self.tr.tr.saved,
+                                path.display(),
+                                frames,
+                                self.tr.tr.frames
+                            ),
+                            false,
+                        );
+                    }
                     // Offer a head/tail trim. `frames / fps` is a good enough
                     // duration estimate (the recorder writes one frame per
                     // tick); ffprobe is not required. GIF needs no ffmpeg.

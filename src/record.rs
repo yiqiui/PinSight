@@ -28,6 +28,11 @@ pub enum RecordUpdate {
     Finished {
         path: PathBuf,
         frames: u32,
+        /// True when the recording ended early because the screen/monitor
+        /// capture source disappeared mid-stream. The file is kept (it is a
+        /// valid, shorter clip) but the UI must warn the user it is truncated
+        /// rather than reporting an unqualified success.
+        truncated: bool,
     },
     Failed(String),
     /// The user stopped during the countdown: no file was written, and the
@@ -363,6 +368,10 @@ fn run(
     // would make the video fast-forward through the pause. Repeating the last
     // frame keeps the timeline honest (and GIFs get a free freeze-frame).
     let mut held: Option<image::RgbaImage> = None;
+    // Set when `capture_region` fails *after* at least one frame was written.
+    // The file is still finalised (a valid, shorter clip), but we must surface
+    // a warning instead of an unqualified "saved" toast.
+    let mut capture_failed: Option<String> = None;
 
     // Enumerate monitors once. `Monitor::all()` is expensive; calling it every
     // frame (15–30×/s) starved the compositor and made the live cursor stutter
@@ -406,6 +415,10 @@ fn run(
                     let _ = std::fs::remove_file(path);
                     return Err(format!("capture failed: {err}"));
                 }
+                // Frames were already written: remember why we stopped so the
+                // finished clip can be flagged as truncated instead of looking
+                // like a clean save.
+                capture_failed = Some(format!("capture failed: {err}"));
                 break;
             }
         };
@@ -438,6 +451,7 @@ fn run(
     let _ = tx.send(RecordUpdate::Finished {
         path: path.to_path_buf(),
         frames,
+        truncated: capture_failed.is_some(),
     });
     Ok(())
 }

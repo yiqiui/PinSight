@@ -422,6 +422,7 @@ strings! {
     rec_hud_stop { en: "Stop", zh: "停止", tw: "停止", ja: "停止", ko: "정지", fr: "Arrêter", de: "Stopp" }
     rec_hud_hint { en: "Esc stops the recording", zh: "按 Esc 停止录制", tw: "按 Esc 停止錄製", ja: "Esc で録画を停止", ko: "Esc로 녹화 정지", fr: "Échap arrête l'enregistrement", de: "Esc beendet die Aufnahme" }
     rec_annotate { en: "Annotate", zh: "标注", tw: "標註", ja: "注釈", ko: "주석", fr: "Annoter", de: "Anmerken" }
+    rec_truncated { en: "Recording interrupted, saved truncated clip", zh: "录制被中断，已保存被截断的视频", tw: "錄製被中斷，已儲存被截斷的影片", ja: "録画が中断されました。切り詰められた動画を保存しました", ko: "녹화가 중단되어 잘린 영상을 저장했습니다", fr: "Enregistrement interrompu, vidéo tronquée enregistrée", de: "Aufnahme unterbrochen, verkürztes Video gespeichert" }
     mk_arrow { en: "Arrow", zh: "箭头", tw: "箭頭", ja: "矢印", ko: "화살표", fr: "Flèche", de: "Pfeil" }
     mk_line { en: "Line", zh: "直线", tw: "直線", ja: "直線", ko: "직선", fr: "Ligne", de: "Linie" }
     mk_rect { en: "Rectangle", zh: "矩形", tw: "矩形", ja: "矩形", ko: "사각형", fr: "Rectangle", de: "Rechteck" }
