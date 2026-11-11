@@ -388,10 +388,9 @@ mod imp {
                 let r = *ctx.bgra.get(si + 2).unwrap_or(&0) as f32;
                 let a = *ctx.bgra.get(si + 3).unwrap_or(&255) as f32;
                 let af = (a / 255.0) * opacity;
-                let di =
-                    (((y as usize) + (margin as usize)) * (w as usize)
-                        + ((x as usize) + (margin as usize)))
-                        * 4;
+                let di = (((y as usize) + (margin as usize)) * (w as usize)
+                    + ((x as usize) + (margin as usize)))
+                    * 4;
                 *px.add(di) = (b * af).round() as u8;
                 *px.add(di + 1) = (g * af).round() as u8;
                 *px.add(di + 2) = (r * af).round() as u8;

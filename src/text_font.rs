@@ -25,8 +25,7 @@ impl TextFont {
     fn resolve_path() -> Option<PathBuf> {
         // Prefer whatever the UI is drawn with; fall back to any Latin face so
         // text annotations still rasterise when font discovery failed.
-        crate::fonts::primary_font_path()
-            .or_else(|| crate::fonts::find_system_font(FALLBACK_FONTS))
+        crate::fonts::primary_font_path().or_else(|| crate::fonts::find_system_font(FALLBACK_FONTS))
     }
 
     fn load() -> Self {
@@ -170,9 +169,7 @@ fn font_cell() -> &'static std::sync::RwLock<TextFont> {
 
 /// The process-wide rasteriser font, resolved from the same file the UI uses.
 pub fn font() -> std::sync::RwLockReadGuard<'static, TextFont> {
-    font_cell()
-        .read()
-        .unwrap_or_else(|e| e.into_inner())
+    font_cell().read().unwrap_or_else(|e| e.into_inner())
 }
 
 /// Re-resolve after the user changes the UI font.

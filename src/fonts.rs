@@ -786,9 +786,7 @@ pub fn apply(
     // later font change reaches the rasteriser too.
     let resolved = primary_path;
     {
-        let mut stored = PRIMARY_PATH
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut stored = PRIMARY_PATH.write().unwrap_or_else(|e| e.into_inner());
         *stored = resolved.clone();
     }
     if resolved.is_some() {
