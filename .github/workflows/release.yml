@@ -296,6 +296,12 @@ jobs:
               gh release upload "$TAG" "$f" --clobber
             done
             gh release edit "$TAG" --title "PinSight v${VERSION}" --notes "$notes"
+            # Moving the tag does not update the Release object's own
+            # target_commitish; patch it so the page shows the commit that
+            # actually produced these binaries rather than a stale hash.
+            rid=$(gh api "repos/${GH_REPO}/releases/tags/${TAG}" --jq '.id')
+            gh api -X PATCH "repos/${GH_REPO}/releases/${rid}" \
+              -f target_commitish="$GITHUB_SHA" >/dev/null
           else
             echo "New version $VERSION: creating release $TAG"
             gh release create "$TAG" "${files[@]}" \
