@@ -46,6 +46,12 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog commandline
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+; Inno Setup 6 auto-detects the OS UI language. `auto` selects it with no manual
+; prompt unless the locale is ambiguous (e.g. a neutral language that matches
+; more than one bundled translation); `no` would always suppress the dialog.
+; This is what makes the installer follow the system language — a zh-CN machine
+; installs in Chinese, an en-US machine in English.
+ShowLanguageDialog=auto
 UninstallDisplayName={#AppName}
 
 [Languages]
@@ -96,11 +102,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
 [Run]
 Filename: "{app}\pinsight.exe"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
-[Code]
-// Skip the language-selection page. Inno Setup has already chosen the language
-// that matches the OS UI locale (e.g. Chinese on a zh-CN machine), so we proceed
-// with it automatically instead of asking the user to pick.
-function ShouldSkipPage(PageID: Integer): Boolean;
-begin
-  Result := (PageID = wpSelectLanguage);
-end;
+; NOTE: In Inno Setup 6 the language dialog is a *pre-wizard* dialog, not a
+; wizard page, so the old `ShouldSkipPage(wpSelectLanguage)` trick is invalid
+; (wpSelectLanguage is no longer a defined constant). The system-language
+; behaviour is instead controlled by `ShowLanguageDialog` above.
