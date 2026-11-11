@@ -151,24 +151,40 @@ jobs:
       # Linux needs the system libraries that `eframe`/`xcap`/`arboard`/`leptess`
       # load. `libpipewire-0.3-dev` is required by `libspa-sys` (pulled in by
       # `xcap`); `libtesseract-dev` is what the Linux OCR backend links.
+      # The Ubuntu apt mirror (`azure.archive.ubuntu.com`) occasionally fails
+      # to resolve on a fresh runner ("Temporary failure resolving"), which
+      # would otherwise abort the whole Linux build. Retry a few times so a
+      # transient DNS/network blip self-heals instead of blocking the release.
       - name: Install system dependencies
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc \
-            libgtk-3-dev \
-            libxcb-render0-dev \
-            libxcb-shape0-dev \
-            libxcb-xfixes0-dev \
-            libxkbcommon-dev \
-            libssl-dev \
-            libwayland-dev \
-            libxcursor-dev \
-            libxdo-dev \
-            libpipewire-0.3-dev \
-            libtesseract-dev \
-            libgbm-dev
+          set -euo pipefail
+          ok=0
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y \
+              gcc \
+              libgtk-3-dev \
+              libxcb-render0-dev \
+              libxcb-shape0-dev \
+              libxcb-xfixes0-dev \
+              libxkbcommon-dev \
+              libssl-dev \
+              libwayland-dev \
+              libxcursor-dev \
+              libxdo-dev \
+              libpipewire-0.3-dev \
+              libtesseract-dev \
+              libgbm-dev ; then
+              ok=1
+              break
+            fi
+            echo "apt-get install attempt $attempt failed (transient mirror?); retrying in 20s"
+            sleep 20
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::apt-get install failed after 3 attempts"
+            exit 1
+          fi
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
