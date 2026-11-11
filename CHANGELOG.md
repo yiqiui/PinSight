@@ -22,6 +22,16 @@ _Nothing yet — changes land here until the next tagged release._
   (Previously the installer was English-only because the translation was not
   bundled with the build environment.)
 
+### Changed
+
+- **Refined the v0.1.2 logo** (`scripts/make_pinsight_icon.py`): the indigo
+  plate now uses a top-lit vertical gradient with a glassy sheen and a crisper
+  darker rim; the four viewfinder brackets are slimmer with rounded caps; the
+  push-pin has a domed head with gentle volume, a cyan ring plus a solid cyan
+  core, and a rounded needle tip. The regenerated `assets/icon.png`, `icon.ico`
+  and `tray.ico` propagate to the executable icon, the taskbar and the
+  installer bundle via `build.rs`.
+
 ## [0.1.2] - 2026-11-11
 
 ### Added
