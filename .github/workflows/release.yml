@@ -219,17 +219,17 @@ jobs:
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found after installing Inno Setup" }
 
-          # ChineseSimplified.isl is an UNOFFICIAL translation and is absent
-          # from the stock Inno Setup install used on GitHub runners. Without
-          # this define the compile aborts with "Couldn't open include file",
-          # which fails the whole Windows x64 job and (via needs: build) skips
-          # publishing the release entirely.
-          $langFile = "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl"
+          # The Simplified Chinese translation now ships *in the repo*
+          # (packaging/windows/Languages/ChineseSimplified.isl), so the installer
+          # is built bilingual and auto-selects the system language. Only fall
+          # back to an English-only installer via /DNoChinese if the file is
+          # somehow missing from the checkout.
+          $langFile = "$PWD\packaging\windows\Languages\ChineseSimplified.isl"
           # NB: never assign to $args in PowerShell — it is an automatic
           # variable holding the script's unbound arguments.
           $isccArgs = @("/DAppVersion=$version", "/DPinsightExe=$PWD\target\${{ matrix.target }}\release\pinsight.exe")
           if (-not (Test-Path $langFile)) {
-            Write-Host "ChineseSimplified.isl not present; building an English-only installer"
+            Write-Host "ChineseSimplified.isl not found; building an English-only installer"
             $isccArgs += "/DNoChinese"
           }
           $isccArgs += "packaging\windows\pinsight.iss"

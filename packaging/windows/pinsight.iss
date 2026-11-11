@@ -97,9 +97,9 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
 Filename: "{app}\pinsight.exe"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-; Skip the language-selection page. Inno Setup has already chosen the language
-; that matches the OS UI locale (e.g. Chinese on a zh-CN machine), so we proceed
-; with it automatically instead of asking the user to pick.
+// Skip the language-selection page. Inno Setup has already chosen the language
+// that matches the OS UI locale (e.g. Chinese on a zh-CN machine), so we proceed
+// with it automatically instead of asking the user to pick.
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := (PageID = wpSelectLanguage);
