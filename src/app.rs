@@ -7320,18 +7320,20 @@ impl PinSightApp {
             }
         }
         if start_download {
-            // Clone the asset out first so no borrow of the report outlives the
-            // state change below.
-            let asset = self
+            // Clone the asset (and its checksum manifest) out first so no borrow
+            // of the report outlives the state change below.
+            let (asset, checksums) = self
                 .update_report
                 .as_ref()
                 .and_then(|r| r.available().or_else(|| r.newest()))
-                .and_then(|rel| rel.asset.clone());
+                .map(|rel| (rel.asset.clone(), rel.checksums.clone()))
+                .unwrap_or((None, None));
             if let Some(asset) = asset {
                 let cfg = self.config.clone();
                 self.update_dl = Some(crate::update::start_download(
                     cfg,
                     asset,
+                    checksums,
                     crate::update::download_dir(),
                 ));
                 self.update_state = UpdateUi::Downloading;

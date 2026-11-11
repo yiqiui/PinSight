@@ -44,6 +44,10 @@ pub struct Release {
     pub prerelease: bool,
     /// The asset matching this OS/architecture, if the release shipped one.
     pub asset: Option<Asset>,
+    /// The `PinSight-<version>-sha256.txt` manifest shipped with the release,
+    /// if present. The updater verifies the downloaded asset's hash against it
+    /// before installing. `None` for older releases that did not ship one.
+    pub checksums: Option<Asset>,
 }
 
 /// Everything one check returns: the running version plus every published
@@ -297,8 +301,24 @@ pub fn fetch(cfg: &Config) -> Result<Report, String> {
 }
 
 fn to_release(r: &ApiRelease) -> Release {
+    let version = r.tag_name.trim_start_matches('v').to_string();
+    let version_lc = version.to_ascii_lowercase();
+    // Locate the SHA-256 manifest shipped alongside the binaries. Its name is
+    // `PinSight-<version>-sha256.txt`; older releases simply have none.
+    let checksums = r
+        .assets
+        .iter()
+        .find(|a| {
+            let n = a.name.to_ascii_lowercase();
+            n.starts_with("pinsight-") && n.ends_with("-sha256.txt") && n.contains(&version_lc)
+        })
+        .map(|a| Asset {
+            name: a.name.clone(),
+            url: a.browser_download_url.clone(),
+            size: a.size,
+        });
     Release {
-        version: r.tag_name.trim_start_matches('v').to_string(),
+        version,
         notes: clean_notes(if r.body.trim().is_empty() {
             &r.name
         } else {
@@ -308,6 +328,7 @@ fn to_release(r: &ApiRelease) -> Release {
         published_at: r.published_at.clone().unwrap_or_default(),
         prerelease: r.prerelease,
         asset: pick_asset(&r.assets),
+        checksums,
     }
 }
 
@@ -349,7 +370,17 @@ impl DownloadJob {
 }
 
 /// Start downloading `asset` into `dir` on a background thread.
-pub fn start_download(cfg: Config, asset: Asset, dir: PathBuf) -> DownloadJob {
+///
+/// If `checksums` is supplied (a release that ships a `PinSight-<version>-sha256.txt`
+/// manifest), the downloaded file is verified against it before the job reports
+/// success. Verification fails closed: a missing manifest fetch, a missing entry,
+/// or a hash mismatch all abort the download with an error.
+pub fn start_download(
+    cfg: Config,
+    asset: Asset,
+    checksums: Option<Asset>,
+    dir: PathBuf,
+) -> DownloadJob {
     let (tx, rx) = mpsc::channel();
     let progress = Arc::new(AtomicU64::new(0));
     let cancel = Arc::new(AtomicBool::new(false));
@@ -383,6 +414,12 @@ pub fn start_download(cfg: Config, asset: Asset, dir: PathBuf) -> DownloadJob {
                     }
                     file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
                     p.fetch_add(n as u64, Ordering::Relaxed);
+                }
+                // Verify integrity against the release checksum manifest (if the
+                // release ships one) before handing the file back. This fails
+                // closed: a missing or mismatched hash blocks installation.
+                if let Some(cs) = &checksums {
+                    verify_asset(&path, &asset.name, cs, &cfg)?;
                 }
                 Ok(path)
             })();
@@ -486,6 +523,65 @@ fn find_file(root: &Path, name: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// Compute the lower-case hex SHA-256 of a file, streaming it in 64 KiB chunks.
+fn sha256_of_file(path: &Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hex::encode(hasher.finalize()))
+}
+
+/// Extract the expected lower-case hex digest for `asset_name` from a
+/// `sha256sum`-style manifest (lines of `<hash>  <filename>`). Returns `None`
+/// if no line names that file.
+fn parse_expected_hash(text: &str, asset_name: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        let hash = parts.next()?;
+        let name = parts.last()?;
+        (name == asset_name).then(|| hash.to_ascii_lowercase())
+    })
+}
+
+/// Download the release's `PinSight-<version>-sha256.txt` manifest and confirm
+/// the downloaded `asset_name`'s hash matches.
+///
+/// Fail-closed: if the manifest cannot be fetched, the asset is missing from it,
+/// or the hash differs, this returns an error and the updater refuses to
+/// install. Releases that never shipped a manifest are handled by the caller
+/// (it simply does not pass `checksums`), so updates from older versions still
+/// work unchanged.
+fn verify_asset(
+    path: &Path,
+    asset_name: &str,
+    manifest: &Asset,
+    cfg: &Config,
+) -> Result<(), String> {
+    let text = client(cfg, Some(Duration::from_secs(30)))
+        .get(&manifest.url)
+        .send()
+        .and_then(|r| r.text())
+        .map_err(|e| format!("download checksum manifest failed: {e}"))?;
+    let expected = parse_expected_hash(&text, asset_name)
+        .ok_or_else(|| format!("checksum manifest is missing an entry for {asset_name}"))?;
+    let actual = sha256_of_file(path)?;
+    if actual.eq_ignore_ascii_case(&expected) {
+        Ok(())
+    } else {
+        Err(format!(
+            "checksum mismatch: expected {expected}, got {actual} (the file may be corrupted or tampered with)"
+        ))
+    }
 }
 
 /// Replace the running executable with the freshly extracted build and restart.
@@ -597,6 +693,7 @@ mod tests {
             published_at: String::new(),
             prerelease: false,
             asset: None,
+            checksums: None,
         }
     }
 
@@ -621,6 +718,41 @@ mod tests {
         };
         assert!(report.available().is_none());
         assert_eq!(report.newest().map(|r| r.version.as_str()), Some("1.2.0"));
+    }
+
+    #[test]
+    fn sha256_of_empty_file_is_known_constant() {
+        let dir = std::env::temp_dir().join("pinsight_test_sha");
+        let _ = std::fs::create_dir_all(&dir);
+        let p = dir.join("empty.bin");
+        std::fs::write(&p, []).unwrap();
+        let h = sha256_of_file(&p).unwrap();
+        assert_eq!(
+            h,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn parses_checksum_manifest_entries() {
+        let manifest =
+            "abc123  PinSight-1.0.0-windows-x64.zip\ndef456  PinSight-1.0.0-sha256.txt\n";
+        assert_eq!(
+            parse_expected_hash(manifest, "PinSight-1.0.0-windows-x64.zip").as_deref(),
+            Some("abc123")
+        );
+        // Missing file has no entry.
+        assert_eq!(parse_expected_hash(manifest, "nope.zip"), None);
+        // The hash is normalised to lower case for case-insensitive compares.
+        assert_eq!(
+            parse_expected_hash(
+                "ABC123  PinSight-1.0.0-windows-x64.zip",
+                "PinSight-1.0.0-windows-x64.zip"
+            )
+            .as_deref(),
+            Some("abc123")
+        );
     }
 
     #[test]

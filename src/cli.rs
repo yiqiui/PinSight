@@ -102,7 +102,9 @@ fn run_update_check(args: &[String]) -> Result<()> {
             return Err(anyhow!("no downloadable asset for this platform"));
         };
         println!("downloading…");
-        let job = crate::update::start_download(cfg, asset, crate::update::download_dir());
+        let checksums = target.and_then(|rel| rel.checksums.clone());
+        let job =
+            crate::update::start_download(cfg, asset, checksums, crate::update::download_dir());
         match job.rx.recv() {
             Ok(Ok(path)) => println!("downloaded: {}", path.display()),
             Ok(Err(e)) => return Err(anyhow!("{e}")),
