@@ -72,7 +72,19 @@ if (-not $SkipInstaller) {
         # Bundle the *staged* exe (which is UPX-compressed when -Upx was passed)
         # so the installed binary on disk is small too. Inno's own lzma2
         # compression only shrinks the setup file, not the installed exe.
-        & $iscc.Source "/DPinsightExe=..\..\dist\portable\PinSight\pinsight.exe" "packaging\windows\pinsight.iss"
+        #
+        # ChineseSimplified.isl is an unofficial translation and is not shipped
+        # with stock Inno Setup. Passing /DNoChinese when it is missing makes
+        # the .iss fall back to an English-only installer instead of aborting.
+        $isccDir = Split-Path -Parent $iscc.Source
+        $langFile = Join-Path $isccDir "Languages\ChineseSimplified.isl"
+        $issArgs = @("/DPinsightExe=..\..\dist\portable\PinSight\pinsight.exe")
+        if (-not (Test-Path $langFile)) {
+            Write-Warning "ChineseSimplified.isl not found — building an English-only installer"
+            $issArgs += "/DNoChinese"
+        }
+        $issArgs += "packaging\windows\pinsight.iss"
+        & $iscc.Source @issArgs
         if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
     }
 }

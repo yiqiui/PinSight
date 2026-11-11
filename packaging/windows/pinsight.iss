@@ -50,11 +50,21 @@ UninstallDisplayName={#AppName}
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
+; ChineseSimplified.isl is NOT part of the official Inno Setup distribution
+; (it is an unofficial translation). GitHub's `choco install innosetup` runner
+; therefore has no such file, which used to abort the compile and fail the
+; whole Windows x64 release job. Callers that cannot find the file pass
+; /DNoChinese and we degrade to an English-only installer. Local builds with
+; the translation installed keep the bilingual installer.
+#ifndef NoChinese
 Name: "zh"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+#endif
 
 [CustomMessages]
 en.AssocCapture=Capture the current screen
+#ifndef NoChinese
 zh.AssocCapture=截取当前屏幕
+#endif
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
