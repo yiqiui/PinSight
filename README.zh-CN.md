@@ -16,7 +16,7 @@ Native Rust screenshot · annotation · pin · long-capture · recording tool wi
 
 <br />
 
-[![Release](https://img.shields.io/badge/release-v0.1.2-2EA043)](https://github.com/yiqiui/PinSight/releases)
+[![Release](https://img.shields.io/badge/release-v0.1.3-2EA043)](https://github.com/yiqiui/PinSight/releases)
 [![Stars](https://img.shields.io/github/stars/yiqiui/PinSight?style=social)](https://github.com/yiqiui/PinSight/stargazers)
 [![License](https://img.shields.io/badge/license-Apache--2.0-2EA043)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-stdio-6B5BFF)](https://github.com/yiqiui/PinSight/blob/main/README.zh-CN.md#mcp-集成)
@@ -38,7 +38,7 @@ Native Rust screenshot · annotation · pin · long-capture · recording tool wi
   <img src="docs/images/main.png" width="720" alt="PinSight 主界面" />
 </div>
 
-> **状态：v0.1.2 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
+> **状态：v0.1.3 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
 > 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）、图片上传、
 > 语音便签（可录制，点击播放待完善）、MCP、托盘菜单、自定义背景图与界面内热键录制均已跑通；长截图对固定页眉、
 > 粘性元素与动画仍有一定敏感性。

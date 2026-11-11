@@ -9,7 +9,7 @@
 #define AppName "PinSight"
 ; Overridable from the command line: iscc /DAppVersion=1.2.3 ...
 #ifndef AppVersion
-  #define AppVersion "0.1.2"
+  #define AppVersion "0.1.3"
 #endif
 #define AppPublisher "PinSight contributors"
 #define AppURL "https://github.com/yiqiui/PinSight"
@@ -50,14 +50,15 @@ UninstallDisplayName={#AppName}
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
-; ChineseSimplified.isl is NOT part of the official Inno Setup distribution
-; (it is an unofficial translation). GitHub's `choco install innosetup` runner
-; therefore has no such file, which used to abort the compile and fail the
-; whole Windows x64 release job. Callers that cannot find the file pass
-; /DNoChinese and we degrade to an English-only installer. Local builds with
-; the translation installed keep the bilingual installer.
+; The Simplified Chinese translation now ships *in this repo*
+; (packaging/windows/Languages/ChineseSimplified.isl), so both local builds
+; and the GitHub CI runner compile a bilingual installer instead of degrading
+; to English-only. Inno Setup auto-selects the language matching the user's
+; system UI locale at startup, and the [Code] section below skips the manual
+; language page so a Chinese Windows installs in Chinese with no extra click.
+; Pass /DNoChinese only if the file is somehow absent.
 #ifndef NoChinese
-Name: "zh"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "zh"; MessagesFile: "Languages\ChineseSimplified.isl"
 #endif
 
 [CustomMessages]
@@ -94,3 +95,12 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
 
 [Run]
 Filename: "{app}\pinsight.exe"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+; Skip the language-selection page. Inno Setup has already chosen the language
+; that matches the OS UI locale (e.g. Chinese on a zh-CN machine), so we proceed
+; with it automatically instead of asking the user to pick.
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = wpSelectLanguage);
+end;

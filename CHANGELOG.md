@@ -8,6 +8,19 @@ All notable changes to PinSight are documented here. The format follows
 
 _Nothing yet — changes land here until the next tagged release._
 
+## [0.1.3] - 2026-11-11
+
+### Added
+
+- **Bilingual Windows installer that follows the system language.** The
+  Simplified Chinese translation (`ChineseSimplified.isl`) now ships in the repo
+  at `packaging/windows/Languages/`, so the Inno Setup installer is built
+  bilingual (English + 简体中文) on both local machines and the CI runner.
+  Inno Setup auto-selects the language matching the OS UI locale at startup, and
+  the language-selection page is skipped, so a Chinese Windows installs in
+  Chinese with no manual pick. (Previously the installer was English-only because
+  the translation was not bundled with the build environment.)
+
 ## [0.1.2] - 2026-11-11
 
 ### Added
