@@ -1,25 +1,88 @@
 name: Release
 
+# Every push to main builds all six platform packages. The version in
+# Cargo.toml is the single source of truth:
+#   - version UNCHANGED  -> replace the assets on that version's existing
+#                           Release in place (no new Release entry, no new tag)
+#   - version BUMPED     -> create one new Release for the new version
+# There is deliberately no `push: tags` trigger and no rolling "nightly"
+# Release: those produced a cluttered list of near-duplicate entries.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
     inputs:
       upx:
         description: "UPX-compress the release binary (smaller, may trip antivirus)"
         type: boolean
         default: false
-      version:
-        description: "Release version WITHOUT the v prefix, e.g. 0.1.1 (also the tag published when dispatching manually)"
-        type: string
-        default: "0.1.1"
 
 env:
   CARGO_TERM_COLOR: always
 
+# Never cancel a publish midway: a half-replaced asset set is worse than a
+# queued run. Rapid pushes simply wait their turn.
+concurrency:
+  group: pinsight-release
+  cancel-in-progress: false
+
 jobs:
+  # Resolve the version ONCE so every matrix job and the publish job agree.
+  meta:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      release_exists: ${{ steps.meta.outputs.release_exists }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from Cargo.toml and check the release
+        id: meta
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Only [package].version; Cargo.toml also contains dependency
+          # versions, so stop at the next table.
+          version=$(awk '/^\[package\]/{p=1;next} /^\[/{p=0} p && /^version = /{gsub(/"/,"",$3); print $3; exit}' Cargo.toml)
+          if [ -z "$version" ]; then
+            echo "::error::could not read [package].version from Cargo.toml"
+            exit 1
+          fi
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            exists=true
+          else
+            exists=false
+          fi
+          # Guard against a half-bumped version: Cargo.toml drives everything,
+          # but the README badges and the Inno Setup default still carry a
+          # literal version for humans / local builds. Fail loudly instead of
+          # silently shipping mismatched packages.
+          readme=$(grep -o 'release-v[0-9][^)-]*' README.md | head -n1 | sed 's/^release-//')
+          iss=$(sed -n 's/.*#define AppVersion "\([^"]*\)".*/\1/p' packaging/windows/pinsight.iss | head -n1)
+          if [ "$readme" != "$tag" ]; then
+            echo "::error::README.md badge says $readme but Cargo.toml says $tag"
+            exit 1
+          fi
+          if [ "$iss" != "$version" ]; then
+            echo "::error::pinsight.iss says $iss but Cargo.toml says $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release_exists=$exists" >> "$GITHUB_OUTPUT"
+          echo "Version $version -> release $tag (exists=$exists)"
+
   build:
     name: ${{ matrix.os }} / ${{ matrix.target }}
+    needs: meta
     strategy:
       fail-fast: false
       matrix:
@@ -117,16 +180,18 @@ jobs:
 
       - name: Package
         shell: bash
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
         run: |
           set -euo pipefail
-          version="${{ github.event.inputs.version || github.ref_name }}"
-          version="${version#v}"
+          version="$VERSION"
           stage="dist/pinsight-${{ matrix.platform }}"
           mkdir -p "$stage"
           cp "target/${{ matrix.target }}/release/${{ matrix.artifact }}" "$stage/"
           cp README.md LICENSE config.example.json "$stage/"
           cp -r assets "$stage/"
           echo "$version" > "$stage/VERSION"
+          printf '%s\n' "${GITHUB_SHA}" > "$stage/COMMIT"
           if [ "${{ runner.os }}" = "Windows" ]; then
             (cd dist && powershell -NoProfile -Command "Compress-Archive -Path 'pinsight-${{ matrix.platform }}' -DestinationPath 'PinSight-$version-${{ matrix.platform }}.zip' -Force")
           else
@@ -139,9 +204,11 @@ jobs:
       - name: Build Windows installer
         if: ${{ matrix.platform == 'windows-x64' }}
         shell: pwsh
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
         run: |
           choco install innosetup -y --no-progress
-          $version = "${{ github.event.inputs.version || github.ref_name }}".TrimStart('v')
+          $version = "$env:VERSION"
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found after installing Inno Setup" }
 
@@ -175,52 +242,64 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
-  # Publish every artefact (portable zips, tar.gz, and the Windows installer) on
-  # the tag's GitHub Release, so the in-app updater can find and download them.
-  # Publish on a `v*` tag AND on a manual dispatch. Previously the `if` only
-  # allowed tag pushes, so clicking "Run workflow" built and uploaded every
-  # artefact as a CI-only artefact and then silently skipped the publish step.
-  # `github.ref_name` on a dispatch is the BRANCH name (`main`), so the tag
-  # must be derived explicitly rather than reusing `github.ref_name`.
-  release:
-    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
-    needs: build
+  # Replace the current version's assets in place, or open a new Release only
+  # when Cargo.toml declares a version we have never published before.
+  publish:
+    name: Publish current version
+    needs: [meta, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Collect artefacts
         uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
-      - name: Resolve release tag
-        id: meta
+      - name: Replace assets or create the release
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          TAG: ${{ needs.meta.outputs.tag }}
+          RELEASE_EXISTS: ${{ needs.meta.outputs.release_exists }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            raw="${{ github.event.inputs.version }}"
-          else
-            raw="${{ github.ref_name }}"
-          fi
-          raw="${raw#v}"
-          if [ -z "$raw" ]; then
-            echo "::error::release version is empty; refusing to publish"
+          shopt -s nullglob
+          files=(dist/*.zip dist/*.tar.gz dist/*-setup.exe)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::no artefacts were produced; refusing to publish"
             exit 1
           fi
-          echo "tag=v$raw" >> "$GITHUB_OUTPUT"
-          echo "version=$raw" >> "$GITHUB_OUTPUT"
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: PinSight v${{ steps.meta.outputs.version }}
-          target_commitish: ${{ github.sha }}
-          draft: false
-          # Tags like v0.2.0-beta are published as prereleases.
-          prerelease: ${{ contains(steps.meta.outputs.tag, '-') }}
-          generate_release_notes: true
-          files: dist/*
+          # A single, fully-rewritten notes block (never appended) avoids the
+          # duplicated "Full Changelog" lines produced by generate_release_notes
+          # on repeated publishes.
+          notes="PinSight ${VERSION} — built from \`main\` at \`${GITHUB_SHA}\` on $(date -u +%Y-%m-%dT%H:%M:%SZ). Packages for the current version are replaced in place on every push; bump \`version\` in Cargo.toml to open a new Release. See [CHANGELOG.md](https://github.com/${GH_REPO}/blob/${GITHUB_SHA}/CHANGELOG.md) for the full history."
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "$RELEASE_EXISTS" = "true" ]; then
+            echo "Version $VERSION unchanged: replacing assets on $TAG"
+            # Keep the tag pointing at the commit that produced these binaries,
+            # so the Release page never shows a stale commit hash.
+            git tag -f "$TAG" "$GITHUB_SHA"
+            git push --force origin "refs/tags/$TAG"
+            for f in "${files[@]}"; do
+              gh release upload "$TAG" "$f" --clobber
+            done
+            gh release edit "$TAG" --title "PinSight v${VERSION}" --notes "$notes"
+          else
+            echo "New version $VERSION: creating release $TAG"
+            gh release create "$TAG" "${files[@]}" \
+              --title "PinSight v${VERSION}" \
+              --notes "$notes" \
+              --target "$GITHUB_SHA"
+          fi
