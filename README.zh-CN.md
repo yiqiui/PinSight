@@ -16,7 +16,7 @@ Native Rust screenshot · annotation · pin · long-capture · recording tool wi
 
 <br />
 
-[![Release](https://img.shields.io/badge/release-v0.1.1-2EA043)](https://github.com/yiqiui/PinSight/releases)
+[![Release](https://img.shields.io/badge/release-v0.1.2-2EA043)](https://github.com/yiqiui/PinSight/releases)
 [![Stars](https://img.shields.io/github/stars/yiqiui/PinSight?style=social)](https://github.com/yiqiui/PinSight/stargazers)
 [![License](https://img.shields.io/badge/license-Apache--2.0-2EA043)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-stdio-6B5BFF)](https://github.com/yiqiui/PinSight/blob/main/README.zh-CN.md#mcp-集成)
@@ -38,7 +38,7 @@ Native Rust screenshot · annotation · pin · long-capture · recording tool wi
   <img src="docs/images/main.png" width="720" alt="PinSight 主界面" />
 </div>
 
-> **状态：v0.1.1 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
+> **状态：v0.1.2 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
 > 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）、图片上传、
 > 语音便签（可录制，点击播放待完善）、MCP、托盘菜单、自定义背景图与界面内热键录制均已跑通；长截图对固定页眉、
 > 粘性元素与动画仍有一定敏感性。
@@ -58,7 +58,7 @@ PinSight 想做的是一个**可读、可改、可自动化**的开源实现：
 - **为长期使用而设计**：主题、强调色、字号、界面语言、字体都可切换，控件与图标全部矢量手绘，不随缩放失真。
 - **对 AI 友好**：内置 MCP stdio 服务，Claude Desktop、Cursor、Continue 等客户端可以直接调用截图、贴图、长截图、录屏能力。
 - **工程透明**：模块边界、线程模型、坐标空间和失败模式都写在 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-- **猫头鹰 logo**：以雕鸮（eagle-owl）为原型的扁平插画——怒目圆睁的橙红大眼，深底圆角板；四角的**取景括号**（左琥珀 / 右青）点出「截图框选」的语义，与选区四角的对焦环手柄、冻结层羽翼式入场一脉相承。原图由 AI 生成（[`icon_gen/`](icon_gen/)），[`scripts/compose_icon.py`](scripts/compose_icon.py) 负责叠加取景括号并导出 PNG/ICO 三件套。
+- **Logo**：深靛蓝圆角底板，四角白色**取景括号**（「视 / sight」），正中一枚白色**图钉**（「钉 / pin」）——把产品名「PinSight」凝成一个图形。图标由 [`scripts/make_pinsight_icon.py`](scripts/make_pinsight_icon.py) 几何绘制并导出 PNG/ICO 三件套，任意尺寸都清晰。
 
 PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、粘性元素、动画）与 Snipaste
 可能仍有差距，macOS / Linux 上的贴图后端也仍在打磨中。核心能力（截图、标注、
@@ -110,7 +110,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 ### 主题
 
 - **跟随系统**（默认）/ **浅色** / **深色**，切换即时生效并写回配置。
-- **6 种强调色**：蓝、紫、翡翠、琥珀、玫红、青色（左琥珀 / 右青正是猫头鹰 logo 的双眼瞳色）。强调色同时决定选中态、主按钮、选区描边和贴图卡片高亮。
+- **6 种强调色**：蓝、紫、翡翠、琥珀、玫红、青色。强调色同时决定选中态、主按钮、选区描边和贴图卡片高亮。
 - 冻结层与工具栏始终使用暗色玻璃质感，保证在任意桌面背景上都有足够对比度。
 
 ### 多语言
@@ -257,7 +257,7 @@ PINSIGHT_UPX_ONLY=1 python tools/_repackage_portable.py    # 只出 UPX 版
   本目录的 `data\` / `captures\` 里，整个文件夹可以随意拷贝/删除，不在系统里留痕迹。
   删除该标记文件即可恢复为"按用户安装"行为。
 - 也可以手动触发便携模式：`pinsight.exe --portable` 或环境变量 `PINSIGHT_PORTABLE=1`。
-- CI 在打 `v*` 标签时自动构建发布包：Windows（x64 / ARM64）、macOS（x64 / ARM64）、Linux（x64 / ARM64）。
+- CI 在每次推送 `main` 时自动构建全部 6 个平台包（Windows / macOS / Linux，各 x64 + ARM64）。`Cargo.toml` 的版本号决定结果：未变则原地替换现有 Release 的资产，变了则新建一条 Release。
 
 ---
 
@@ -513,7 +513,7 @@ PinSight/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                # Windows fmt / clippy / test / build
-│       └── release.yml           # v* 标签：Windows/macOS/Linux（x64 + ARM64）发布包
+│       └── release.yml           # 推送 main：Windows/macOS/Linux（x64 + ARM64），版本驱动的发布
 ├── assets/
 │   ├── icon.png                  # 应用图标（多尺寸矢量导出）
 │   ├── icon.ico                  # Windows 图标

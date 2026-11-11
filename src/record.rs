@@ -257,6 +257,9 @@ pub fn start(
 
     let countdown = record_options.countdown.clamp(0, 10);
     let fail_tx = tx.clone();
+    // The recorder thread gets its own handle to signal completion (so the Esc
+    // watcher can unhook); the original `done` is returned inside the job.
+    let done_thread = done.clone();
     let spawn_res = std::thread::Builder::new()
         .name("pinsight-recorder".into())
         .spawn(move || {
@@ -273,6 +276,12 @@ pub fn start(
             ) {
                 let _ = tx.send(RecordUpdate::Failed(err));
             }
+            // Always release the Esc watcher (and its low-level keyboard hook)
+            // when the recorder thread ends — even if the UI thread never gets
+            // around to polling the final update. `poll()` also sets this, but
+            // relying on it alone would leave the global hook installed if the
+            // app closed or stopped pumping the channel mid-recording.
+            done_thread.store(true, Ordering::Relaxed);
         });
     if let Err(err) = spawn_res {
         let _ = fail_tx.send(RecordUpdate::Failed(format!(

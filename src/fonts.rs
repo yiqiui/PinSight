@@ -270,7 +270,12 @@ fn index() -> &'static Vec<(String, PathBuf)> {
 }
 
 /// Face chosen by the last [`apply`] call, for the rasteriser's benefit.
-static PRIMARY_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+///
+/// A `RwLock` (not a `OnceLock`) so a later font change can overwrite the
+/// recorded path: the text rasteriser reads this through
+/// [`primary_font_path`] and is reloaded on every change, so the committed
+/// text annotation must keep drawing with the same face the UI now uses.
+static PRIMARY_PATH: std::sync::RwLock<Option<PathBuf>> = std::sync::RwLock::new(None);
 
 fn walk(dir: &Path, depth: usize, out: &mut Vec<(String, PathBuf)>) {
     if depth > 3 {
@@ -325,8 +330,11 @@ pub fn find_system_font(names: &[&str]) -> Option<PathBuf> {
 
 /// Path of the face that ended up primary, recorded by [`apply`] so the
 /// rasteriser can outline glyphs from the same file the UI renders with.
-pub fn primary_font_path() -> Option<&'static PathBuf> {
-    PRIMARY_PATH.get().and_then(|p| p.as_ref())
+pub fn primary_font_path() -> Option<PathBuf> {
+    PRIMARY_PATH
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
 }
 
 /// Every font family installed on this machine, name first.
@@ -369,8 +377,19 @@ pub fn families() -> Vec<(String, PathBuf)> {
                     Some(data.as_mut_ptr() as *mut u8),
                     Some(&mut data_len),
                 );
-                if status.is_err() {
+                // `status` is a raw `WIN32_ERROR`: 0 means the value was read,
+                // ERROR_NO_MORE_ITEMS (259) marks the end of the enumeration,
+                // and anything else (e.g. ERROR_MORE_DATA for an unusually long
+                // value name or path) must NOT abort the whole scan — one
+                // malformed registry entry must not hide every font listed
+                // after it. `continue` advances the `for` index to the next
+                // value, so this can never loop forever.
+                const ERROR_NO_MORE_ITEMS: u32 = 259;
+                if status.0 == ERROR_NO_MORE_ITEMS {
                     break;
+                }
+                if status.0 != 0 {
+                    continue;
                 }
                 let value =
                     String::from_utf16_lossy(&data[..(data_len as usize / 2).saturating_sub(1)]);
@@ -763,10 +782,16 @@ pub fn apply(
     ctx.all_styles_mut(|style| style.text_styles = styles.clone());
 
     // Remember which face won so the text rasteriser can outline glyphs from
-    // the same file the UI is drawn with.
+    // the same file the UI is drawn with. Overwrite (not just initialise) so a
+    // later font change reaches the rasteriser too.
     let resolved = primary_path;
-    let changed = PRIMARY_PATH.set(resolved.clone()).is_err();
-    if changed || resolved.is_some() {
+    {
+        let mut stored = PRIMARY_PATH
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        *stored = resolved.clone();
+    }
+    if resolved.is_some() {
         crate::text_font::reload();
     }
 

@@ -14,7 +14,7 @@
 
 <br />
 
-[![Release](https://img.shields.io/badge/release-v0.1.1-2EA043)](https://github.com/yiqiui/PinSight/releases)
+[![Release](https://img.shields.io/badge/release-v0.1.2-2EA043)](https://github.com/yiqiui/PinSight/releases)
 [![Stars](https://img.shields.io/github/stars/yiqiui/PinSight?style=social)](https://github.com/yiqiui/PinSight/stargazers)
 [![License](https://img.shields.io/badge/license-Apache--2.0-2EA043)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-stdio-6B5BFF)](https://github.com/yiqiui/PinSight/blob/main/README.md#mcp-integration)
@@ -36,7 +36,7 @@
   <img src="docs/images/main.png" width="720" alt="PinSight main window" />
 </div>
 
-> **Status: v0.1.1 / usable.** Capture, annotation (text / numbered steps / undo-redo / mosaic / highlight), pin-to-screen, long capture, GIF/MP4 recording, offline OCR, GIF editing (trim / crop / add text / convert to MP4), image upload, voice notes (recording works; click-to-play pending), MCP, tray menu, custom background and in-app hotkey recording all work. Long capture is still sensitive to sticky headers and animations.
+> **Status: v0.1.2 / usable.** Capture, annotation (text / numbered steps / undo-redo / mosaic / highlight), pin-to-screen, long capture, GIF/MP4 recording, offline OCR, GIF editing (trim / crop / add text / convert to MP4), image upload, voice notes (recording works; click-to-play pending), MCP, tray menu, custom background and in-app hotkey recording all work. Long capture is still sensitive to sticky headers and animations.
 > The UI ships dark/light themes, 6 accent colours, 7 languages and font switching; the settings window has multiple tabs and remembers where you left off.
 > PinSight draws with native Win32 windows and GDI — no Electron, no Tauri, no WebView. It also builds and runs on macOS and Linux (pins fall back to an egui viewport).
 
@@ -51,7 +51,7 @@ Snipaste and PixPin proved that "screenshot + pin" is a high-frequency desktop w
 - **Built for daily long-term use**: theme, accent, font size, UI language and fonts are all switchable; every widget and icon is hand-drawn vectors that never blur when scaled.
 - **AI friendly**: a built-in MCP stdio server lets clients such as Claude Desktop, Cursor or Continue call capture, pin, long-capture and recording tools directly.
 - **Engineering transparency**: module boundaries, threading model, coordinate spaces and failure modes are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-- **The owl logo**: a flat-vector eagle-owl — intense orange eyes, a fierce stare, on a dark rounded plate — with **viewfinder corner brackets** (amber left pair, cyan right pair) that give it the capture-tool signature, echoing the focus-ring handles on the selection corners and the wing-fold entrance of the freeze overlay. The artwork is AI-generated ([`icon_gen/`](icon_gen/)); [`scripts/compose_icon.py`](scripts/compose_icon.py) overlays the brackets and exports the PNG/ICO set.
+- **The logo**: a deep indigo rounded plate carrying four white **viewfinder corner brackets** (the "sight") and a white push-pin at the centre (the "pin") — the product name as one glyph. It is drawn geometrically and exported as the PNG/ICO set by [`scripts/make_pinsight_icon.py`](scripts/make_pinsight_icon.py).
 
 PinSight is still iterating quickly: edge cases of scrolling long capture (fixed headers, sticky elements, animations) may lag behind Snipaste, and the pin backends on macOS / Linux are still being polished. The core features (capture, annotate, pin, long capture, record, OCR, GIF editing, upload, MCP) are usable daily on Windows.
 
@@ -100,7 +100,7 @@ The main window is a left icon rail + content area + status bar. Every control (
 ### Themes
 
 - **System** (default) / **light** / **dark**, applied instantly and persisted.
-- **6 accent colours**: blue, violet, emerald, amber, rose, cyan (amber left / cyan right are exactly the owl logo's two iris colours). The accent drives selected states, primary buttons, the selection outline and pin-card highlights.
+- **6 accent colours**: blue, violet, emerald, amber, rose, cyan. The accent drives selected states, primary buttons, the selection outline and pin-card highlights.
 - The freeze overlay and its toolbar always use a dark glass look for contrast on any desktop background.
 
 ### Languages
@@ -226,7 +226,7 @@ PINSIGHT_UPX_ONLY=1 python tools/_repackage_portable.py    # UPX only
 - **Installer** (`dist\PinSight-<version>-setup.exe`): built with Inno Setup 6, **user-chosen install directory** (default `%LOCALAPPDATA%\Programs\PinSight`), optional desktop icon, optional autostart; uninstalls via "Add or remove programs".
 - **Portable** (`dist\PinSight-<version>-portable.zip`): unzip and run; the folder carries a `pinsight.portable` marker — config, background and captures then live in `data\` / `captures\` next to the exe, so the folder can be copied or deleted freely with no trace left. Remove the marker to return to per-user behaviour.
 - Portable mode can also be forced: `pinsight.exe --portable` or `PINSIGHT_PORTABLE=1`.
-- CI builds release packages automatically on `v*` tags: Windows (x64 / ARM64), macOS (x64 / ARM64), Linux (x64 / ARM64).
+- CI builds all six platform packages on every push to `main` (Windows / macOS / Linux, each x64 + ARM64). The `Cargo.toml` version decides the outcome: unchanged → the existing Release's assets are replaced in place; bumped → a new Release is opened.
 
 ---
 
@@ -475,9 +475,9 @@ PinSight/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                # Windows fmt / clippy / test / build
-│       └── release.yml           # v* tags: Windows/macOS/Linux (x64 + ARM64) packages
+│       └── release.yml           # push main: Windows/macOS/Linux (x64 + ARM64), version-driven publish
 ├── assets/
-│   ├── icon.png                  # app icon (owl)
+│   ├── icon.png                  # app icon (viewfinder + pin)
 │   ├── icon.ico                  # Windows icon
 │   └── tray.ico                  # tray icon (multi-resolution)
 ├── docs/
@@ -488,7 +488,7 @@ PinSight/
 │       └── pinsight.iss          # Inno Setup script (custom dir / autostart task)
 ├── scripts/
 │   ├── package.ps1               # portable zip + installer
-│   ├── make_owl_icon.py          # draws the owl icon set (PNG + ICO)
+│   ├── make_pinsight_icon.py     # draws the icon set (viewfinder + pin)
 │   ├── make_assets.py            # icon and README demo art
 │   ├── make_icon.py              # legacy icon generator
 │   ├── measure.py                # memory/CPU sampler

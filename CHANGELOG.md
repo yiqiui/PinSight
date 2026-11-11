@@ -8,6 +8,48 @@ All notable changes to PinSight are documented here. The format follows
 
 _Nothing yet — changes land here until the next tagged release._
 
+## [0.1.2] - 2026-11-11
+
+### Added
+
+- **New logo** (`scripts/make_pinsight_icon.py`): a geometry-only mark — a deep
+  indigo rounded plate carrying four white **viewfinder corner brackets**
+  (the "sight") and a white push-pin at the centre (the "pin"), with a cyan
+  brand core on the pin head. The full icon set (`assets/icon.png`, `icon.ico`,
+  `tray.ico`) is generated programmatically from one script, replacing the
+  previous AI-generated owl concept. No AI/metadata is embedded in the assets,
+  and the mark keeps a dark plate + bright marks so the single-colour tray
+  extraction still works.
+
+### Changed
+
+- **Accent palette** now carries six brand colours (blue, violet, emerald,
+  amber, rose, cyan) instead of being tied to the logo's eye colours, so theming
+  is independent of the icon.
+
+### Fixed
+
+- **Text annotation font never refreshed** (`text_font.rs`): `font()` and
+  `reload()` referenced two independent `static` fonts, so changing the UI font
+  at runtime left the text-rasteriser on the old face. They now share one
+  lock-guarded font, and `fonts::PRIMARY_PATH` is a `RwLock` (was `OnceLock`)
+  so the resolved primary path is overwritten on every change and reaches the
+  rasteriser.
+- **Recording Esc hook leaked** (`record.rs`): the low-level keyboard hook that
+  captures Esc while another window is focused was only released when the UI
+  polled the final recorder update. The recorder thread now sets the `done`
+  flag on exit, so the hook is always unhooked even if the app closes
+  mid-recording.
+- **Font enumeration aborted on one bad registry entry** (`fonts.rs`): the
+  `RegEnumValueW` loop broke on *any* error, so a single over-long value could
+  hide every font listed after it. It now breaks only on `ERROR_NO_MORE_ITEMS`
+  and skips other errors.
+- **Integer overflow in buffer sizing / indexing** (`capture.rs`, `pin.rs`):
+  several `width * height * 4` and `y * w + x` expressions were computed in
+  `i32` before the cast to `usize`, which could overflow for very large
+  surfaces and corrupt the layered-window DIB. Dimensions are now widened to
+  `usize` before multiplying.
+
 ## [0.1.1] - 2026-11-10
 Maintenance release: a long series of correctness and hardening fixes since
 0.1.0 (config recovery, hotkey/tray input boundaries, recording truncation

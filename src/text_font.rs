@@ -26,7 +26,6 @@ impl TextFont {
         // Prefer whatever the UI is drawn with; fall back to any Latin face so
         // text annotations still rasterise when font discovery failed.
         crate::fonts::primary_font_path()
-            .cloned()
             .or_else(|| crate::fonts::find_system_font(FALLBACK_FONTS))
     }
 
@@ -157,12 +156,21 @@ impl TextFont {
     }
 }
 
-/// The process-wide rasteriser font, resolved from the same file the UI uses.
-/// A lock (rather than a bare `OnceLock`) lets [`reload`] swap in a new face
-/// after the user changes the UI font, while readers still get a reference.
-pub fn font() -> std::sync::RwLockReadGuard<'static, TextFont> {
+/// Shared, lock-guarded rasteriser font.
+///
+/// A single `static` (rather than two, as a previous version had) is what makes
+/// [`reload`] and [`font`] agree: `reload` writes through `font_cell`, and
+/// `font` reads through the very same lock, so changing the UI font actually
+/// reaches the text-annotation rasteriser. The lock (not a bare `OnceLock`)
+/// is what lets `reload` swap in a fresh face after the user changes the font.
+fn font_cell() -> &'static std::sync::RwLock<TextFont> {
     static FONT: std::sync::OnceLock<std::sync::RwLock<TextFont>> = std::sync::OnceLock::new();
     FONT.get_or_init(|| std::sync::RwLock::new(TextFont::load()))
+}
+
+/// The process-wide rasteriser font, resolved from the same file the UI uses.
+pub fn font() -> std::sync::RwLockReadGuard<'static, TextFont> {
+    font_cell()
         .read()
         .unwrap_or_else(|e| e.into_inner())
 }
@@ -173,11 +181,6 @@ pub fn reload() {
     if let Ok(mut guard) = font_cell().write() {
         *guard = fresh;
     }
-}
-
-fn font_cell() -> &'static std::sync::RwLock<TextFont> {
-    static FONT: std::sync::OnceLock<std::sync::RwLock<TextFont>> = std::sync::OnceLock::new();
-    FONT.get_or_init(|| std::sync::RwLock::new(TextFont::load()))
 }
 
 /// Rasterise plain text onto a white image, wrapping at `max_width`.

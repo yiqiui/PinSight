@@ -468,11 +468,6 @@ fn find_command(items: &[TrayItem], id: u32) -> Option<TrayCommand> {
                 command,
                 ..
             } if *item_id == id => return Some(*command),
-            TrayItem::Submenu {
-                id: item_id, items, ..
-            } if *item_id == id => {
-                return None;
-            }
             TrayItem::Submenu { items, .. } => {
                 if let Some(found) = find_command(items, id) {
                     return Some(found);

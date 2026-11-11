@@ -578,12 +578,11 @@ fn parse_region(value: &str) -> Result<PhysRect> {
         .iter()
         .map(|p| p.parse::<i64>().context("--region expects four integers"))
         .collect::<Result<_>>()?;
-    Ok(PhysRect {
-        x: nums[0] as i32,
-        y: nums[1] as i32,
-        w: nums[2].max(1) as u32,
-        h: nums[3].max(1) as u32,
-    })
+    let x = i32::try_from(nums[0]).map_err(|_| anyhow!("--region x is out of i32 range"))?;
+    let y = i32::try_from(nums[1]).map_err(|_| anyhow!("--region y is out of i32 range"))?;
+    let w = u32::try_from(nums[2].max(1)).map_err(|_| anyhow!("--region w is out of u32 range"))?;
+    let h = u32::try_from(nums[3].max(1)).map_err(|_| anyhow!("--region h is out of u32 range"))?;
+    Ok(PhysRect { x, y, w, h })
 }
 
 #[cfg(test)]

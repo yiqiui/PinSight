@@ -674,7 +674,7 @@ fn grab_virtual_screen_gdi() -> Result<(i32, i32, RgbaImage)> {
             bmiColors: [Default::default(); 1],
         };
         let mut info = info;
-        let mut buf = vec![0u8; (vw * vh * 4) as usize];
+        let mut buf = vec![0u8; (vw as usize) * (vh as usize) * 4];
         let lines = GetDIBits(
             mem,
             bmp,

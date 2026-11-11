@@ -184,7 +184,7 @@ mod imp {
         tx: Sender<PinEvent>,
         ready_tx: Sender<isize>,
     ) {
-        let mut bgra = Vec::with_capacity((width * height * 4) as usize);
+        let mut bgra = Vec::with_capacity((width as usize) * (height as usize) * 4);
         for px in image.pixels() {
             bgra.extend_from_slice(&[px[2], px[1], px[0], px[3]]);
         }
@@ -332,7 +332,7 @@ mod imp {
 
         // The DIB is premultiplied BGRA, cleared to fully transparent.
         let px = bits as *mut u8;
-        let len = (w * h * 4) as usize;
+        let len = (w as usize) * (h as usize) * 4;
         std::ptr::write_bytes(px, 0, len);
         let opacity = ctx.opacity.clamp(0.0, 1.0);
 
@@ -363,7 +363,7 @@ mod imp {
                         continue;
                     }
                     let alpha = (1.0 - dist / m).powf(1.7) * 0.55 * opacity;
-                    let index = ((y * w + x) * 4) as usize;
+                    let index = ((y as usize) * (w as usize) + (x as usize)) * 4;
                     // Premultiplied: the RGB channels carry the shadow colour
                     // scaled by the ring's alpha, so a tinted shadow works.
                     let [sr, sg, sb] = ctx.shadow_color;
@@ -382,13 +382,16 @@ mod imp {
             let sy = ((y as f32 + 0.5) / zoom).min(sh - 1.0).max(0.0) as u32;
             for x in 0..iw {
                 let sx = ((x as f32 + 0.5) / zoom).min(sw - 1.0).max(0.0) as u32;
-                let si = ((sy * ctx.width + sx) * 4) as usize;
+                let si = ((sy as usize) * (ctx.width as usize) + (sx as usize)) * 4;
                 let b = *ctx.bgra.get(si).unwrap_or(&0) as f32;
                 let g = *ctx.bgra.get(si + 1).unwrap_or(&0) as f32;
                 let r = *ctx.bgra.get(si + 2).unwrap_or(&0) as f32;
                 let a = *ctx.bgra.get(si + 3).unwrap_or(&255) as f32;
                 let af = (a / 255.0) * opacity;
-                let di = (((y + margin) * w + (x + margin)) * 4) as usize;
+                let di =
+                    (((y as usize) + (margin as usize)) * (w as usize)
+                        + ((x as usize) + (margin as usize)))
+                        * 4;
                 *px.add(di) = (b * af).round() as u8;
                 *px.add(di + 1) = (g * af).round() as u8;
                 *px.add(di + 2) = (r * af).round() as u8;

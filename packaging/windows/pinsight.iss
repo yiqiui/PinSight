@@ -9,7 +9,7 @@
 #define AppName "PinSight"
 ; Overridable from the command line: iscc /DAppVersion=1.2.3 ...
 #ifndef AppVersion
-  #define AppVersion "0.1.1"
+  #define AppVersion "0.1.2"
 #endif
 #define AppPublisher "PinSight contributors"
 #define AppURL "https://github.com/yiqiui/PinSight"
