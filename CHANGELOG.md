@@ -9,7 +9,6 @@ All notable changes to PinSight are documented here. The format follows
 _Nothing yet — changes land here until the next tagged release._
 
 ## [0.1.1] - 2026-11-10
-
 Maintenance release: a long series of correctness and hardening fixes since
 0.1.0 (config recovery, hotkey/tray input boundaries, recording truncation
 reporting, `.part` atomic publishing, MCP/PDF/decorate input validation, and
@@ -67,84 +66,6 @@ moving PDF export off the UI thread), plus an automatic per-commit dev build.
 - **Bilingual README**: an English README mirrors the Chinese one; both hero
   sections cross-link via "English · 简体中文" (now `README.md` + `README.zh-CN.md`).
 
-### Fixed
-
-- Review pass (code / UI / features):
-  - The **Line** tool had no configurable shortcut — `Tool::ALL` advertised
-    `(L)` but `AppKeys`, the keyboard handler and Settings all omitted it.
-    Added end-to-end; the toolbar now prints the *user's* bindings and
-    `AppKeys::default()` derives them from `Tool::shortcut()`.
-  - The DeepL/API-key field cloned its buffer every frame and only committed
-    on focus loss, so typed characters were discarded; it now binds the config
-    field directly.
-  - Lasso masking was `O(width × height × vertices)` on the GUI thread and
-    could freeze on a 4K frame. Replaced with a per-scanline even-odd fill and
-    verified pixel-for-pixel against the reference implementation.
-  - `TranslatePrefs` lacked `#[serde(default)]`: configs written before the
-    new `endpoint` field would fail to load on upgrade. Added a regression test.
-  - Re-running OCR kept the previous translation (and an in-flight job could
-    overwrite it); OCR and QR panels shared one anchor and overlapped exactly;
-    the QR button's hover text was a "scanning…" status string.
-  - The QR generator uploaded a GPU texture every frame; it now caches the
-    texture and rebuilds only when the code changes.
-  - QR decoding skipped the 2× upscale on 4K frames due to the pixel cap,
-    missing small codes. Added overlapping tiled 2× scanning with a time budget.
-  - DeepL `target_lang` rejects bare `EN`/`PT`/`ZH`; mapped to `EN-US`,
-    `EN-GB`, `PT-BR`, `PT-PT`, `ZH-HANS`, `ZH-HANT` and kept valid region codes.
-  - Misc UI: the per-group hotkey box looked editable but discarded input, the
-    app-key record button said "Record/stop recording", the translation hint
-    used a hardcoded grey, the toolbar was too narrow for 12 tools, and the
-    rounded-corner arc sampled pixel corners instead of centres.
-- The **annotation toolbar** window is now excluded from WGC like the HUD
-  pills, so a full-screen recording no longer bakes the toolbar into the video
-  (the annotation canvas stays visible so marks are still recorded).
-- The pin-group rename box could panic (`unwrap` on a slot the same frame
-  had just cleared); the draft now lives in a local variable.
-
-### Changed
-
-- License changed from MIT to **Apache-2.0** (adds an explicit patent grant and
-  trademark/attribution terms). A `NOTICE` file records the copyright.
-- Settings got a visual overhaul. Controls are right-aligned in every row
-  instead of trailing a fixed-width label (which left a dead 300 px gap), the
-  eight tabs are an underline strip rather than a plate of pills, cards are
-  capped at a readable width and centred, row spacing is tighter, and the
-  scrollbar is a thin neutral handle instead of a near-black stripe.
-- Every checkbox is now a switch (`ui::toggle`): a 42×24 track with an animated
-  knob, accent-filled when on, with a hover and focus state.
-- Sliders are drawn by the app (`ui::slider`): thin track, accent fill, round
-  knob, value in a quiet badge. `egui::Slider` mirrors itself inside a
-  right-to-left row, which made the knob grow the wrong way — the custom one
-  always reads left-to-right.
-- Colour pickers show their hex value next to a bordered swatch
-  (`ui::color_field`), so white is visible on a white card.
-- Packaging can now UPX-compress every artefact from one switch:
-  `scripts/package.ps1 -Upx` compresses the staged exe *and* makes the Inno
-  Setup installer bundle that compressed copy (the `.iss` takes the exe path via
-  `/DPinsightExe=`), so the installed binary is ~2.5 MiB rather than ~7.2 MiB.
-  `tools/_repackage_portable.py` always emits both a plain and a `-upx` zip;
-  `PINSIGHT_UPX_ONLY=1` limits it to the UPX one. The release workflow gained a
-  `upx` dispatch input that installs UPX per OS and compresses before packaging.
-- Long-capture stitching no longer copies the whole image on every frame. The
-  stitched output is now a growable row buffer (`Stitch`) appended in place
-  (amortised O(n) instead of the old O(n²) reallocate-and-copy), which matters
-  for tall captures of hundreds of frames; the single `RgbaImage` conversion
-  happens once at the end. The overlap search also runs coarse-to-fine: a
-  strided scan locates the few candidate peaks and only their neighbourhoods
-  are compared at full resolution, cutting the per-frame alignment work without
-  changing the resulting offset.
-
-### Docs
-
-- **README refresh** to match the public GitHub project: hero now mirrors the repo
-  tagline (screenshot · annotation · pin · long-capture · recording · OCR · GIF
-  editing · upload · MCP, no WebView) with an English line; the feature table
-  marks text annotation, OCR, GIF editing, upload and voice-note recording as
-  done (voice-note playback still pending), removes the duplicate/⏳ single-instance
-  row, fixes the clone URL (`yiqiui/PinSight`), and the roadmap now checks off the
-  completed items while keeping `MCP ocr_image` and voice-note playback open.
-
-### Added
 
 - **Upload**: a configurable share step (`src/upload.rs`). An HTTP backend posts
   the PNG as multipart (POST) or a raw body (PUT) to any endpoint — image host,
@@ -329,7 +250,86 @@ moving PDF export off the UI thread), plus an automatic per-commit dev build.
   selection, so ending a session never depends on remembering a separate
   shortcut.
 
+### Changed
+
+- License changed from MIT to **Apache-2.0** (adds an explicit patent grant and
+  trademark/attribution terms). A `NOTICE` file records the copyright.
+- Settings got a visual overhaul. Controls are right-aligned in every row
+  instead of trailing a fixed-width label (which left a dead 300 px gap), the
+  eight tabs are an underline strip rather than a plate of pills, cards are
+  capped at a readable width and centred, row spacing is tighter, and the
+  scrollbar is a thin neutral handle instead of a near-black stripe.
+- Every checkbox is now a switch (`ui::toggle`): a 42×24 track with an animated
+  knob, accent-filled when on, with a hover and focus state.
+- Sliders are drawn by the app (`ui::slider`): thin track, accent fill, round
+  knob, value in a quiet badge. `egui::Slider` mirrors itself inside a
+  right-to-left row, which made the knob grow the wrong way — the custom one
+  always reads left-to-right.
+- Colour pickers show their hex value next to a bordered swatch
+  (`ui::color_field`), so white is visible on a white card.
+- Packaging can now UPX-compress every artefact from one switch:
+  `scripts/package.ps1 -Upx` compresses the staged exe *and* makes the Inno
+  Setup installer bundle that compressed copy (the `.iss` takes the exe path via
+  `/DPinsightExe=`), so the installed binary is ~2.5 MiB rather than ~7.2 MiB.
+  `tools/_repackage_portable.py` always emits both a plain and a `-upx` zip;
+  `PINSIGHT_UPX_ONLY=1` limits it to the UPX one. The release workflow gained a
+  `upx` dispatch input that installs UPX per OS and compresses before packaging.
+- Long-capture stitching no longer copies the whole image on every frame. The
+  stitched output is now a growable row buffer (`Stitch`) appended in place
+  (amortised O(n) instead of the old O(n²) reallocate-and-copy), which matters
+  for tall captures of hundreds of frames; the single `RgbaImage` conversion
+  happens once at the end. The overlap search also runs coarse-to-fine: a
+  strided scan locates the few candidate peaks and only their neighbourhoods
+  are compared at full resolution, cutting the per-frame alignment work without
+  changing the resulting offset.
+
+
+- Closing the main window now keeps PinSight running in the tray instead of
+  quitting, so the global hotkeys stay live. The behaviour is configurable
+  (`close_to_tray`), and "Quit" in the tray menu always exits the process.
+- Rebinding hotkeys reuses the live `GlobalHotKeyManager` — the old set is
+  unregistered, then the new one registered — instead of building a second
+  manager, which used to fail with "already registered" for most rows.
+- The selection outline and handles follow the accent colour instead of a fixed
+  red.
+- Pin cards are painted from a single rectangle instead of nested layouts, which
+  makes the metadata, zoom readout and action strip line up regardless of label
+  length.
+
 ### Fixed
+
+- Review pass (code / UI / features):
+  - The **Line** tool had no configurable shortcut — `Tool::ALL` advertised
+    `(L)` but `AppKeys`, the keyboard handler and Settings all omitted it.
+    Added end-to-end; the toolbar now prints the *user's* bindings and
+    `AppKeys::default()` derives them from `Tool::shortcut()`.
+  - The DeepL/API-key field cloned its buffer every frame and only committed
+    on focus loss, so typed characters were discarded; it now binds the config
+    field directly.
+  - Lasso masking was `O(width × height × vertices)` on the GUI thread and
+    could freeze on a 4K frame. Replaced with a per-scanline even-odd fill and
+    verified pixel-for-pixel against the reference implementation.
+  - `TranslatePrefs` lacked `#[serde(default)]`: configs written before the
+    new `endpoint` field would fail to load on upgrade. Added a regression test.
+  - Re-running OCR kept the previous translation (and an in-flight job could
+    overwrite it); OCR and QR panels shared one anchor and overlapped exactly;
+    the QR button's hover text was a "scanning…" status string.
+  - The QR generator uploaded a GPU texture every frame; it now caches the
+    texture and rebuilds only when the code changes.
+  - QR decoding skipped the 2× upscale on 4K frames due to the pixel cap,
+    missing small codes. Added overlapping tiled 2× scanning with a time budget.
+  - DeepL `target_lang` rejects bare `EN`/`PT`/`ZH`; mapped to `EN-US`,
+    `EN-GB`, `PT-BR`, `PT-PT`, `ZH-HANS`, `ZH-HANT` and kept valid region codes.
+  - Misc UI: the per-group hotkey box looked editable but discarded input, the
+    app-key record button said "Record/stop recording", the translation hint
+    used a hardcoded grey, the toolbar was too narrow for 12 tools, and the
+    rounded-corner arc sampled pixel corners instead of centres.
+- The **annotation toolbar** window is now excluded from WGC like the HUD
+  pills, so a full-screen recording no longer bakes the toolbar into the video
+  (the annotation canvas stays visible so marks are still recorded).
+- The pin-group rename box could panic (`unwrap` on a slot the same frame
+  had just cleared); the draft now lives in a local variable.
+
 
 - **Non-Windows builds compile again.** The tray field on `PinSightApp` was the
   one remaining unconditional reference to the Windows-only `tray` module, so
@@ -356,21 +356,6 @@ moving PDF export off the UI thread), plus an automatic per-commit dev build.
   sysroot (wayland, pipewire, gtk plus a cross linker) that pkg-config will
   not pick up without multiarch setup; Windows ARM still builds natively.
 
-### Changed
-
-- Closing the main window now keeps PinSight running in the tray instead of
-  quitting, so the global hotkeys stay live. The behaviour is configurable
-  (`close_to_tray`), and "Quit" in the tray menu always exits the process.
-- Rebinding hotkeys reuses the live `GlobalHotKeyManager` — the old set is
-  unregistered, then the new one registered — instead of building a second
-  manager, which used to fail with "already registered" for most rows.
-- The selection outline and handles follow the accent colour instead of a fixed
-  red.
-- Pin cards are painted from a single rectangle instead of nested layouts, which
-  makes the metadata, zoom readout and action strip line up regardless of label
-  length.
-
-### Fixed
 
 - The tray menu did nothing at all — not even Quit. The app runs with
   `ControlFlow::Wait`, so an idle window never repaints, and `poll_tray` only
@@ -514,6 +499,16 @@ moving PDF export off the UI thread), plus an automatic per-commit dev build.
 - Text annotations in the recording layer could never be committed: the
   multiline `TextEdit` swallowed Enter as a newline. Plain Enter now commits and
   Shift+Enter inserts a newline.
+
+### Docs
+
+- **README refresh** to match the public GitHub project: hero now mirrors the repo
+  tagline (screenshot · annotation · pin · long-capture · recording · OCR · GIF
+  editing · upload · MCP, no WebView) with an English line; the feature table
+  marks text annotation, OCR, GIF editing, upload and voice-note recording as
+  done (voice-note playback still pending), removes the duplicate/⏳ single-instance
+  row, fixes the clone URL (`yiqiui/PinSight`), and the roadmap now checks off the
+  completed items while keeping `MCP ocr_image` and voice-note playback open.
 
 ## [0.1.0] - 2026-10-22
 

@@ -51,6 +51,7 @@ Thumbs.db
 /tools/*
 !/tools/subset_ui_font.py
 !/tools/_repackage_portable.py
+!/tools/release_notes.py
 
 # One-off probe scripts; only the packaging script ships.
 /scripts/*

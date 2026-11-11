@@ -75,6 +75,13 @@ jobs:
             echo "::error::pinsight.iss says $iss but Cargo.toml says $version"
             exit 1
           fi
+          # Every published version must have a real CHANGELOG section. A
+          # version bump with no release notes is rejected before we spend
+          # time building six platforms.
+          if ! grep -q "^## \\[$version\\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$version]' section; add release notes before publishing"
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "release_exists=$exists" >> "$GITHUB_OUTPUT"
@@ -278,10 +285,17 @@ jobs:
             exit 1
           fi
 
-          # A single, fully-rewritten notes block (never appended) avoids the
-          # duplicated "Full Changelog" lines produced by generate_release_notes
-          # on repeated publishes.
-          notes="PinSight ${VERSION} — built from \`main\` at \`${GITHUB_SHA}\` on $(date -u +%Y-%m-%dT%H:%M:%SZ). Packages for the current version are replaced in place on every push; bump \`version\` in Cargo.toml to open a new Release. See [CHANGELOG.md](https://github.com/${GH_REPO}/blob/${GITHUB_SHA}/CHANGELOG.md) for the full history."
+          # Build the release notes from this version's CHANGELOG section:
+          # a compact "Added / Changed / Fixed" summary plus the full text.
+          # Written to a file (never appended), so repeated publishes cannot
+          # duplicate the changelog. Fails loudly if the section is missing.
+          python3 tools/release_notes.py \
+            --changelog CHANGELOG.md \
+            --version "$VERSION" \
+            --commit "$GITHUB_SHA" \
+            --repo "$GH_REPO" \
+            --timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --output release-notes.md
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -295,7 +309,9 @@ jobs:
             for f in "${files[@]}"; do
               gh release upload "$TAG" "$f" --clobber
             done
-            gh release edit "$TAG" --title "PinSight v${VERSION}" --notes "$notes"
+            gh release edit "$TAG" \
+              --title "PinSight v${VERSION}" \
+              --notes-file release-notes.md
             # Moving the tag does not update the Release object's own
             # target_commitish; patch it so the page shows the commit that
             # actually produced these binaries rather than a stale hash.
@@ -306,6 +322,6 @@ jobs:
             echo "New version $VERSION: creating release $TAG"
             gh release create "$TAG" "${files[@]}" \
               --title "PinSight v${VERSION}" \
-              --notes "$notes" \
+              --notes-file release-notes.md \
               --target "$GITHUB_SHA"
           fi
