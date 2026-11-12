@@ -60,10 +60,18 @@ pub fn recognize(image: RgbaImage) -> Result<Vec<OcrWord>> {
     // message loop, which would deadlock on an STA thread (the GUI thread), so
     // they must not execute there.
     std::thread::scope(|s| {
-        let handle = s.spawn(|| recognize_inner(image));
+        // Wrap the WinRT pipeline in `catch_unwind`: a panic inside
+        // `recognize_inner` would otherwise unwind across the COM/FFI boundary
+        // (undefined behaviour) before `join` could recover it. `catch_unwind`
+        // contains the panic entirely inside the worker thread and turns it
+        // into a clean `Err`.
+        let handle = s.spawn(|| {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| recognize_inner(image)))
+                .unwrap_or_else(|_| Err(anyhow::anyhow!("OCR thread panicked")))
+        });
         handle
             .join()
-            .unwrap_or_else(|_| Err(anyhow::anyhow!("OCR thread panicked")))
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("OCR worker thread terminated unexpectedly")))
     })
 }
 

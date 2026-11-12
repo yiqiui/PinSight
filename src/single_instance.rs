@@ -82,24 +82,47 @@ fn acquire_windows() -> Option<Guard> {
 }
 
 #[cfg(windows)]
+use windows::Win32::Foundation::{HWND, LPARAM};
+#[cfg(windows)]
+use windows::core::BOOL;
+
+#[cfg(windows)]
 fn raise_existing_windows() -> bool {
-    use windows::Win32::Foundation::HWND;
     use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
     use windows::Win32::UI::WindowsAndMessaging::{
-        BringWindowToTop, FindWindowW, GetWindowThreadProcessId, SW_RESTORE, SetForegroundWindow,
+        BringWindowToTop, EnumWindows, GetWindowThreadProcessId, SW_RESTORE, SetForegroundWindow,
         ShowWindow,
     };
-    use windows::core::HSTRING;
 
-    // The main viewport is titled "PinSight" (see main.rs); the class is
-    // winit's default, so match on the title alone.
-    let title = HSTRING::from("PinSight");
-    let Ok(hwnd) = (unsafe { FindWindowW(None, &title) }) else {
-        return false;
+    // Locate the running instance's main window. A bare `FindWindowW(None,
+    // "PinSight")` only matches on the exact title, so it misses the window when
+    // its title changes (e.g. while a capture is active) and can grab an
+    // unrelated app that happens to share the name. We enumerate every
+    // top-level window instead and keep the one owned by our own executable
+    // that still carries the "PinSight" title — robust against both failure
+    // modes. The single-instance mutex already guarantees there is at most one
+    // such process, so the first match is the one we want.
+    let my_exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()))
+        .unwrap_or_default();
+
+    let mut ctx = FindCtx { hwnd: None, my_exe };
+    unsafe {
+        let _ = EnumWindows(
+            Some(enum_find_window),
+            LPARAM(&mut ctx as *mut FindCtx as isize),
+        );
+    }
+
+    let hwnd = match ctx.hwnd {
+        Some(h) => h,
+        None => return false,
     };
     if hwnd == HWND::default() {
         return false;
     }
+
     unsafe {
         let _ = ShowWindow(hwnd, SW_RESTORE);
         // Windows only lets the foreground process steal focus; attaching to
@@ -113,6 +136,95 @@ fn raise_existing_windows() -> bool {
             let _ = AttachThreadInput(mine, target, false);
         }
         ok
+    }
+}
+
+#[cfg(windows)]
+struct FindCtx {
+    hwnd: Option<HWND>,
+    my_exe: String,
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn enum_find_window(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
+    };
+
+    unsafe {
+        let ctx = &mut *(lparam.0 as *mut FindCtx);
+
+        // Only top-level, visible windows can be the main viewport.
+        if !IsWindowVisible(hwnd).as_bool() {
+            return BOOL::from(true);
+        }
+
+        // The window must belong to another process running our own executable —
+        // this is the second launch, so the instance we want is a sibling process,
+        // not this one (which is about to exit). This is what rules out unrelated
+        // apps that happen to be titled "PinSight".
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid as *mut u32));
+        if pid == 0 {
+            return BOOL::from(true);
+        }
+        let owner = match process_image_name(pid) {
+            Some(name) => name,
+            None => return BOOL::from(true),
+        };
+        if !owner.eq_ignore_ascii_case(&ctx.my_exe) {
+            return BOOL::from(true);
+        }
+
+        // Finally confirm it still shows the PinSight title.
+        let len = GetWindowTextLengthW(hwnd);
+        if len <= 0 {
+            return BOOL::from(true);
+        }
+        let mut buf = vec![0u16; (len + 1) as usize];
+        let written = GetWindowTextW(hwnd, &mut buf);
+        if written <= 0 {
+            return BOOL::from(true);
+        }
+        let title = String::from_utf16_lossy(&buf[..written as usize]);
+        if !title.to_lowercase().contains("pinsight") {
+            return BOOL::from(true);
+        }
+
+        if ctx.hwnd.is_none() {
+            ctx.hwnd = Some(hwnd);
+        }
+        BOOL::from(true)
+    }
+}
+
+#[cfg(windows)]
+fn process_image_name(pid: u32) -> Option<String> {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_INFORMATION, QueryFullProcessImageNameW,
+    };
+    use windows::core::PWSTR;
+
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_INFORMATION, false, pid).ok()?;
+        let mut size: u32 = 1024;
+        let mut buf = vec![0u16; size as usize];
+        let ok = QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_WIN32,
+            PWSTR::from_raw(buf.as_mut_ptr()),
+            &mut size,
+        )
+        .is_ok();
+        let _ = CloseHandle(handle);
+        if !ok {
+            return None;
+        }
+        let path = String::from_utf16_lossy(&buf[..size as usize]);
+        std::path::Path::new(&path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_lowercase())
     }
 }
 

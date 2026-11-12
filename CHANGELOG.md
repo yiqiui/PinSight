@@ -42,6 +42,18 @@ _Nothing yet — changes land here until the next tagged release._
   This protects against transport corruption and a tampered package; it is not a
   full code-signing chain (signing remains future work).
 
+### Fixed
+
+- **Harden the OCR worker thread.** The Windows OCR pipeline now runs inside
+  `catch_unwind`, so a panic in the WinRT path is converted to a clean error
+  instead of unwinding across the COM/FFI boundary (undefined behaviour).
+- **Make single-instance window raising robust.** `raise_existing()` now
+  enumerates top-level windows and matches the running instance by its
+  executable image name *and* a "PinSight" title, instead of relying on an
+  exact title match. This avoids missing the window when its title changes
+  (e.g. during a capture) and prevents grabbing an unrelated app that happens
+  to share the name.
+
 ## [0.1.2] - 2026-11-11
 
 ### Added
