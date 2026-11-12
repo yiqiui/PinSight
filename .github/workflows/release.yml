@@ -314,7 +314,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          files=(dist/*.zip dist/*.tar.gz dist/*-setup.exe dist/PinSight-*.sha256.txt)
+          files=(dist/*.zip dist/*.tar.gz dist/*-setup.exe dist/PinSight-*-sha256.txt)
           if [ ${#files[@]} -eq 0 ]; then
             echo "::error::no artefacts were produced; refusing to publish"
             exit 1
