@@ -48,7 +48,7 @@ mod imp {
         GetClientRect, GetCursorPos, GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION,
         HWND_NOTOPMOST, HWND_TOPMOST, IDC_ARROW, LWA_ALPHA, LoadCursorW, MENU_ITEM_FLAGS,
         MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, PostMessageW,
-        PostQuitMessage, RegisterClassW, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOMOVE,
+        PostQuitMessage, RegisterClassW, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
         SWP_NOZORDER, SendMessageW, SetForegroundWindow, SetLayeredWindowAttributes,
         SetWindowLongPtrW, SetWindowPos, ShowWindow, TPM_LEFTALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON,
         TrackPopupMenu, TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_APP, WM_CLOSE,
@@ -1137,6 +1137,24 @@ mod imp {
         }
     }
 
+    /// Move the window without resizing, raising or activating it (used by the
+    /// tray's tile / snap-to-grid actions).
+    pub fn move_to(hwnd: isize, x: i32, y: i32) {
+        if hwnd != 0 {
+            unsafe {
+                let _ = SetWindowPos(
+                    HWND(hwnd as *mut c_void),
+                    None,
+                    x,
+                    y,
+                    0,
+                    0,
+                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+            }
+        }
+    }
+
     /// Show or hide the pin window.
     pub fn set_visible(hwnd: isize, visible: bool) {
         if hwnd != 0 {
@@ -1278,6 +1296,17 @@ impl Pin {
     pub fn focus(&self) {
         #[cfg(windows)]
         imp::focus(self.native.hwnd);
+    }
+
+    /// Move the pin and keep the stored position in sync (it is reused when a
+    /// closed pin is restored).
+    pub fn move_to(&mut self, x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+        #[cfg(windows)]
+        imp::move_to(self.native.hwnd, x, y);
+        #[cfg(not(windows))]
+        self.vp.set_position(x, y);
     }
 
     /// Show or hide the pin window.

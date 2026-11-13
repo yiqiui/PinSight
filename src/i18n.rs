@@ -724,6 +724,12 @@ strings! {
     tray_history_cleared_toast { en: "Capture history cleared", zh: "已清空截图历史", tw: "已清空截圖歷史", ja: "撮影履歴を消去しました", ko: "캡처 기록을 지웠습니다", fr: "Historique effacé", de: "Verlauf gelöscht" }
     tray_restarting_toast { en: "Restarting PinSight…", zh: "正在重启 PinSight…", tw: "正在重新啟動 PinSight…", ja: "PinSight を再起動します…", ko: "PinSight를 다시 시작합니다…", fr: "Redémarrage de PinSight…", de: "PinSight wird neu gestartet…" }
     tray_no_history_toast { en: "There is no capture history yet", zh: "还没有截图历史", tw: "還沒有截圖歷史", ja: "撮影履歴はまだありません", ko: "캡처 기록이 아직 없습니다", fr: "Aucun historique de capture", de: "Noch kein Aufnahmeverlauf" }
+    tray_arrange_pins { en: "Arrange pins (grid)", zh: "平铺排列贴图", tw: "平鋪排列貼圖", ja: "ピンを格子状に整列", ko: "핀 격자 정렬", fr: "Disposer les épingles (grille)", de: "Pins anordnen (Raster)" }
+    tray_align_grid { en: "Align to grid", zh: "对齐到网格", tw: "對齊到網格", ja: "グリッドに整列", ko: "그리드에 맞춤", fr: "Aligner sur la grille", de: "Am Raster ausrichten" }
+    tray_arranged_toast { en: "Pins arranged", zh: "已排列贴图", tw: "已排列貼圖", ja: "ピンを整列しました", ko: "핀을 정렬했습니다", fr: "Épingles disposées", de: "Pins angeordnet" }
+    tray_aligned_toast { en: "Pins aligned to grid", zh: "已对齐到网格", tw: "已對齊到網格", ja: "グリッドに整列しました", ko: "그리드에 맞췄습니다", fr: "Aligné sur la grille", de: "Am Raster ausgerichtet" }
+    pin_grid_label { en: "Snap grid size", zh: "对齐网格大小", tw: "對齊網格大小", ja: "グリッド間隔", ko: "그리드 간격", fr: "Taille de la grille", de: "Rastergröße" }
+    pin_grid_hint { en: "Visible pins snap to this step in pixels when you pick \"Align to grid\". Set to 1 to disable rounding.", zh: "点击「对齐到网格」时，可见贴图会按此步长（像素）吸附；设为 1 表示不取整。", tw: "點擊「對齊到網格」時，可見貼圖會依此步長（像素）吸附；設為 1 表示不取整。", ja: "「グリッドに整列」を選ぶと、表示中のピンがこの間隔（ピクセル）単位に吸着します。1 にすると丸めを無効化します。", ko: "「그리드에 맞춤」을 선택하면 보이는 핀이 이 간격(픽셀) 단위로 맞춰집니다. 1로 하면 반올림을 끕니다.", fr: "Avec « Aligner sur la grille », les pins visibles s'aimantent à ce pas (en pixels). Mettez 1 pour désactiver l'arrondi.", de: "Bei „Am Raster ausrichten“ rasten sichtbare Pins in diesem Schritt (Pixel) ein. 1 deaktiviert das Runden." }
 
     // ---- pins subtabs -----------------------------------------------------
     pin_sub_display { en: "Display", zh: "显示", tw: "顯示", ja: "表示", ko: "표시", fr: "Affichage", de: "Anzeige" }

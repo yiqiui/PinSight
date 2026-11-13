@@ -61,6 +61,13 @@ _Nothing yet — changes land here until the next tagged release._
   window become part of the picture — bring the target window to the front
   first. The DWM insets are scaled into physical pixels so this stays correct
   in the headless CLI, which is DPI-unaware because winit never starts there.
+- **Pin tiling and grid alignment.** The tray's "Pins" submenu now offers
+  "Arrange pins (grid)" — which tiles every open pin into a non-overlapping grid
+  sized to the largest pin and centred inside each cell — and "Align to grid",
+  which rounds each pin's position to the snap grid. The grid step is configurable
+  in Settings → Pins → Display (default 16 px; 1 disables rounding). The layout
+  maths lives in a pure, unit-tested `pin_layout` module and `Pin::move_to` keeps
+  the stored coordinates in sync so a restored pin returns to its slot.
 
 ### Changed
 

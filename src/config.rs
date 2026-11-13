@@ -474,6 +474,10 @@ pub struct Config {
     pub pin_gestures: PinGestures,
     /// Named groups pins can belong to. Always has at least one entry.
     pub pin_groups: Vec<PinGroup>,
+    /// Snap-to-grid step (device pixels) used by the "Align to grid" tray
+    /// action. Set to 1 to disable rounding.
+    #[serde(default = "default_pin_grid")]
+    pub pin_grid: u32,
     /// Global hotkeys are live. The tray's "disable hotkeys" flips this
     /// without losing the bindings themselves.
     pub hotkeys_enabled: bool,
@@ -806,6 +810,10 @@ fn default_toggle_pins_hotkey() -> String {
     "Ctrl+Shift+H".into()
 }
 
+fn default_pin_grid() -> u32 {
+    16
+}
+
 impl Hotkeys {
     /// Shortcut text bound to an action, used in status messages.
     pub fn for_action(&self, action: crate::hotkeys::Action) -> &str {
@@ -948,6 +956,7 @@ impl Default for Config {
                 hidden: false,
                 hotkey: String::new(),
             }],
+            pin_grid: 16,
             hotkeys_enabled: true,
             update_on_start: true,
             update_hours: 24,

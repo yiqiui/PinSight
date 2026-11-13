@@ -104,6 +104,15 @@ impl ViewportPin {
         }
     }
 
+    /// Move the pin. `show()` compares the state against its per-frame
+    /// snapshot and emits `ViewportCommand::OuterPosition` on the next frame.
+    pub fn set_position(&mut self, x: i32, y: i32) {
+        if let Ok(mut s) = self.state.lock() {
+            s.x = x;
+            s.y = y;
+        }
+    }
+
     /// Must be called from `App::ui` on every frame while the pin is alive.
     pub fn show(&mut self, ctx: &egui::Context) {
         if self.is_closed() {

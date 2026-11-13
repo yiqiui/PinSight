@@ -145,6 +145,10 @@ pub(crate) enum TrayCommand {
     TogglePins,
     /// Bring a specific pin to the front (the "Pins" submenu).
     FocusPin(u64),
+    /// Arrange every open pin into a non-overlapping grid.
+    TilePins,
+    /// Round every open pin's position to the configured grid.
+    SnapPinsToGrid,
     /// Show or hide every pin in a group.
     ToggleGroup(u32),
     /// Reopen the most recently closed pin.
@@ -3396,6 +3400,7 @@ impl PinSightApp {
         // be hidden and a specific pin brought to the front without hunting
         // for it on screen.
         let mut pin_rows: Vec<TrayItem> = Vec::new();
+        let mut next_id = 900u32;
         if self.pins.is_empty() {
             pin_rows.push(TrayItem::Command {
                 id: 900,
@@ -3403,7 +3408,20 @@ impl PinSightApp {
                 command: TrayCommand::ShowWindow,
             });
         } else {
-            let mut next_id = 900u32;
+            pin_rows.push(TrayItem::Command {
+                id: next_id,
+                label: t.tray_arrange_pins.to_string(),
+                command: TrayCommand::TilePins,
+            });
+            next_id += 1;
+            pin_rows.push(TrayItem::Command {
+                id: next_id,
+                label: t.tray_align_grid.to_string(),
+                command: TrayCommand::SnapPinsToGrid,
+            });
+            next_id += 1;
+            pin_rows.push(TrayItem::Separator);
+
             let groups = self.config.pin_groups.clone();
             for group in &groups {
                 let pins: Vec<&Pin> = self
@@ -3703,6 +3721,8 @@ impl PinSightApp {
                         pin.focus();
                     }
                 }
+                TrayCommand::TilePins => self.arrange_pins(true),
+                TrayCommand::SnapPinsToGrid => self.arrange_pins(false),
                 TrayCommand::RestorePin => self.restore_closed_pin(),
                 TrayCommand::ToggleGroup(id) => {
                     let hidden = self
@@ -4106,6 +4126,66 @@ impl PinSightApp {
             self.toast(self.tr.tr.tray_pins_hidden_toast, false);
         } else {
             self.toast(self.tr.tr.tray_pins_shown_toast, false);
+        }
+    }
+
+    /// Tile every open pin into a non-overlapping grid (`tile == true`), or
+    /// round each pin's current position to the snap grid (`tile == false`).
+    /// The geometry lives in `pin_layout`; this wires it to the live pins and
+    /// keeps their stored coordinates in sync (so a restored pin returns here).
+    fn arrange_pins(&mut self, tile: bool) {
+        if self.pins.is_empty() {
+            self.toast(self.tr.tr.tray_no_pins, true);
+            return;
+        }
+        let area = match capture::monitors() {
+            Ok(monitors) => monitors
+                .iter()
+                .find(|mon| mon.primary)
+                .or_else(|| monitors.first())
+                .map(|mon| mon.rect)
+                .unwrap_or(crate::util::PhysRect {
+                    x: 0,
+                    y: 0,
+                    w: 1920,
+                    h: 1080,
+                }),
+            Err(_) => crate::util::PhysRect {
+                x: 0,
+                y: 0,
+                w: 1920,
+                h: 1080,
+            },
+        };
+
+        let boxes: Vec<crate::pin_layout::PinBox> = self
+            .pins
+            .iter()
+            .map(|p| crate::pin_layout::PinBox {
+                id: p.id,
+                w: (p.width as f32 * p.zoom).max(1.0) as u32,
+                h: (p.height as f32 * p.zoom).max(1.0) as u32,
+            })
+            .collect();
+
+        // `tile` / `snap` preserve input order, so the result lines up with
+        // `self.pins` and we can zip without a lookup table.
+        let moves: Vec<(u64, i32, i32)> = if tile {
+            crate::pin_layout::tile(&boxes, area, 8)
+        } else {
+            let current: Vec<(u64, i32, i32)> =
+                self.pins.iter().map(|p| (p.id, p.x, p.y)).collect();
+            crate::pin_layout::snap(&current, self.config.pin_grid)
+        };
+
+        for (pin, &(_, x, y)) in self.pins.iter_mut().zip(moves.iter()) {
+            pin.move_to(x, y);
+        }
+
+        if tile {
+            self.toast(self.tr.tr.tray_arranged_toast, false);
+        } else {
+            self.toast(self.tr.tr.tray_aligned_toast, false);
         }
     }
 
@@ -7011,6 +7091,22 @@ impl PinSightApp {
                     let _ = self.config.save();
                 }
             });
+
+            ui::field_row(ui, p, t.pin_grid_label, |ui| {
+                let mut value = self.config.pin_grid as f32;
+                if ui::slider(ui, p, &mut value, 1.0..=128.0, 0, " px").changed() {
+                    self.config.pin_grid = value.round() as u32;
+                    let _ = self.config.save();
+                }
+            });
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(t.pin_grid_hint)
+                        .size(11.0)
+                        .color(p.text_weak),
+                )
+                .wrap(),
+            );
         });
     }
 
