@@ -67,6 +67,7 @@ mod trim;
 mod ui;
 mod update;
 mod upload;
+mod upload_presets;
 mod util;
 mod voice;
 

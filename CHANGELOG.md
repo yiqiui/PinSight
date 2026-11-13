@@ -21,6 +21,36 @@ _Nothing yet — changes land here until the next tagged release._
   machine in English, with no manual pick unless the match is ambiguous.
   (Previously the installer was English-only because the translation was not
   bundled with the build environment.)
+- **Image adjustments in the capture editor.** A new toolbar panel adds nine
+  pixel-level operations: rotate 90° CW/CCW, rotate 180°, flip horizontally /
+  vertically, grayscale, invert, Gaussian blur and emboss; the CLI additionally
+  accepts `blur:<sigma>` and `rotate:<degrees>`. Filters change the image itself,
+  so they are fully undoable/redoable together with annotations — the history
+  now snapshots the bitmap as well as the annotation list. Grayscale and emboss
+  preserve the alpha channel. Usable headlessly via `pinsight shot --filter
+  <code>` (repeatable, applied in order) and `--list-filters`.
+- **Capture automation: schedules, change detection and post-capture workflows.**
+  Settings → Capture → Automation adds interval or daily-time capture, a
+  monitor that samples a chosen region and captures only when the pixels change
+  (with an adjustable threshold and poll cadence), and a configurable workflow
+  chain that runs after every capture: `save`, `save:<format>` (JPEG / WebP /
+  BMP / TIFF / GIF), `copy_image`, `upload`, `copy_link` (which implies an
+  upload) and `notify`. Every step is isolated — one failure does not abort the
+  rest — and a `max captures` cap prevents runaway loops. Captures run on a
+  worker thread and respect the same "busy / UI open" guards as manual shots.
+  The same plan is available headlessly via `pinsight shot --workflow <codes>`
+  and `--list-workflow`.
+- **One-click upload host presets.** Settings → Output → Upload now offers
+  Imgur, SM.MS, Chevereto, S3/R2 (presigned PUT), WebDAV PUT and a generic
+  multipart webhook; each fills the URL, method, form field, headers and JSON
+  response path for you, leaving only an API key and/or endpoint to fill in.
+  `Custom` keeps the free-form HTTP editors. Missing required fields produce a
+  clear error before any network request, optional blank credentials are not
+  sent, and presigned-PUT/WebDAV links are derived from the request URL (with
+  signatures and embedded Basic credentials stripped) because those servers
+  reply with an empty body. FTP and SigV4 request signing are intentionally
+  **not** included — they need protocols/dependencies the HTTP transport does
+  not have; use a presigned URL instead.
 
 ### Changed
 

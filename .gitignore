@@ -3,6 +3,8 @@
 target/
 *.pdb
 *.ilk
+# A stray single-file build dropped at the repo root by local cargo experiments
+/pinsight.exe
 
 # Local logs and test artefacts
 *.log

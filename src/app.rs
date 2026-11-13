@@ -6066,66 +6066,158 @@ impl PinSightApp {
             });
             match self.config.upload.backend {
                 config::UploadBackend::Http => {
-                    ui::field_row(ui, p, t.up_url, |ui| {
-                        if ui
-                            .add(
-                                egui::TextEdit::singleline(&mut self.config.upload.http.url)
-                                    .desired_width(280.0),
-                            )
-                            .changed()
-                        {
-                            let _ = self.config.save();
-                        }
+                    // A host preset derives the HTTP knobs; the free-form
+                    // fields below are only editable on `Custom`.
+                    let preset_label = |v: config::UploadPreset| match v {
+                        config::UploadPreset::Custom => t.up_preset_custom,
+                        config::UploadPreset::Imgur => "Imgur",
+                        config::UploadPreset::SmMs => "SM.MS",
+                        config::UploadPreset::Chevereto => "Chevereto",
+                        config::UploadPreset::S3Put => "S3 / R2 (presigned PUT)",
+                        config::UploadPreset::WebDavPut => "WebDAV (PUT)",
+                        config::UploadPreset::Webhook => "Webhook",
+                    };
+                    ui::field_row(ui, p, t.up_preset, |ui| {
+                        egui::ComboBox::from_id_salt("pinsight-upload-preset")
+                            .selected_text(preset_label(self.config.upload.preset))
+                            .width(240.0)
+                            .show_ui(ui, |ui| {
+                                for v in config::UploadPreset::ALL {
+                                    if ui
+                                        .selectable_label(
+                                            self.config.upload.preset == v,
+                                            preset_label(v),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.config.upload.preset = v;
+                                        let _ = self.config.save();
+                                    }
+                                }
+                            });
                     });
-                    ui::field_row(ui, p, t.up_method, |ui| {
-                        let options = [
-                            (config::HttpMethod::Post, "POST"),
-                            (config::HttpMethod::Put, "PUT"),
-                        ];
-                        if let Some(m) =
-                            ui::segmented(ui, p, self.config.upload.http.method, &options)
-                        {
-                            self.config.upload.http.method = m;
-                            let _ = self.config.save();
+                    if self.config.upload.preset != config::UploadPreset::Custom {
+                        let need = crate::upload_presets::requirements(self.config.upload.preset);
+                        let mut required: Vec<&str> = Vec::new();
+                        if need.token {
+                            required.push(t.up_preset_token);
                         }
-                    });
-                    ui::field_row(ui, p, t.up_field, |ui| {
-                        if ui
-                            .add(
-                                egui::TextEdit::singleline(&mut self.config.upload.http.field)
-                                    .desired_width(160.0),
-                            )
-                            .changed()
-                        {
-                            let _ = self.config.save();
+                        if need.endpoint {
+                            required.push(t.up_preset_endpoint);
                         }
-                    });
-                    ui::field_row(ui, p, t.up_response, |ui| {
-                        let options = [
-                            (config::UploadResponse::Raw, t.up_resp_raw),
-                            (config::UploadResponse::Json, t.up_resp_json),
-                        ];
-                        if let Some(r) =
-                            ui::segmented(ui, p, self.config.upload.http.response, &options)
-                        {
-                            self.config.upload.http.response = r;
-                            let _ = self.config.save();
+                        if !required.is_empty() {
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(format!(
+                                        "{}: {}",
+                                        t.up_preset_required,
+                                        required.join(" / ")
+                                    ))
+                                    .size(11.0)
+                                    .color(p.text_weak),
+                                )
+                                .wrap(),
+                            );
                         }
-                    });
-                    if self.config.upload.http.response == config::UploadResponse::Json {
-                        ui::field_row(ui, p, t.up_json_field, |ui| {
+                        ui::field_row(ui, p, t.up_preset_token, |ui| {
                             if ui
                                 .add(
                                     egui::TextEdit::singleline(
-                                        &mut self.config.upload.http.json_field,
+                                        &mut self.config.upload.preset_token,
                                     )
-                                    .desired_width(160.0),
+                                    .password(true)
+                                    .desired_width(240.0),
                                 )
                                 .changed()
                             {
                                 let _ = self.config.save();
                             }
                         });
+                        ui::field_row(ui, p, t.up_preset_endpoint, |ui| {
+                            if ui
+                                .add(
+                                    egui::TextEdit::singleline(
+                                        &mut self.config.upload.preset_endpoint,
+                                    )
+                                    .desired_width(240.0),
+                                )
+                                .changed()
+                            {
+                                let _ = self.config.save();
+                            }
+                        });
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(t.up_preset_hint)
+                                    .size(11.0)
+                                    .color(p.text_weak),
+                            )
+                            .wrap(),
+                        );
+                        // Presets own these fields; don't show the raw editors
+                        // that would immediately be overridden on upload.
+                    } else {
+                        ui::field_row(ui, p, t.up_url, |ui| {
+                            if ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.config.upload.http.url)
+                                        .desired_width(280.0),
+                                )
+                                .changed()
+                            {
+                                let _ = self.config.save();
+                            }
+                        });
+                        ui::field_row(ui, p, t.up_method, |ui| {
+                            let options = [
+                                (config::HttpMethod::Post, "POST"),
+                                (config::HttpMethod::Put, "PUT"),
+                            ];
+                            if let Some(m) =
+                                ui::segmented(ui, p, self.config.upload.http.method, &options)
+                            {
+                                self.config.upload.http.method = m;
+                                let _ = self.config.save();
+                            }
+                        });
+                        ui::field_row(ui, p, t.up_field, |ui| {
+                            if ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.config.upload.http.field)
+                                        .desired_width(160.0),
+                                )
+                                .changed()
+                            {
+                                let _ = self.config.save();
+                            }
+                        });
+                        ui::field_row(ui, p, t.up_response, |ui| {
+                            let options = [
+                                (config::UploadResponse::Raw, t.up_resp_raw),
+                                (config::UploadResponse::Json, t.up_resp_json),
+                            ];
+                            if let Some(r) =
+                                ui::segmented(ui, p, self.config.upload.http.response, &options)
+                            {
+                                self.config.upload.http.response = r;
+                                let _ = self.config.save();
+                            }
+                        });
+                        if self.config.upload.http.response == config::UploadResponse::Json {
+                            ui::field_row(ui, p, t.up_json_field, |ui| {
+                                if ui
+                                    .add(
+                                        egui::TextEdit::singleline(
+                                            &mut self.config.upload.http.json_field,
+                                        )
+                                        .desired_width(160.0),
+                                    )
+                                    .changed()
+                                {
+                                    let _ = self.config.save();
+                                }
+                            });
+                        }
                     }
                 }
                 config::UploadBackend::Local => {

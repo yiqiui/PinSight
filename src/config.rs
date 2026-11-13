@@ -1201,6 +1201,62 @@ pub struct UploadConfig {
     pub http: HttpUpload,
     /// Local backend settings (used when `backend == local`).
     pub local: LocalUpload,
+    /// One-click host preset. `Custom` (the default) uses `http` verbatim; any
+    /// other value derives the HTTP settings from `preset_token` /
+    /// `preset_endpoint`. See `crate::upload_presets`.
+    #[serde(default)]
+    pub preset: UploadPreset,
+    /// API key / client id / token for the selected preset.
+    #[serde(default)]
+    pub preset_token: String,
+    /// Base URL for self-hosted presets (Chevereto, WebDAV, webhook, S3 URL).
+    #[serde(default)]
+    pub preset_endpoint: String,
+}
+
+impl UploadConfig {
+    /// The HTTP settings to actually use. A preset overrides the free-form
+    /// `http` block; `Custom` leaves it untouched. Callers should use this
+    /// instead of reading `http` directly.
+    pub fn effective_http(&self) -> HttpUpload {
+        let secrets = crate::upload_presets::PresetSecrets {
+            token: self.preset_token.clone(),
+            endpoint: self.preset_endpoint.clone(),
+        };
+        crate::upload_presets::effective(self.preset, &secrets).unwrap_or_else(|| self.http.clone())
+    }
+}
+
+/// Well-known upload hosts with a one-click configuration.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UploadPreset {
+    /// Use the free-form `http` settings verbatim.
+    #[default]
+    Custom,
+    Imgur,
+    /// SM.MS image host.
+    SmMs,
+    /// Self-hosted Chevereto.
+    Chevereto,
+    /// S3/R2/OSS *presigned* PUT URL.
+    S3Put,
+    /// WebDAV PUT destination.
+    WebDavPut,
+    /// Generic multipart webhook.
+    Webhook,
+}
+
+impl UploadPreset {
+    pub const ALL: [UploadPreset; 7] = [
+        UploadPreset::Custom,
+        UploadPreset::Imgur,
+        UploadPreset::SmMs,
+        UploadPreset::Chevereto,
+        UploadPreset::S3Put,
+        UploadPreset::WebDavPut,
+        UploadPreset::Webhook,
+    ];
 }
 
 impl Default for UploadConfig {
@@ -1214,6 +1270,9 @@ impl Default for UploadConfig {
             backend: UploadBackend::Local,
             http: HttpUpload::default(),
             local: LocalUpload::default(),
+            preset: UploadPreset::Custom,
+            preset_token: String::new(),
+            preset_endpoint: String::new(),
         }
     }
 }
@@ -1556,6 +1615,39 @@ mod tests {
             crate::automation::Schedule::Off
         ));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_upload_config_defaults_to_custom_preset() {
+        let cfg: UploadConfig = serde_json::from_str(
+            r#"{"enabled":true,"backend":"http","http":{"url":"https://mine/x"}}"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.preset, UploadPreset::Custom);
+        assert!(cfg.preset_token.is_empty());
+        // Custom leaves the free-form http block untouched.
+        assert_eq!(cfg.effective_http().url, "https://mine/x");
+    }
+
+    #[test]
+    fn preset_overrides_the_free_form_http_block() {
+        let mut cfg = UploadConfig::default();
+        cfg.http.url = "https://ignored".into();
+        cfg.preset = UploadPreset::Imgur;
+        cfg.preset_token = "CLIENTID".into();
+        let http = cfg.effective_http();
+        assert_eq!(http.url, "https://api.imgur.com/3/image");
+        assert_eq!(http.json_field, "data.link");
+        assert_eq!(http.headers, vec!["Authorization: Client-ID CLIENTID"]);
+    }
+
+    #[test]
+    fn all_preset_variants_roundtrip_through_json() {
+        for p in UploadPreset::ALL {
+            let json = serde_json::to_string(&p).unwrap();
+            let back: UploadPreset = serde_json::from_str(&json).unwrap();
+            assert_eq!(p, back);
+        }
     }
 
     #[test]

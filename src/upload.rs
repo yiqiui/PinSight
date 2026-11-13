@@ -13,7 +13,7 @@
 //! profile sets `panic = "abort"`.
 
 use crate::config::{
-    HttpMethod, HttpUpload, LocalUpload, UploadBackend, UploadConfig, UploadResponse,
+    HttpMethod, HttpUpload, LocalUpload, UploadBackend, UploadConfig, UploadPreset, UploadResponse,
 };
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -26,7 +26,19 @@ pub fn upload_image(image: &image::RgbaImage, cfg: &UploadConfig) -> Result<Stri
     }
     match cfg.backend {
         UploadBackend::Local => upload_local(image, &cfg.local),
-        UploadBackend::Http => upload_http(image, &cfg.http),
+        UploadBackend::Http => {
+            // A selected host preset derives the HTTP knobs from its template;
+            // `Custom` returns the free-form `http` block unchanged. Check the
+            // preset's required fields first so a missing key yields a clear
+            // message rather than a confusing 401 / relative-URL failure.
+            let secrets = crate::upload_presets::PresetSecrets {
+                token: cfg.preset_token.clone(),
+                endpoint: cfg.preset_endpoint.clone(),
+            };
+            crate::upload_presets::validate(cfg.preset, &secrets).map_err(anyhow::Error::msg)?;
+            let http = cfg.effective_http();
+            upload_http(image, &http, cfg.preset)
+        }
     }
 }
 
@@ -42,7 +54,7 @@ fn upload_local(image: &image::RgbaImage, cfg: &LocalUpload) -> Result<String> {
     Ok(path.to_string_lossy().into_owned())
 }
 
-fn upload_http(image: &image::RgbaImage, cfg: &HttpUpload) -> Result<String> {
+fn upload_http(image: &image::RgbaImage, cfg: &HttpUpload, preset: UploadPreset) -> Result<String> {
     if cfg.url.trim().is_empty() {
         anyhow::bail!("upload.http.url is not set");
     }
@@ -110,6 +122,12 @@ fn upload_http(image: &image::RgbaImage, cfg: &HttpUpload) -> Result<String> {
     };
     if !status.is_success() {
         anyhow::bail!("upload failed: HTTP {status}\n{body}");
+    }
+
+    // A successful PUT (presigned S3/R2 or WebDAV) legitimately returns an
+    // empty body; the shareable link comes from the request URL instead.
+    if let Some(locator) = crate::upload_presets::put_locator(preset, &cfg.url) {
+        return Ok(locator);
     }
 
     let locator = match cfg.response {
@@ -181,5 +199,24 @@ mod tests {
         let out = upload_local(&img, &cfg).unwrap();
         assert!(std::path::Path::new(&out).exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn incomplete_preset_fails_before_any_network_call() {
+        let img = image::RgbaImage::new(2, 2);
+        let mut cfg = UploadConfig {
+            enabled: true,
+            backend: UploadBackend::Http,
+            preset: UploadPreset::Imgur,
+            ..Default::default()
+        };
+        cfg.preset_token.clear();
+        let err = upload_image(&img, &cfg).unwrap_err().to_string();
+        assert!(err.contains("API key"), "unexpected error: {err}");
+
+        cfg.preset = UploadPreset::S3Put;
+        cfg.preset_endpoint.clear();
+        let err = upload_image(&img, &cfg).unwrap_err().to_string();
+        assert!(err.contains("endpoint"), "unexpected error: {err}");
     }
 }
