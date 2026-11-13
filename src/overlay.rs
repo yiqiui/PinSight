@@ -181,6 +181,8 @@ pub struct CaptureSession {
     /// Measured size of the toolbar from the previous frame, so the panel can be
     /// kept inside the screen when it is docked near an edge.
     toolbar_size: Option<egui::Vec2>,
+    /// Whether the in-editor "Adjustments" (whole-image filter) panel is open.
+    filter_panel_open: bool,
     active: Option<Annotation>,
     drag: Option<DragMode>,
     press_origin: Option<egui::Pos2>,
@@ -243,6 +245,7 @@ impl CaptureSession {
             editing: None,
             ime_on: false,
             toolbar_size: None,
+            filter_panel_open: false,
             active: None,
             drag: None,
             press_origin: None,
@@ -402,7 +405,7 @@ impl CaptureSession {
                     .filter(|p| screen.contains(*p))
                     .unwrap_or_else(|| screen.center());
                 let at = to_img(hover);
-                self.history.record(&self.annotations);
+                self.history.record(&self.annotations, None);
                 self.annotations.push(Annotation::Text {
                     at,
                     text,
@@ -561,7 +564,7 @@ impl CaptureSession {
                 let img = to_img(pos);
                 let annotation = self.make_annotation(img, img);
                 if annotation_is_visible(&annotation) {
-                    self.history.record(&self.annotations);
+                    self.history.record(&self.annotations, None);
                     self.annotations.push(annotation);
                 }
             }
@@ -602,6 +605,10 @@ impl CaptureSession {
         self.show_ocr_panel(ui, screen, scale);
         // Floating QR results panel (if open).
         self.show_qr_panel(ui, screen, scale);
+        // Floating whole-image adjustments panel (if open).
+        if self.filter_panel_open {
+            self.show_filter_panel(ui, screen);
+        }
 
         // Hint line at the top center while no selection exists.
         if self.selection.is_none() && self.prefs.hints {
@@ -635,6 +642,66 @@ impl CaptureSession {
         }
 
         None
+    }
+
+    /// Floating whole-image "Adjustments" panel: rotate, flip, grayscale,
+    /// invert, blur and emboss. Each button records an undo step, mutates the
+    /// base image in place and invalidates the cached texture so the preview
+    /// refreshes next frame.
+    fn show_filter_panel(&mut self, ui: &mut egui::Ui, screen: egui::Rect) {
+        let p = self.palette;
+        let t = self.tr;
+        let panel_w = 380.0;
+        // Dock just above the bottom-centre toolbar so the two never overlap.
+        let pos = egui::pos2(
+            (screen.center().x - panel_w * 0.5).clamp(
+                screen.left() + 8.0,
+                (screen.right() - panel_w - 8.0).max(screen.left() + 8.0),
+            ),
+            (screen.bottom() - 96.0 - 12.0).max(screen.top() + 8.0),
+        );
+        egui::Area::new(egui::Id::new(("pinsight-filters", self.monitor.id)))
+            .order(egui::Order::Foreground)
+            .fixed_pos(pos)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::NONE
+                    .fill(p.card)
+                    .stroke(egui::Stroke::new(1.0, p.stroke))
+                    .corner_radius(12)
+                    .inner_margin(egui::Margin::symmetric(10, 8))
+                    .shadow(egui::epaint::Shadow {
+                        offset: [0, 6],
+                        blur: 18,
+                        spread: 0,
+                        color: egui::Color32::from_black_alpha(90),
+                    })
+                    .show(ui, |ui| {
+                        ui.set_width(panel_w);
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(t.f_adjust).strong().color(p.text));
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui.button(t.f_close).clicked() {
+                                        self.filter_panel_open = false;
+                                    }
+                                },
+                            );
+                        });
+                        ui.separator();
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+                            for f in crate::filters::Filter::PANEL {
+                                let label = filter_label(f, t);
+                                if ui.button(label).clicked() {
+                                    self.history.record(&self.annotations, Some(&self.image));
+                                    self.image = crate::filters::apply(&self.image, f);
+                                    self.texture = None;
+                                }
+                            }
+                        });
+                    });
+            });
     }
 
     /// Centred yes/no prompt shown when Escape is configured to confirm.
@@ -857,7 +924,7 @@ impl CaptureSession {
         if draft.buffer.trim().is_empty() {
             return;
         }
-        self.history.record(&self.annotations);
+        self.history.record(&self.annotations, None);
         self.annotations.push(Annotation::Text {
             at: draft.at,
             text: draft.buffer,
@@ -868,15 +935,23 @@ impl CaptureSession {
 
     /// Snapshot the annotations, then undo the last change.
     pub fn undo(&mut self) {
-        if let Some(previous) = self.history.undo(&self.annotations) {
+        if let Some((previous, image)) = self.history.undo(&self.annotations, &self.image) {
             self.annotations = previous;
+            if let Some(img) = image {
+                self.image = img;
+                self.texture = None;
+            }
         }
     }
 
     /// Re-apply the change undone by [`CaptureSession::undo`].
     pub fn redo(&mut self) {
-        if let Some(next) = self.history.redo(&self.annotations) {
+        if let Some((next, image)) = self.history.redo(&self.annotations, &self.image) {
             self.annotations = next;
+            if let Some(img) = image {
+                self.image = img;
+                self.texture = None;
+            }
         }
     }
 
@@ -942,7 +1017,7 @@ impl CaptureSession {
         if (pressed(egui::Key::Backspace) || pressed(egui::Key::Delete))
             && !self.annotations.is_empty()
         {
-            self.history.record(&self.annotations);
+            self.history.record(&self.annotations, None);
             self.annotations.pop();
         }
         // Ctrl+Z undoes; Ctrl+Y redoes. Ctrl+Shift+Z is honoured too, but note
@@ -1007,7 +1082,7 @@ impl CaptureSession {
                 if sel.contains(img) {
                     // Moving the selection translates every annotation, so the
                     // whole list is snapshotted once at drag start.
-                    self.history.record(&self.annotations);
+                    self.history.record(&self.annotations, None);
                     self.drag = Some(DragMode::Move {
                         original: sel,
                         anchor: img,
@@ -1179,7 +1254,7 @@ impl CaptureSession {
             Some(DragMode::Draw { .. }) => {
                 if let Some(annotation) = self.active.take() {
                     if annotation_is_visible(&annotation) {
-                        self.history.record(&self.annotations);
+                        self.history.record(&self.annotations, None);
                         self.annotations.push(annotation);
                     }
                 }
@@ -1548,8 +1623,23 @@ impl CaptureSession {
                             if ui::icon_button(ui, &p, Icon::Trash, false, t.ov_clear).clicked()
                                 && !self.annotations.is_empty()
                             {
-                                self.history.record(&self.annotations);
+                                self.history.record(&self.annotations, None);
                                 self.annotations.clear();
+                            }
+
+                            vertical_separator(ui, &p);
+
+                            // Toggle the whole-image "Adjustments" panel.
+                            if ui::icon_button(
+                                ui,
+                                &p,
+                                Icon::Image,
+                                self.filter_panel_open,
+                                t.f_adjust,
+                            )
+                            .clicked()
+                            {
+                                self.filter_panel_open = !self.filter_panel_open;
                             }
                         });
 
@@ -2120,6 +2210,22 @@ fn click_action(action: crate::config::ClickAction) -> Option<OverlayAction> {
         ClickAction::Pin => Some(OverlayAction::Pin),
         ClickAction::Save => Some(OverlayAction::Save),
         ClickAction::Nothing => None,
+    }
+}
+
+fn filter_label(f: crate::filters::Filter, t: &Strings) -> &'static str {
+    use crate::filters::Filter;
+    match f {
+        Filter::Rotate90Cw => t.f_rotate90,
+        Filter::Rotate90Ccw => t.f_rotate270,
+        Filter::Rotate180 => t.f_rotate180,
+        Filter::FlipHorizontal => t.f_fliph,
+        Filter::FlipVertical => t.f_flipv,
+        Filter::Grayscale => t.f_gray,
+        Filter::Invert => t.f_invert,
+        Filter::Blur(_) => t.f_blur,
+        Filter::Emboss => t.f_emboss,
+        Filter::Rotate(_) => t.f_rotate180, // not shown in the fixed panel
     }
 }
 

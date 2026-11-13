@@ -14,6 +14,7 @@
 //! - `capture`  — monitor enumeration and frame grabbing
 //! - `overlay`  — frozen-screen selection surface
 //! - `annotate` — annotation model, preview and rasterisation
+//! - `filters`  — whole-image adjustments (rotate/flip/invert/blur/emboss)
 //! - `pin`      — native top-most pin windows
 //! - `longshot` — scroll capture and stitching
 //! - `record`   — frame capture and GIF/MP4 encoding
@@ -29,6 +30,7 @@ mod cli;
 mod clipboard;
 mod config;
 mod decorate;
+mod filters;
 mod fonts;
 mod gifedit;
 mod hdr;

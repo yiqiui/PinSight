@@ -831,6 +831,18 @@ strings! {
     ov_undo { en: "Undo", zh: "撤销", tw: "還原", ja: "元に戻す", ko: "실행 취소", fr: "Annuler", de: "Rückgängig" }
     ov_redo { en: "Redo", zh: "重做", tw: "重做", ja: "やり直す", ko: "다시 실행", fr: "Rétablir", de: "Wiederholen" }
     ov_width { en: "Stroke width", zh: "线宽", tw: "線寬", ja: "線の太さ", ko: "선 두께", fr: "Épaisseur du trait", de: "Strichstärke" }
+    // ---- image adjustments (editor "Adjustments" panel) ------------------
+    f_adjust { en: "Adjustments", zh: "图像调整", tw: "圖像調整", ja: "調整", ko: "조정", fr: "Ajustements", de: "Anpassungen" }
+    f_rotate90 { en: "Rotate 90° CW", zh: "顺时针 90°", tw: "順時針 90°", ja: "時計回り 90°", ko: "시계 방향 90°", fr: "Rotation 90° horaire", de: "90° im Uhrzeigersinn" }
+    f_rotate270 { en: "Rotate 90° CCW", zh: "逆时针 90°", tw: "逆時針 90°", ja: "反時計回り 90°", ko: "반시계 90°", fr: "Rotation 90° anti-horaire", de: "90° gegen Uhrzeigersinn" }
+    f_rotate180 { en: "Rotate 180°", zh: "旋转 180°", tw: "旋轉 180°", ja: "180° 回転", ko: "180° 회전", fr: "Rotation 180°", de: "180° drehen" }
+    f_fliph { en: "Flip horizontal", zh: "水平翻转", tw: "水平翻轉", ja: "左右反転", ko: "좌우 대칭", fr: "Retourner H", de: "Horizontal spiegeln" }
+    f_flipv { en: "Flip vertical", zh: "垂直翻转", tw: "垂直翻轉", ja: "上下反転", ko: "상하 대칭", fr: "Retourner V", de: "Vertikal spiegeln" }
+    f_gray { en: "Grayscale", zh: "灰度", tw: "灰階", ja: "グレースケール", ko: "흑백", fr: "Niveaux de gris", de: "Graustufen" }
+    f_invert { en: "Invert", zh: "反相", tw: "反相", ja: "反転", ko: "반전", fr: "Inverser", de: "Invertieren" }
+    f_blur { en: "Blur", zh: "模糊", tw: "模糊", ja: "ぼかし", ko: "흐림", fr: "Flou", de: "Weichzeichnen" }
+    f_emboss { en: "Emboss", zh: "浮雕", tw: "浮雕", ja: "エンボス", ko: "양각", fr: "Estampage", de: "Prägen" }
+    f_close { en: "Close", zh: "关闭", tw: "關閉", ja: "閉じる", ko: "닫기", fr: "Fermer", de: "Schließen" }
     col_white { en: "White", zh: "白色", tw: "白色", ja: "白", ko: "흰색", fr: "Blanc", de: "Weiß" }
     col_red { en: "Red", zh: "红色", tw: "紅色", ja: "赤", ko: "빨강", fr: "Rouge", de: "Rot" }
     col_amber { en: "Amber", zh: "琥珀", tw: "琥珀", ja: "アンバー", ko: "호박색", fr: "Ambre", de: "Bernstein" }

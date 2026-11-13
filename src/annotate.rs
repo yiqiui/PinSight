@@ -284,35 +284,65 @@ pub const ACCENT: [u8; 4] = [255, 84, 96, 255];
 /// would need.
 #[derive(Debug, Default)]
 pub struct History {
-    past: Vec<Vec<Annotation>>,
-    future: Vec<Vec<Annotation>>,
+    past: Vec<HistoryEntry>,
+    future: Vec<HistoryEntry>,
+}
+
+/// One undo step: the annotation list at that moment, plus an optional snapshot
+/// of the base image. The image is only stored when it actually changed (a
+/// filter), keeping memory bounded — annotation edits store `None` and the
+/// image is left untouched on undo.
+#[derive(Debug, Default)]
+struct HistoryEntry {
+    annotations: Vec<Annotation>,
+    image: Option<RgbaImage>,
 }
 
 impl History {
     /// Deepest history kept; a long session cannot grow this without bound.
     const LIMIT: usize = 64;
 
-    /// Call *before* mutating the list, with its current contents.
-    pub fn record(&mut self, current: &[Annotation]) {
+    /// Call *before* mutating, with the current annotations and — when the base
+    /// image is about to change (a filter) — a snapshot of it.
+    pub fn record(&mut self, current: &[Annotation], image: Option<&RgbaImage>) {
         if self.past.len() >= Self::LIMIT {
             self.past.remove(0);
         }
-        self.past.push(current.to_vec());
+        self.past.push(HistoryEntry {
+            annotations: current.to_vec(),
+            image: image.cloned(),
+        });
         self.future.clear();
     }
 
     /// Restore the previous state, if any. `current` becomes the redo target.
-    pub fn undo(&mut self, current: &[Annotation]) -> Option<Vec<Annotation>> {
+    /// Returns the annotation list and, when this step carried an image
+    /// snapshot, that image.
+    pub fn undo(
+        &mut self,
+        current: &[Annotation],
+        image: &RgbaImage,
+    ) -> Option<(Vec<Annotation>, Option<RgbaImage>)> {
         let previous = self.past.pop()?;
-        self.future.push(current.to_vec());
-        Some(previous)
+        self.future.push(HistoryEntry {
+            annotations: current.to_vec(),
+            image: Some(image.clone()),
+        });
+        Some((previous.annotations, previous.image))
     }
 
     /// Re-apply the state undone by [`Self::undo`], if any.
-    pub fn redo(&mut self, current: &[Annotation]) -> Option<Vec<Annotation>> {
+    pub fn redo(
+        &mut self,
+        current: &[Annotation],
+        image: &RgbaImage,
+    ) -> Option<(Vec<Annotation>, Option<RgbaImage>)> {
         let next = self.future.pop()?;
-        self.past.push(current.to_vec());
-        Some(next)
+        self.past.push(HistoryEntry {
+            annotations: current.to_vec(),
+            image: Some(image.clone()),
+        });
+        Some((next.annotations, next.image))
     }
 
     /// Forget everything — used when a new selection invalidates the past.
@@ -904,22 +934,25 @@ mod tests {
     #[test]
     fn undo_redo_round_trip() {
         let mut history = History::default();
+        let img = RgbaImage::from_pixel(1, 1, Rgba([0, 0, 0, 255]));
         let first = vec![rect_at(0.0)];
         let second = vec![rect_at(0.0), rect_at(20.0)];
 
         // Nothing recorded yet: both directions are no-ops.
         assert!(!history.can_undo());
-        assert!(history.undo(&second).is_none());
-        assert!(history.redo(&first).is_none());
+        assert!(history.undo(&second, &img).is_none());
+        assert!(history.redo(&first, &img).is_none());
 
-        history.record(&first);
+        history.record(&first, None);
         assert!(history.can_undo());
-        let back = history.undo(&second).expect("undo returns the snapshot");
-        assert_eq!(back.len(), 1);
+        let back = history
+            .undo(&second, &img)
+            .expect("undo returns the snapshot");
+        assert_eq!(back.0.len(), 1);
 
         assert!(history.can_redo());
-        let forward = history.redo(&back).expect("redo re-applies");
-        assert_eq!(forward.len(), 2);
+        let forward = history.redo(&back.0, &img).expect("redo re-applies");
+        assert_eq!(forward.0.len(), 2);
 
         // Undoing consumed the redo branch.
         assert!(!history.can_redo());
@@ -928,14 +961,15 @@ mod tests {
     #[test]
     fn recording_clears_the_redo_branch() {
         let mut history = History::default();
+        let img = RgbaImage::from_pixel(1, 1, Rgba([0, 0, 0, 255]));
         let a = vec![rect_at(0.0)];
         let b = vec![rect_at(0.0), rect_at(20.0)];
-        history.record(&a);
-        let back = history.undo(&b).unwrap();
+        history.record(&a, None);
+        let back = history.undo(&b, &img).unwrap();
         assert!(history.can_redo());
 
         // A new action after an undo starts a fresh future.
-        history.record(&back);
+        history.record(&back.0, None);
         assert!(!history.can_redo());
     }
 
@@ -944,7 +978,7 @@ mod tests {
         let mut history = History::default();
         let list = vec![rect_at(0.0)];
         for _ in 0..(History::LIMIT + 8) {
-            history.record(&list);
+            history.record(&list, None);
         }
         assert!(history.past.len() <= History::LIMIT);
 

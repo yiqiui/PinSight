@@ -39,13 +39,17 @@ OPTIONS:
     --clipboard         copy the image to the clipboard
     --ocr               recognise text with Windows.Media.Ocr and print it
     --delay <SECONDS>   wait before capturing
+    --filter <CODE>     apply an image adjustment (repeatable, applied in order)
     --list-monitors     print monitor ids and exit
     --list-windows      print window ids/titles and exit
+    --list-filters      print the available --filter codes and exit
     -h, --help          show this help
 
 NOTE:
     --ocr uses the offline engine built into Windows 10/11; the recognised
     text is printed to stdout and the saved image path (if any) to stderr.
+    --filter codes: rotate90, rotate270, rotate180, fliph, flipv, gray,
+    invert, blur:<sigma>, emboss, rotate:<degrees> (e.g. rotate:30).
 
 OTHER COMMANDS:
     pinsight pdf <imgs...> --out book.pdf   images → one PDF
@@ -125,6 +129,8 @@ fn run(args: &[String]) -> Result<()> {
     let mut upload = false;
     let mut list = false;
     let mut list_windows = false;
+    let mut list_filters = false;
+    let mut filters: Vec<crate::filters::Filter> = Vec::new();
 
     let mut i = 0;
     while i < args.len() {
@@ -160,6 +166,16 @@ fn run(args: &[String]) -> Result<()> {
                     .ok_or_else(|| anyhow!("--delay needs seconds"))?;
                 delay = value.parse().context("--delay expects a number")?;
             }
+            "--filter" | "-f" => {
+                i += 1;
+                let value = args
+                    .get(i)
+                    .ok_or_else(|| anyhow!("--filter needs a code"))?;
+                let f = crate::filters::Filter::from_code(value).ok_or_else(|| {
+                    anyhow!("unknown filter `{value}` (try `pinsight shot --help`)")
+                })?;
+                filters.push(f);
+            }
             "--list-monitors" => list = true,
             "--window" | "-w" => {
                 i += 1;
@@ -167,6 +183,7 @@ fn run(args: &[String]) -> Result<()> {
                 window_id = Some(value.parse().context("--window expects a number")?);
             }
             "--list-windows" => list_windows = true,
+            "--list-filters" => list_filters = true,
             "-h" | "--help" => {
                 print!("{USAGE}");
                 return Ok(());
@@ -205,11 +222,21 @@ fn run(args: &[String]) -> Result<()> {
         return Ok(());
     }
 
+    if list_filters {
+        for f in crate::filters::Filter::PANEL {
+            println!("{}", f.code());
+        }
+        // Parameterised codes are not in the fixed panel; document them too.
+        println!("blur:<sigma>");
+        println!("rotate:<degrees>");
+        return Ok(());
+    }
+
     if delay > 0.0 {
         std::thread::sleep(Duration::from_secs_f32(delay));
     }
 
-    let image = match region {
+    let captured = match region {
         Some(rect) => capture::grab_physical_rect(rect)?,
         None => {
             if let Some(id) = window_id {
@@ -222,6 +249,11 @@ fn run(args: &[String]) -> Result<()> {
                 capture::grab_monitor(&info)?
             }
         }
+    };
+    let image = if filters.is_empty() {
+        captured
+    } else {
+        crate::filters::apply_chain(&captured, &filters)
     };
 
     if ocr {
