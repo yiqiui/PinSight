@@ -36,6 +36,8 @@ OPTIONS:
     --region X,Y,W,H    capture a physical-desktop rectangle
     --monitor <ID>      capture one monitor (see --list-monitors)
     --window <ID>       capture one top-level window (see --list-windows)
+    --window-shadow <MODE>  off | system | synthetic (used with --window;
+                        default follows Settings → Output → Window shadow)
     --clipboard         copy the image to the clipboard
     --ocr               recognise text with Windows.Media.Ocr and print it
     --delay <SECONDS>   wait before capturing
@@ -126,6 +128,7 @@ fn run(args: &[String]) -> Result<()> {
     let mut region: Option<PhysRect> = None;
     let mut monitor_id: Option<u32> = None;
     let mut window_id: Option<u32> = None;
+    let mut window_shadow: Option<crate::window_shadow::Mode> = None;
     let mut clipboard = false;
     let mut delay = 0.0_f32;
     let mut ocr = false;
@@ -186,6 +189,16 @@ fn run(args: &[String]) -> Result<()> {
                 i += 1;
                 let value = args.get(i).ok_or_else(|| anyhow!("--window needs an id"))?;
                 window_id = Some(value.parse().context("--window expects a number")?);
+            }
+            "--window-shadow" => {
+                i += 1;
+                let value = args
+                    .get(i)
+                    .ok_or_else(|| anyhow!("--window-shadow needs a mode"))?;
+                window_shadow =
+                    Some(crate::window_shadow::Mode::from_code(value).ok_or_else(|| {
+                        anyhow!("unknown window-shadow mode `{value}` (off|system|synthetic)")
+                    })?);
             }
             "--list-windows" => list_windows = true,
             "--list-filters" => list_filters = true,
@@ -281,7 +294,9 @@ fn run(args: &[String]) -> Result<()> {
         Some(rect) => capture::grab_physical_rect(rect)?,
         None => {
             if let Some(id) = window_id {
-                capture::grab_window(id)?
+                let cfg = crate::config::Config::load_or_warn();
+                let mode = window_shadow.unwrap_or(cfg.window_shadow);
+                crate::window_shadow::grab(id, mode, cfg.window_shadow_padding)?
             } else {
                 let info = match monitor_id {
                     Some(id) => capture::find_monitor(id)?,

@@ -1048,7 +1048,11 @@ impl PinSightApp {
     }
 
     fn capture_window_now(&mut self, id: u32) {
-        match capture::grab_window(id) {
+        match crate::window_shadow::grab(
+            id,
+            self.config.window_shadow,
+            self.config.window_shadow_padding,
+        ) {
             Ok(image) => {
                 let image = Arc::new(image);
                 match copy_to_clipboard(&self.config, &image) {
@@ -5870,6 +5874,36 @@ impl PinSightApp {
                     }
                 });
             }
+        });
+
+        // ---- window shadow (whole-window captures) -------------------------
+        ui::card(ui, p, |ui| {
+            ui::section_header(ui, p, Icon::Layers, t.ws_section);
+            ui::field_row(ui, p, t.ws_mode, |ui| {
+                let label = |m: crate::window_shadow::Mode| match m {
+                    crate::window_shadow::Mode::Off => t.ws_off,
+                    crate::window_shadow::Mode::System => t.ws_system,
+                    crate::window_shadow::Mode::Synthetic => t.ws_synthetic,
+                };
+                let options = crate::window_shadow::Mode::ALL.map(|m| (m, label(m)));
+                if let Some(m) = ui::segmented(ui, p, self.config.window_shadow, &options) {
+                    self.config.window_shadow = m;
+                    let _ = self.config.save();
+                }
+            });
+            if self.config.window_shadow != crate::window_shadow::Mode::Off {
+                ui::field_row(ui, p, t.ws_padding, |ui| {
+                    let mut value = self.config.window_shadow_padding as f32;
+                    if ui::slider(ui, p, &mut value, 0.0..=64.0, 0, " px").changed() {
+                        self.config.window_shadow_padding = value.round() as u32;
+                        let _ = self.config.save();
+                    }
+                });
+            }
+            ui.add(
+                egui::Label::new(egui::RichText::new(t.ws_hint).size(11.0).color(p.text_weak))
+                    .wrap(),
+            );
         });
 
         // ---- recording ----------------------------------------------------

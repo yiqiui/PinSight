@@ -128,6 +128,29 @@ pub fn decorate_image(image: &RgbaImage, deco: &Decorations) -> RgbaImage {
     img
 }
 
+/// Produce a transparent "window card" for a captured window: round the
+/// window's own corners, then cast a soft shadow on an expanded transparent
+/// canvas. Unlike [`decorate_image`] (which rounds the *finished* canvas),
+/// this rounds the content first so the shadow follows the rounded silhouette.
+/// Used by the synthetic window-shadow capture mode.
+pub fn window_shadow_frame(
+    image: &RgbaImage,
+    radius: u32,
+    blur: u32,
+    offset_y: i32,
+    opacity: u8,
+) -> RgbaImage {
+    let rounded = round_corners(image, radius);
+    let shadow = ShadowDeco {
+        blur: blur.clamp(1, MAX_SHADOW_BLUR),
+        offset_x: 0,
+        offset_y: offset_y.clamp(-MAX_SHADOW_OFFSET, MAX_SHADOW_OFFSET),
+        color: [0, 0, 0],
+        opacity,
+    };
+    add_shadow(&rounded, &shadow)
+}
+
 /// Round the four corners of `image` with a one-pixel anti-aliased cutout.
 ///
 /// Only the corner bounding boxes are visited, so the cost is independent of

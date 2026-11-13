@@ -51,6 +51,16 @@ _Nothing yet — changes land here until the next tagged release._
   reply with an empty body. FTP and SigV4 request signing are intentionally
   **not** included — they need protocols/dependencies the HTTP transport does
   not have; use a presigned URL instead.
+- **Window-shadow capture modes.** Settings → Output → Window shadow and
+  `pinsight shot --window-shadow <off|system|synthetic>` add three ways to
+  capture a whole window: `off` (the previous WGC grab), `system` (read the DWM
+  extended frame bounds, expand the rectangle by the real shadow gap plus an
+  adjustable margin, then grab that screen region) and `synthetic` (round the
+  window's corners and cast a soft shadow onto a transparent canvas). System
+  mode deliberately grabs from the screen, so the wallpaper and any overlapping
+  window become part of the picture — bring the target window to the front
+  first. The DWM insets are scaled into physical pixels so this stays correct
+  in the headless CLI, which is DPI-unaware because winit never starts there.
 
 ### Changed
 
@@ -125,6 +135,12 @@ _Nothing yet — changes land here until the next tagged release._
   a WinRT async result used an unbounded `recv()`. It now uses a 60-second
   `recv_timeout`, so a stalled recognition cannot hang the calling thread
   indefinitely.
+- **Make headless `--window` captures work.** xcap's WGC window capture needs a
+  COM apartment / message loop that `pinsight shot` never sets up, so every CLI
+  window capture failed with "timed out waiting on channel". It now falls back
+  to grabbing the window's physical rectangle from the screen. Like the system
+  shadow mode, that fallback can include overlapping windows; the GUI path is
+  unaffected because WGC succeeds there.
 
 ## [0.1.2] - 2026-11-11
 

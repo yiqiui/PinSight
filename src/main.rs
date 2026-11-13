@@ -17,6 +17,7 @@
 //! - `filters`  — whole-image adjustments (rotate/flip/invert/blur/emboss)
 //! - `automation` — scheduling, region monitoring, after-capture workflow
 //! - `pin`      — native top-most pin windows
+//! - `window_shadow` — drop-shadow modes for whole-window captures
 //! - `longshot` — scroll capture and stitching
 //! - `record`   — frame capture and GIF/MP4 encoding
 //! - `hotkeys`  — global hotkey registration
@@ -70,6 +71,7 @@ mod upload;
 mod upload_presets;
 mod util;
 mod voice;
+mod window_shadow;
 
 use eframe::egui;
 

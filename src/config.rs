@@ -420,6 +420,12 @@ pub struct Config {
     // ---- save decorations (保存后处理) -----------------------------------
     /// Border / shadow / watermark applied to every saved capture.
     pub decorations: crate::decorate::Decorations,
+    /// How a whole-window capture handles the drop shadow. `Off` keeps the
+    /// plain WGC grab; `system` includes Windows' real DWM shadow;
+    /// `synthetic` draws a transparent rounded shadow. See `window_shadow`.
+    pub window_shadow: crate::window_shadow::Mode,
+    /// Extra margin (pixels) around a shadowed window capture.
+    pub window_shadow_padding: u32,
     // ---- pins (贴图) ------------------------------------------------------
     /// Soft drop shadow around a pinned image.
     pub pin_shadow: bool,
@@ -912,6 +918,8 @@ impl Default for Config {
             capture_pointer: false,
             capture_delay_secs: 0,
             decorations: crate::decorate::Decorations::default(),
+            window_shadow: crate::window_shadow::Mode::Off,
+            window_shadow_padding: 12,
             pin_shadow: true,
             pin_shadow_color: [0, 0, 0],
             pin_opacity: 100,

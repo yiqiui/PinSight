@@ -224,14 +224,49 @@ fn windows_foreground_window() -> Option<WindowInfo> {
     }
 }
 
+/// Physical-pixel rectangle of a top-level window, by `xcap` id.
+///
+/// Unlike `GetWindowRect`, xcap reports physical pixels regardless of the
+/// calling process's DPI awareness — which matters for the headless CLI, where
+/// winit never runs and the process stays DPI-unaware (Win32 would then hand
+/// back virtualised logical coordinates).
+pub fn window_rect(id: u32) -> Result<PhysRect> {
+    let windows = xcap::Window::all().context("listing windows")?;
+    let window = windows
+        .into_iter()
+        .find(|w| w.id().ok() == Some(id))
+        .ok_or_else(|| anyhow!("window {id} not found"))?;
+    Ok(PhysRect {
+        x: window.x()?,
+        y: window.y()?,
+        w: window.width()?,
+        h: window.height()?,
+    })
+}
+
 /// Capture a single window by its `xcap` id.
+///
+/// WGC window capture needs a COM apartment / message loop that the headless
+/// CLI (`pinsight shot --window`) does not set up; there it fails with
+/// "timed out waiting on channel". Rather than making `--window` unusable in
+/// scripts, fall back to grabbing the window's rectangle from the screen. The
+/// trade-off is that an overlapping window can appear in the fallback — the
+/// same trade-off as the `system` window-shadow mode.
 pub fn grab_window(id: u32) -> Result<RgbaImage> {
     let windows = xcap::Window::all().context("listing windows")?;
     let window = windows
         .into_iter()
         .find(|w| w.id().ok() == Some(id))
         .ok_or_else(|| anyhow!("window {id} not found"))?;
-    window.capture_image().context("capturing window")
+    match window.capture_image() {
+        Ok(image) => Ok(image),
+        Err(err) => {
+            let rect = window_rect(id)?;
+            grab_physical_rect(rect).with_context(|| {
+                format!("capturing window ({err}); screen-rectangle fallback also failed")
+            })
+        }
+    }
 }
 
 /// Mark a top-level window so the Windows.Graphics.Capture pipeline (what xcap
