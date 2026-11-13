@@ -329,6 +329,11 @@ pub struct Config {
     /// Generic image upload backend (HTTP to a configured URL, or a local
     /// folder copy). Disabled by default; see [`UploadConfig`].
     pub upload: UploadConfig,
+    // ---- automation --------------------------------------------------------
+    /// Unattended captures (interval / daily / region-change) and the
+    /// after-capture workflow chain. See [`AutomationConfig`].
+    #[serde(default)]
+    pub automation: AutomationConfig,
     // ---- appearance -------------------------------------------------------
     /// `system` follows the operating system, `light` / `dark` force a theme.
     pub theme: ThemeMode,
@@ -865,6 +870,7 @@ impl Default for Config {
             hdr_fix: true,
             mcp_enabled: false,
             upload: UploadConfig::default(),
+            automation: AutomationConfig::default(),
             theme: ThemeMode::System,
             accent: Accent::Blue,
             accent_custom: [0x5B, 0x9D, 0xFF],
@@ -1093,6 +1099,91 @@ pub fn paths() -> &'static Paths {
 /// True when running in portable mode (settings page shows it).
 pub fn is_portable() -> bool {
     paths().portable
+}
+
+/// Unattended capture automation. All fields default to "off", so an existing
+/// `config.json` that predates this feature loads unchanged.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AutomationConfig {
+    /// Master switch for scheduled / monitored captures.
+    pub enabled: bool,
+    /// Fire every N seconds (`0` disables the interval trigger).
+    pub interval_secs: u64,
+    /// Local wall-clock times as `HH:MM` strings, e.g. `["09:00", "17:30"]`.
+    pub daily_times: Vec<String>,
+    /// Watch a region and capture only when it changes.
+    pub monitor_enabled: bool,
+    /// Mean per-pixel difference (0–255) that counts as a change.
+    pub monitor_threshold: f32,
+    /// How often the monitor samples, in milliseconds.
+    pub monitor_poll_ms: u64,
+    /// Physical rectangle to watch. `None` = the whole monitor under the
+    /// cursor. Serialised as `[x, y, w, h]`.
+    pub monitor_rect: Option<[i32; 4]>,
+    /// Ordered after-capture workflow tokens (`save`, `save:jpeg`,
+    /// `copy-image`, `upload`, `copy-link`, `notify`). See `crate::automation`.
+    pub workflow: Vec<String>,
+    /// Cap on automatic captures per session (0 = unlimited). A runaway
+    /// interval on an unattended machine must not fill the disk.
+    pub max_captures: u32,
+}
+
+impl Default for AutomationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            interval_secs: 0,
+            daily_times: Vec::new(),
+            monitor_enabled: false,
+            monitor_threshold: 8.0,
+            monitor_poll_ms: 1000,
+            monitor_rect: None,
+            workflow: vec!["save".to_string()],
+            max_captures: 0,
+        }
+    }
+}
+
+impl AutomationConfig {
+    /// Effective schedule, derived from the interval and daily-time fields.
+    /// Interval wins when both are set (a fixed cadence is easier to reason
+    /// about than two overlapping clocks).
+    pub fn schedule(&self) -> crate::automation::Schedule {
+        use crate::automation::{Schedule, normalise_times, parse_hhmm};
+        if !self.enabled {
+            return Schedule::Off;
+        }
+        if self.interval_secs > 0 {
+            return Schedule::Interval {
+                secs: self.interval_secs,
+            };
+        }
+        let times: Vec<(u8, u8)> = self
+            .daily_times
+            .iter()
+            .filter_map(|s| parse_hhmm(s))
+            .collect();
+        let times = normalise_times(&times);
+        if times.is_empty() {
+            Schedule::Off
+        } else {
+            Schedule::Daily { times }
+        }
+    }
+
+    /// Sanitised monitoring cadence, clamped so a bad config cannot spin the
+    /// loop at 0 ms or fall silent for minutes.
+    pub fn monitor_period(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.monitor_poll_ms.clamp(200, 60_000))
+    }
+
+    /// The normalised after-capture workflow plan.
+    pub fn workflow_plan(&self) -> Vec<crate::automation::WorkflowAction> {
+        crate::automation::plan(&crate::automation::WorkflowAction::parse_all(
+            &self.workflow,
+        ))
+    }
 }
 
 /// Generic image upload backend. PinSight hard-codes no host: the HTTP backend
@@ -1447,5 +1538,64 @@ mod tests {
             "temp file must be cleaned up"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_config_without_automation_gets_safe_defaults() {
+        let dir = std::env::temp_dir().join(format!("ps-cfg-autodefault-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("config.json");
+        std::fs::write(&path, r#"{"image_quality":55}"#).unwrap();
+        let (cfg, corrupt) = read_config(&path);
+        assert!(corrupt.is_none());
+        assert_eq!(cfg.image_quality, 55);
+        assert!(!cfg.automation.enabled);
+        assert_eq!(cfg.automation.interval_secs, 0);
+        assert!(matches!(
+            cfg.automation.schedule(),
+            crate::automation::Schedule::Off
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn automation_schedule_and_workflow_conversions() {
+        use crate::automation::{Schedule, WorkflowAction};
+        let mut cfg = AutomationConfig {
+            enabled: true,
+            interval_secs: 15,
+            ..Default::default()
+        };
+        assert_eq!(
+            cfg.schedule(),
+            Schedule::Interval { secs: 15 },
+            "interval wins over daily times"
+        );
+        assert_eq!(
+            cfg.schedule().next_in((0, 0, 0), std::time::Duration::ZERO),
+            Some(std::time::Duration::from_secs(15))
+        );
+
+        cfg.interval_secs = 0;
+        cfg.daily_times = vec!["bad".into(), "09:30".into(), "09:30".into()];
+        assert_eq!(
+            cfg.schedule(),
+            Schedule::Daily {
+                times: vec![(9, 30)]
+            }
+        );
+
+        cfg.workflow = vec!["copy-link".into(), "save".into(), "nope".into()];
+        assert_eq!(
+            cfg.workflow_plan(),
+            vec![
+                WorkflowAction::Save,
+                WorkflowAction::Upload,
+                WorkflowAction::CopyLink
+            ]
+        );
+        assert_eq!(cfg.monitor_period(), std::time::Duration::from_millis(1000));
+        cfg.monitor_poll_ms = 0;
+        assert_eq!(cfg.monitor_period(), std::time::Duration::from_millis(200));
     }
 }

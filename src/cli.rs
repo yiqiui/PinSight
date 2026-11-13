@@ -40,9 +40,12 @@ OPTIONS:
     --ocr               recognise text with Windows.Media.Ocr and print it
     --delay <SECONDS>   wait before capturing
     --filter <CODE>     apply an image adjustment (repeatable, applied in order)
+    --workflow <CODES>  run an after-capture workflow (comma-separated codes,
+                        see --list-workflow); overrides --out/--clipboard/--upload
     --list-monitors     print monitor ids and exit
     --list-windows      print window ids/titles and exit
     --list-filters      print the available --filter codes and exit
+    --list-workflow     print the after-capture workflow action codes and exit
     -h, --help          show this help
 
 NOTE:
@@ -130,7 +133,9 @@ fn run(args: &[String]) -> Result<()> {
     let mut list = false;
     let mut list_windows = false;
     let mut list_filters = false;
+    let mut list_workflow = false;
     let mut filters: Vec<crate::filters::Filter> = Vec::new();
+    let mut workflow: Vec<String> = Vec::new();
 
     let mut i = 0;
     while i < args.len() {
@@ -184,6 +189,19 @@ fn run(args: &[String]) -> Result<()> {
             }
             "--list-windows" => list_windows = true,
             "--list-filters" => list_filters = true,
+            "--list-workflow" => list_workflow = true,
+            "--workflow" => {
+                i += 1;
+                let value = args
+                    .get(i)
+                    .ok_or_else(|| anyhow!("--workflow needs comma-separated codes"))?;
+                workflow.extend(
+                    value
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty()),
+                );
+            }
             "-h" | "--help" => {
                 print!("{USAGE}");
                 return Ok(());
@@ -232,6 +250,29 @@ fn run(args: &[String]) -> Result<()> {
         return Ok(());
     }
 
+    if list_workflow {
+        use crate::automation::{ExtraFormat, WorkflowAction};
+        for a in [
+            WorkflowAction::Save,
+            WorkflowAction::CopyImage,
+            WorkflowAction::Upload,
+            WorkflowAction::CopyLink,
+            WorkflowAction::Notify,
+        ] {
+            println!("{}", a.code());
+        }
+        for f in [
+            ExtraFormat::Jpeg,
+            ExtraFormat::Webp,
+            ExtraFormat::Bmp,
+            ExtraFormat::Tiff,
+            ExtraFormat::Gif,
+        ] {
+            println!("save:{}", f.as_str());
+        }
+        return Ok(());
+    }
+
     if delay > 0.0 {
         std::thread::sleep(Duration::from_secs_f32(delay));
     }
@@ -262,6 +303,42 @@ fn run(args: &[String]) -> Result<()> {
         // stdout carries only the recognised text so it can be piped or
         // redirected cleanly; any saved path is reported on stderr below.
         println!("{}", crate::ocr::words_to_text(&words));
+    }
+
+    // An explicit --workflow takes over the whole after-capture stage: run the
+    // normalised chain on a worker-free synchronous path (CLI is headless) and
+    // print the resulting paths/links, one per line, for shell consumption.
+    if !workflow.is_empty() {
+        let config = crate::config::Config::load_or_warn();
+        let mut params = crate::autorun::RunParams::from_config(&config);
+        if let Some(dir) = &out {
+            params.save_dir = dir
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(&config.save_dir)
+                .to_path_buf();
+        }
+        if params.upload.backend == crate::config::UploadBackend::Local
+            && params.upload.local.folder.as_os_str().is_empty()
+        {
+            params.upload.local.folder = config.save_dir.join("uploaded");
+        }
+        let actions = crate::automation::WorkflowAction::parse_all(&workflow);
+        if actions.is_empty() {
+            anyhow::bail!("--workflow contained no valid codes (see --list-workflow)");
+        }
+        let plan = crate::automation::plan(&actions);
+        let report = crate::autorun::execute(&image, &plan, &params);
+        for path in &report.saved {
+            println!("{}", path.display());
+        }
+        if let Some(link) = &report.link {
+            println!("{link}");
+        }
+        for err in &report.errors {
+            eprintln!("pinsight: {err}");
+        }
+        return Ok(());
     }
 
     if upload {
@@ -642,5 +719,36 @@ mod tests {
         assert!(maybe_run(&["pdf".into(), "a.png".into(), "b.png".into()]).is_some());
         assert!(maybe_run(&["--mcp".into()]).is_none());
         assert!(maybe_run(&[]).is_none());
+    }
+
+    #[test]
+    fn list_options_print_codes_without_capturing() {
+        // These short-circuit before any screen grab, so they are safe in CI.
+        assert!(
+            maybe_run(&["shot".into(), "--list-filters".into()])
+                .unwrap()
+                .is_ok()
+        );
+        assert!(
+            maybe_run(&["shot".into(), "--list-workflow".into()])
+                .unwrap()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn workflow_tokens_parse_into_a_normalised_plan() {
+        let tokens: Vec<String> = ["save", "copy-link", "notify", "bogus"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let actions = crate::automation::WorkflowAction::parse_all(&tokens);
+        let plan = crate::automation::plan(&actions);
+        assert_eq!(plan[0], crate::automation::WorkflowAction::Save);
+        assert!(plan.contains(&crate::automation::WorkflowAction::Upload));
+        assert_eq!(
+            plan.last(),
+            Some(&crate::automation::WorkflowAction::Notify)
+        );
     }
 }

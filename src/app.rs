@@ -8,6 +8,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use base64::Engine as _;
+use chrono::Timelike;
 use eframe::CreationContext;
 use eframe::egui;
 use image::RgbaImage;
@@ -276,6 +277,23 @@ pub struct PinSightApp {
     /// building the PDF is far too heavy for the UI thread; the worker sends
     /// back the number of exported pages (or an error) for a toast.
     pdf_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
+    // ---- unattended capture automation ------------------------------------
+    /// When the last scheduled capture fired. Drives the interval/daily
+    /// countdown; reset when automation is toggled on.
+    auto_last_fire: std::time::Instant,
+    /// When the region monitor last sampled a frame. Separate from
+    /// `auto_last_fire` so a fast sampling cadence does not reset the scheduled
+    /// firing countdown (and vice versa).
+    auto_last_sample: std::time::Instant,
+    /// Previous sampled frame for region-change detection, kept only while the
+    /// monitor is enabled so an idle app does not hold a full-screen buffer.
+    auto_prev_frame: Option<RgbaImage>,
+    /// Automatic captures performed this session, checked against
+    /// `config.automation.max_captures` (0 = unlimited).
+    auto_count: u32,
+    /// In-flight automation worker. `Some` means a tick is running; the loop
+    /// will not start another until it reports back.
+    auto_rx: Option<std::sync::mpsc::Receiver<Result<crate::autorun::AutoTick, String>>>,
     next_pin_id: u64,
     root_restore: Option<egui::Pos2>,
     pending_area: Option<PendingArea>,
@@ -346,6 +364,11 @@ pub struct PinSightApp {
     hotkey_draft: HotkeyConfig,
     save_dir_draft: String,
     name_template_draft: String,
+    /// Editable text for the automation daily-times / workflow lists. Kept as
+    /// raw strings so typing a partial token (e.g. `09:`) is not destroyed by
+    /// re-parsing on every frame; parsed into the config on change.
+    auto_daily_draft: String,
+    auto_workflow_draft: String,
     font_path_draft: String,
     last_capture_at: Option<Instant>,
     /// Monitor id + physical rectangle of the last overlay selection, for
@@ -461,6 +484,8 @@ impl PinSightApp {
             last_trim: std::time::Instant::now(),
             save_dir_draft: config.save_dir.display().to_string(),
             name_template_draft: config.name_template.clone(),
+            auto_daily_draft: config.automation.daily_times.join(", "),
+            auto_workflow_draft: config.automation.workflow.join(", "),
             font_path_draft: config
                 .font_path
                 .as_ref()
@@ -481,6 +506,11 @@ impl PinSightApp {
             gif_rx: None,
             voice_rx: None,
             pdf_rx: None,
+            auto_last_fire: std::time::Instant::now(),
+            auto_last_sample: std::time::Instant::now(),
+            auto_prev_frame: None,
+            auto_count: 0,
+            auto_rx: None,
             next_pin_id: 1,
             root_restore: None,
             pending_area: None,
@@ -2374,6 +2404,168 @@ impl PinSightApp {
                 self.voice_rx = None;
             }
         }
+    }
+
+    /// Drive unattended captures. All screen grabbing, pixel comparison and
+    /// workflow I/O happen on a worker thread; this method only decides *when*
+    /// to start a tick and relays the result into a toast. The repaint is
+    /// scheduled from the effective cadence so an idle, tray-hidden process
+    /// still wakes up on time without polling every frame.
+    fn poll_automation(&mut self, ctx: &egui::Context) {
+        // 1. Harvest a finished tick before considering a new one.
+        if let Some(rx) = self.auto_rx.as_ref() {
+            match rx.try_recv() {
+                Ok(Ok(tick)) => {
+                    self.auto_rx = None;
+                    self.auto_prev_frame = tick.frame;
+                    if tick.fired {
+                        self.auto_count = self.auto_count.saturating_add(1);
+                        if let Some(report) = tick.report {
+                            if report.ok() {
+                                self.toast(
+                                    format!("{}: {}", self.tr.tr.auto_done, report.summary()),
+                                    false,
+                                );
+                            } else {
+                                self.toast(
+                                    format!(
+                                        "{}: {}",
+                                        self.tr.tr.auto_failed,
+                                        report.errors.join("; ")
+                                    ),
+                                    true,
+                                );
+                            }
+                        }
+                    }
+                }
+                Ok(Err(err)) => {
+                    self.toast(format!("{}: {err}", self.tr.tr.auto_failed), true);
+                    self.auto_rx = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    return; // a tick is still running
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.auto_rx = None;
+                }
+            }
+        }
+
+        let cfg = self.config.automation.clone();
+        if !cfg.enabled {
+            // Drop the cached frame so a re-enabled monitor starts fresh and
+            // we don't hold a full-screen buffer while automation is off.
+            self.auto_prev_frame = None;
+            return;
+        }
+        // Never layer an automatic capture over an active overlay/recording.
+        if self.busy_with_capture() || self.capture_blocked_by_ui(ctx) {
+            return;
+        }
+        if cfg.max_captures > 0 && self.auto_count >= cfg.max_captures {
+            return;
+        }
+
+        let now = chrono::Local::now();
+        let hms = (now.hour() as u8, now.minute() as u8, now.second() as u8);
+        let since_fire = self.auto_last_fire.elapsed();
+        let schedule = cfg.schedule();
+        let schedule_due = crate::automation::is_due(&schedule, hms, since_fire);
+        // Region monitoring samples on its own cadence. It is only consulted
+        // when no scheduled capture is due, so a monitored region cannot
+        // multiply an already-fixed capture rate.
+        let monitor_due = cfg.monitor_enabled
+            && !schedule_due
+            && self.auto_last_sample.elapsed() >= cfg.monitor_period();
+
+        // Choose the wake-up interval: the nearest of the schedule countdown
+        // and the monitor period, capped at 5 s so config changes take effect
+        // promptly and a clock/DST jump cannot stall us for a whole day.
+        let cadence = if cfg.monitor_enabled {
+            cfg.monitor_period()
+        } else {
+            schedule
+                .next_in(hms, since_fire)
+                .unwrap_or(Duration::from_secs(5))
+        };
+        ctx.request_repaint_after(
+            cadence
+                .min(Duration::from_secs(5))
+                .max(Duration::from_millis(200)),
+        );
+
+        if !schedule_due && !monitor_due {
+            return;
+        }
+
+        // Snapshot everything the worker needs; no borrows cross the spawn.
+        // A scheduled capture always fires; a monitor sample fires only when
+        // the sampled frame differs enough from the previous one.
+        let fire_on_change = monitor_due && !schedule_due;
+        if schedule_due {
+            self.auto_last_fire = Instant::now();
+        }
+        if monitor_due {
+            self.auto_last_sample = Instant::now();
+        }
+        let prev = self.auto_prev_frame.take();
+        let monitor = cfg.monitor_enabled;
+        let rect: Option<crate::util::PhysRect> =
+            cfg.monitor_rect.map(|[x, y, w, h]| crate::util::PhysRect {
+                x,
+                y,
+                w: w.max(0) as u32,
+                h: h.max(0) as u32,
+            });
+        let threshold = cfg.monitor_threshold;
+        let plan = cfg.workflow_plan();
+        let mut params = crate::autorun::RunParams::from_config(&self.config);
+        if params.upload.backend == crate::config::UploadBackend::Local
+            && params.upload.local.folder.as_os_str().is_empty()
+        {
+            params.upload.local.folder = self.config.save_dir.join("uploaded");
+        }
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.auto_rx = Some(rx);
+        std::thread::Builder::new()
+            .name("pinsight-automation".into())
+            .spawn(move || {
+                let result = (|| -> Result<crate::autorun::AutoTick, String> {
+                    let grab = match rect {
+                        Some(r) => capture::grab_physical_rect(r),
+                        None => capture::grab_full_screen().map(|(_, img)| img),
+                    };
+                    let frame = grab.map_err(|e| e.to_string())?;
+                    // Monitor mode: compare against the previous sample. The
+                    // very first tick only seeds the baseline (never fires), so
+                    // enabling the monitor does not immediately dump a capture.
+                    let changed = match &prev {
+                        Some(p) => crate::automation::region_changed(p, &frame, threshold, 4),
+                        None => false,
+                    };
+                    // A scheduled tick always fires. A monitor-only tick fires
+                    // only when the region changed; the first sample seeds the
+                    // baseline (`prev == None`) and never produces a capture.
+                    let fired = if fire_on_change { changed } else { true };
+                    let report = if fired {
+                        Some(crate::autorun::execute(&frame, &plan, &params))
+                    } else {
+                        None
+                    };
+                    // Keep the frame only when we are monitoring (needed for
+                    // the next comparison); a scheduled capture need not hold
+                    // a full-screen buffer between ticks.
+                    Ok(crate::autorun::AutoTick {
+                        fired,
+                        report,
+                        frame: if monitor { Some(frame) } else { None },
+                    })
+                })();
+                let _ = tx.send(result);
+            })
+            .ok();
     }
 
     /// The GIF editor page: pick a GIF, pick an operation, run it on a worker
@@ -6517,6 +6709,115 @@ impl PinSightApp {
                 }
             });
         });
+
+        // ---- automation ---------------------------------------------------
+        ui::card(ui, p, |ui| {
+            ui::section_header(ui, p, Icon::Record, t.sec_automation);
+            ui.add_space(4.0);
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(t.auto_hint)
+                        .size(11.0)
+                        .color(p.text_weak),
+                )
+                .wrap(),
+            );
+            ui.add_space(6.0);
+
+            ui::field_row(ui, p, t.auto_enable, |ui| {
+                if ui::toggle(ui, p, &mut self.config.automation.enabled).changed() {
+                    // Restart the countdowns so enabling after a long idle does
+                    // not immediately fire a backlog of interval captures.
+                    self.auto_last_fire = Instant::now();
+                    self.auto_last_sample = Instant::now();
+                    self.auto_count = 0;
+                    self.auto_prev_frame = None;
+                    let _ = self.config.save();
+                }
+            });
+
+            // Interval as a numeric field. `field_row` is right-to-left, so a
+            // single text edit sits flush right.
+            ui::field_row(ui, p, t.auto_interval, |ui| {
+                let mut secs = self.config.automation.interval_secs.to_string();
+                if ui
+                    .add_sized(
+                        egui::vec2(90.0, 24.0),
+                        egui::TextEdit::singleline(&mut secs),
+                    )
+                    .changed()
+                {
+                    self.config.automation.interval_secs =
+                        secs.trim().parse::<u64>().unwrap_or(0).min(86_400);
+                    let _ = self.config.save();
+                }
+            });
+
+            ui::field_row(ui, p, t.auto_daily, |ui| {
+                if ui
+                    .text_edit_singleline(&mut self.auto_daily_draft)
+                    .lost_focus()
+                {
+                    self.config.automation.daily_times = self
+                        .auto_daily_draft
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    let _ = self.config.save();
+                }
+            });
+
+            ui::field_row(ui, p, t.auto_monitor, |ui| {
+                if ui::toggle(ui, p, &mut self.config.automation.monitor_enabled).changed() {
+                    self.auto_prev_frame = None;
+                    let _ = self.config.save();
+                }
+            });
+
+            ui::field_row(ui, p, t.auto_threshold, |ui| {
+                let mut v = self.config.automation.monitor_threshold;
+                if ui::slider(ui, p, &mut v, 0.0..=64.0, 1, "").changed() {
+                    self.config.automation.monitor_threshold = v;
+                    let _ = self.config.save();
+                }
+            });
+
+            ui::field_row(ui, p, t.auto_workflow, |ui| {
+                if ui
+                    .text_edit_singleline(&mut self.auto_workflow_draft)
+                    .lost_focus()
+                {
+                    self.config.automation.workflow = self
+                        .auto_workflow_draft
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    let _ = self.config.save();
+                }
+            });
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(t.auto_workflow_hint)
+                        .size(11.0)
+                        .color(p.text_weak),
+                )
+                .wrap(),
+            );
+
+            ui::field_row(ui, p, t.auto_max, |ui| {
+                let mut n = self.config.automation.max_captures.to_string();
+                if ui
+                    .add_sized(egui::vec2(90.0, 24.0), egui::TextEdit::singleline(&mut n))
+                    .changed()
+                {
+                    self.config.automation.max_captures =
+                        n.trim().parse::<u32>().unwrap_or(0).min(100_000);
+                    let _ = self.config.save();
+                }
+            });
+        });
     }
 
     /// Pin window defaults.
@@ -8053,6 +8354,7 @@ impl eframe::App for PinSightApp {
         self.poll_upload();
         self.poll_gif();
         self.poll_voice();
+        self.poll_automation(&ctx);
         self.poll_pdf(&ctx);
         self.poll_update(&ctx);
         self.show_overlay(&ctx);

@@ -15,6 +15,7 @@
 //! - `overlay`  — frozen-screen selection surface
 //! - `annotate` — annotation model, preview and rasterisation
 //! - `filters`  — whole-image adjustments (rotate/flip/invert/blur/emboss)
+//! - `automation` — scheduling, region monitoring, after-capture workflow
 //! - `pin`      — native top-most pin windows
 //! - `longshot` — scroll capture and stitching
 //! - `record`   — frame capture and GIF/MP4 encoding
@@ -24,6 +25,8 @@
 mod annotate;
 mod app;
 mod app_keys;
+mod automation;
+mod autorun;
 mod background;
 mod capture;
 mod cli;
