@@ -487,7 +487,10 @@ fn run(
 fn frames_owed(elapsed: Duration, frames_done: u32, fps: u32) -> u32 {
     ((elapsed.as_secs_f64() * fps as f64) as u32)
         .saturating_sub(frames_done)
-        .min(3600 * fps.max(1))
+        // Cap how many frozen frames a single pause can inject so a long
+        // (forgotten) pause cannot blow up the file size — at most a minute
+        // of freeze-frame, after which the timeline simply runs short.
+        .min(60 * fps.max(1))
 }
 
 /// Owns the temporary `.part` output for one recording.
@@ -783,8 +786,10 @@ impl Sink {
                     rgba,
                     10,
                 );
-                // GIF delays are expressed in hundredths of a second.
-                gif_frame.delay = (100 / fps.max(1)).max(1) as u16;
+                // GIF delays are expressed in hundredths of a second. Use
+                // floating division so high frame rates (e.g. 60 fps) are not
+                // truncated to a too-fast 10 ms (100/60 = 1 in integer math).
+                gif_frame.delay = ((100.0 / fps.max(1) as f64).round().max(1.0)) as u16;
                 encoder.write_frame(&gif_frame).map_err(|e| e.to_string())
             }
             Sink::Mp4 { stdin, rgba, .. } => {
@@ -806,11 +811,31 @@ impl Sink {
             }
             Sink::Mp4 { child, stdin, .. } => {
                 drop(stdin.take());
-                let status = child.wait().map_err(|e| e.to_string())?;
-                if status.success() {
-                    Ok(())
-                } else {
-                    Err(format!("ffmpeg exited with {status}"))
+                // Bound the wait: if ffmpeg stalls while finalising (a codec or
+                // device hang, or a source it never releases), do not wedge the
+                // recorder thread — and with it the UI's stop action — forever.
+                // After the deadline we kill it and report the failure so the
+                // clip is disposed of instead of leaving the app frozen.
+                let deadline = Instant::now() + Duration::from_secs(30);
+                loop {
+                    match child.try_wait() {
+                        Ok(Some(status)) => {
+                            break if status.success() {
+                                Ok(())
+                            } else {
+                                Err(format!("ffmpeg exited with {status}"))
+                            };
+                        }
+                        Ok(None) => {
+                            if Instant::now() >= deadline {
+                                let _ = child.kill();
+                                let _ = child.wait();
+                                break Err("ffmpeg did not finish in time (killed)".into());
+                            }
+                            std::thread::sleep(Duration::from_millis(100));
+                        }
+                        Err(e) => break Err(format!("ffmpeg wait failed: {e}")),
+                    }
                 }
             }
         }
@@ -1047,8 +1072,8 @@ mod tests {
         assert_eq!(frames_owed(Duration::from_secs(2), 5, 10), 15);
         // Nothing owed when the timeline is already ahead.
         assert_eq!(frames_owed(Duration::from_secs(1), 30, 10), 0);
-        // Sanity cap: an hour of frames at most, regardless of elapsed.
-        assert_eq!(frames_owed(Duration::from_secs(100_000), 0, 10), 3600 * 10);
+        // Cap: at most a minute of freeze-frame, regardless of elapsed.
+        assert_eq!(frames_owed(Duration::from_secs(100_000), 0, 10), 60 * 10);
         // fps 0 encodes no frames whatever the elapsed time.
         assert_eq!(frames_owed(Duration::from_secs(1), 0, 0), 0);
     }

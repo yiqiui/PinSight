@@ -147,6 +147,7 @@ struct FindCtx {
 
 #[cfg(windows)]
 unsafe extern "system" fn enum_find_window(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    use windows::Win32::System::Threading::GetCurrentProcessId;
     use windows::Win32::UI::WindowsAndMessaging::{
         GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
     };
@@ -166,6 +167,13 @@ unsafe extern "system" fn enum_find_window(hwnd: HWND, lparam: LPARAM) -> BOOL {
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, Some(&mut pid as *mut u32));
         if pid == 0 {
+            return BOOL::from(true);
+        }
+        // Never match this very process: the second launch owns a window too,
+        // and EnumWindows visits windows in unspecified order, so without this
+        // we could raise ourselves instead of the already-running instance and
+        // then exit silently.
+        if pid == GetCurrentProcessId() {
             return BOOL::from(true);
         }
         let owner = match process_image_name(pid) {

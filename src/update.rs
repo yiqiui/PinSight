@@ -388,24 +388,37 @@ pub fn start_download(
     let c = Arc::clone(&cancel);
     let total = asset.size;
 
-    std::thread::Builder::new()
+    // Download to a sibling `*.part` file, then atomically rename it onto the
+    // final name once it is complete and (when available) verified. A crash,
+    // cancellation, truncation or hash mismatch leaves no half-written file
+    // bearing the final name for the next launch to trip over.
+    let part_name = format!("{}.part", asset.name);
+    // Clone the sender for the worker thread; the original must stay free for
+    // the spawn-failure path below.
+    let tx_thread = tx.clone();
+    let handle = std::thread::Builder::new()
         .name("pinsight-update-dl".into())
         .spawn(move || {
             let result = (|| -> Result<PathBuf, String> {
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-                let path = dir.join(&asset.name);
+                let part = dir.join(&part_name);
+                // Start clean: a stale/corrupt partial from a previous
+                // interrupted run must not be appended to.
+                let _ = std::fs::remove_file(&part);
                 let mut resp = client(&cfg, None)
                     .get(&asset.url)
                     .send()
                     .map_err(|e| format!("network: {e}"))?;
                 if !resp.status().is_success() {
+                    let _ = std::fs::remove_file(&part);
                     return Err(format!("download {}", resp.status()));
                 }
-                let mut file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+                let mut file = std::fs::File::create(&part).map_err(|e| e.to_string())?;
+                let mut written: u64 = 0;
                 let mut buf = vec![0u8; 64 * 1024];
                 loop {
                     if c.load(Ordering::Relaxed) {
-                        let _ = std::fs::remove_file(&path);
+                        let _ = std::fs::remove_file(&part);
                         return Err("cancelled".into());
                     }
                     let n = resp.read(&mut buf).map_err(|e| e.to_string())?;
@@ -413,19 +426,49 @@ pub fn start_download(
                         break;
                     }
                     file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
+                    written += n as u64;
                     p.fetch_add(n as u64, Ordering::Relaxed);
                 }
-                // Verify integrity against the release checksum manifest (if the
-                // release ships one) before handing the file back. This fails
-                // closed: a missing or mismatched hash blocks installation.
-                if let Some(cs) = &checksums {
-                    verify_asset(&path, &asset.name, cs, &cfg)?;
+                file.flush().map_err(|e| e.to_string())?;
+                drop(file);
+                // Size integrity: catches a truncated/corrupt download even for
+                // releases that never shipped a checksum manifest (previously
+                // fail-open), since GitHub reports the expected byte length. A
+                // size of 0 means the API did not report one, in which case we
+                // fall back to the hash check below when a manifest is present.
+                if asset.size > 0 && written != asset.size {
+                    let _ = std::fs::remove_file(&part);
+                    return Err(format!(
+                        "download incomplete: received {written} bytes, expected {}",
+                        asset.size
+                    ));
                 }
-                Ok(path)
+                // Verify integrity against the release checksum manifest (if the
+                // release ships one) before publishing. Fails closed: a missing
+                // or mismatched hash blocks installation.
+                if let Some(cs) = &checksums {
+                    if let Err(e) = verify_asset(&part, &asset.name, cs, &cfg) {
+                        let _ = std::fs::remove_file(&part);
+                        return Err(e);
+                    }
+                }
+                let final_path = dir.join(&asset.name);
+                std::fs::rename(&part, &final_path).map_err(|e| e.to_string())?;
+                Ok(final_path)
             })();
-            let _ = tx.send(result);
-        })
-        .ok();
+            let _ = tx_thread.send(result);
+        });
+    match handle {
+        Ok(_) => {}
+        Err(e) => {
+            // Thread creation failed: without a worker the channel would never
+            // receive, which would block the UI's poll forever. Surface the
+            // failure immediately instead.
+            let _ = tx.send(Err(format!(
+                "could not start the update download thread: {e}"
+            )));
+        }
+    }
 
     DownloadJob {
         rx,
@@ -605,14 +648,19 @@ pub fn install_and_restart(source_dir: &Path) -> Result<(), String> {
          setlocal\r\n\
          set \"SRC={src}\"\r\n\
          set \"DST={dst}\"\r\n\
+         set WAIT=0\r\n\
          :wait\r\n\
          tasklist /FI \"IMAGENAME eq pinsight.exe\" 2>nul | find /I \"pinsight.exe\" >nul\r\n\
-         if not errorlevel 1 (\r\n\
-         \x20 timeout /t 1 /nobreak >nul\r\n\
-         \x20 goto wait\r\n\
-         )\r\n\
+         if errorlevel 1 goto copy\r\n\
+         set /A WAIT+=1\r\n\
+         if %WAIT% GEQ 30 goto copy\r\n\
+         timeout /t 1 /nobreak >nul\r\n\
+         goto wait\r\n\
+         :copy\r\n\
          xcopy /Y /E /I \"%SRC%\\*\" \"%DST%\\\" >nul\r\n\
+         if errorlevel 1 goto cleanup\r\n\
          start \"\" \"%DST%\\pinsight.exe\"\r\n\
+         :cleanup\r\n\
          rmdir /S /Q \"%SRC%\"\r\n\
          (goto) 2>nul & del \"%~f0\"\r\n",
         src = source_dir.display(),

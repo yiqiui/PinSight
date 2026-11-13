@@ -44,8 +44,8 @@ macro_rules! block_op {
             })
             .context("subscribing to async operation")?;
         let res = rx
-            .recv()
-            .map_err(|_| anyhow::anyhow!("async operation did not complete"))?;
+            .recv_timeout(std::time::Duration::from_secs(60))
+            .map_err(|_| anyhow::anyhow!("async operation did not complete (or timed out)"))?;
         res.map_err(anyhow::Error::from)
     }};
 }

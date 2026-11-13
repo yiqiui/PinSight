@@ -768,6 +768,26 @@ mod imp {
             None
         }
 
+        /// The modifier currently held at the time of a mouse event, encoded the
+        /// same way `pin_gesture_action` expects it: 1 = Ctrl, 2 = Shift,
+        /// 3 = Alt, 0 = none. This is what makes a plain binding refuse to fire
+        /// while a modifier is down, and lets a modified binding ignore the
+        /// plain one.
+        fn current_gesture_modifier() -> u32 {
+            let ctrl = unsafe { GetKeyState(VK_CONTROL.0 as i32) } < 0;
+            let shift = unsafe { GetKeyState(0x10) } < 0;
+            let alt = unsafe { GetKeyState(0x12) } < 0;
+            if ctrl {
+                1
+            } else if shift {
+                2
+            } else if alt {
+                3
+            } else {
+                0
+            }
+        }
+
         /// Run one pin action. Kept out of the window procedure so the match arms stay
         /// readable.
         unsafe fn run_pin_action(hwnd: HWND, ctx: &mut PinCtx, action: PinAction) {
@@ -833,7 +853,9 @@ mod imp {
                     3
                 };
                 if let Some(ctx) = ctx_from(hwnd) {
-                    if let Some(action) = pin_gesture_action(ctx, 0, button, true) {
+                    if let Some(action) =
+                        pin_gesture_action(ctx, current_gesture_modifier(), button, true)
+                    {
                         run_pin_action(hwnd, ctx, action);
                     }
                 }
@@ -842,7 +864,7 @@ mod imp {
             WM_MBUTTONDOWN => {
                 let close = ctx_from(hwnd)
                     .map(|c| {
-                        pin_gesture_action(c, 0, 2, false)
+                        pin_gesture_action(c, current_gesture_modifier(), 2, false)
                             .map(|a| a == PinAction::Close)
                             .unwrap_or(c.middle_close)
                     })
@@ -925,7 +947,9 @@ mod imp {
                 if let Some(ctx) = ctx_from(hwnd) {
                     let delta = ((wparam.0 >> 16) & 0xffff) as i16 as f32 / 120.0;
                     // A configured binding wins over the legacy flags.
-                    if let Some(action) = pin_gesture_action(ctx, 0, 0, false) {
+                    if let Some(action) =
+                        pin_gesture_action(ctx, current_gesture_modifier(), 0, false)
+                    {
                         match action {
                             PinAction::Zoom => {
                                 let old = ctx.zoom;

@@ -1239,6 +1239,13 @@ impl Config {
     }
 
     pub fn save(&self) -> std::io::Result<()> {
+        // Serialise saves so two callers (e.g. a settings-page edit and a
+        // hotkey-triggered toggle) cannot race writing the same `*.tmp` and
+        // clobber each other's fields with a last-writer-wins rename.
+        static SAVE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = SAVE_LOCK
+            .lock()
+            .map_err(|_| std::io::Error::other("config save lock poisoned"))?;
         let path = Self::path();
         // Keep the previous file around so a bad edit is recoverable.
         if self.auto_backup_config && path.exists() {

@@ -53,6 +53,48 @@ _Nothing yet — changes land here until the next tagged release._
   exact title match. This avoids missing the window when its title changes
   (e.g. during a capture) and prevents grabbing an unrelated app that happens
   to share the name.
+- **Skip the current process in single-instance enumeration.**
+  `enum_find_window` now ignores windows owned by the just-launched process
+  itself. Because `EnumWindows` visits windows in unspecified order, without
+  this guard the second launch could match its own window, raise itself, and
+  then exit silently — defeating the single-instance check. (Windows only.)
+- **Bound the ffmpeg finalise wait during recording.** `Sink::finish()` for
+  MP4 used an unbounded `child.wait()`. If ffmpeg stalled while muxing (a
+  codec/device hang or a source it never released), the recorder thread — and
+  with it the UI's Stop action — would wedge forever. It now polls with a
+  30-second deadline, then kills ffmpeg and reports the failure so the clip is
+  discarded instead of freezing the app.
+- **Fix GIF frame delay at high frame rates.** The delay was computed with
+  integer division (`100 / fps`), which truncates to 1 (10 ms ≈ 100 fps)
+  for anything above 10 fps, making high-fps GIFs play far too fast. It now
+  uses floating-point division and rounding, so e.g. 60 fps yields the correct
+  ~17 ms per frame.
+- **Cap freeze-frame injection on a long pause.** A single, forgotten pause
+  could previously owe up to an hour of duplicate frames (`3600 * fps`),
+  bloating the clip. It is now capped at one minute of freeze-frame; beyond
+  that the timeline simply runs short rather than inflating the file.
+- **Make the in-app updater fail-closed and crash-safe.** Downloads now write
+  to a sibling `*.part` file that is removed on any failure (network error,
+  cancellation, truncated size, or hash mismatch) and only renamed onto the
+  final name once complete and verified — a crash or bad download never leaves
+  a half-written asset with the shipped name. A reported `asset.size` is now
+  checked against the bytes actually received (previously fail-open when no
+  checksum manifest existed), and a failure to spawn the download thread is
+  reported immediately instead of silently blocking the UI's poll forever.
+- **Pass the live gesture modifier to pin actions.** All pin gesture handlers
+  called `pin_gesture_action(ctx, 0, …)` with a hard-coded modifier of `0`,
+  so the "no modifier" guard made modified bindings dead code and a Ctrl/Shift/
+  Alt + click/scroll could never fire. The handlers now read the actually-held
+  modifier via `GetKeyState`, so modifier-specific bindings work and plain
+  bindings correctly refuse to fire while a modifier is down.
+- **Serialise config saves.** `Config::save()` now takes a process-wide lock
+  around its atomic write, so two concurrent writers (e.g. a settings edit and
+  a hotkey-triggered toggle) cannot race on the same `*.tmp` and clobber each
+  other's fields with a last-writer-wins rename.
+- **Timeout the synchronous OCR wait.** The `block_op!` helper that blocks on
+  a WinRT async result used an unbounded `recv()`. It now uses a 60-second
+  `recv_timeout`, so a stalled recognition cannot hang the calling thread
+  indefinitely.
 
 ## [0.1.2] - 2026-11-11
 
