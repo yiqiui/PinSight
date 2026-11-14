@@ -238,7 +238,7 @@ fn macos_ax_rect(cursor: (i32, i32), level: ControlLevel) -> Option<PhysRect> {
 /// an error and the cross-platform fallback takes over.
 #[cfg(target_os = "macos")]
 mod ax {
-    use core::ffi::c_void;
+    use core::ffi::{c_char, c_void};
 
     /// Any CF/AX object reference, as used by these C APIs.
     pub type CF = *mut c_void;
