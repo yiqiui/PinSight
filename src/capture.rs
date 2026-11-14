@@ -491,6 +491,80 @@ pub fn composite_cursor(img: &mut RgbaImage, origin: (i32, i32)) {
 #[cfg(not(windows))]
 pub fn composite_cursor(_img: &mut RgbaImage, _origin: (i32, i32)) {}
 
+/// Screen-space position of the cursor, or `None` when no cursor is showing.
+#[cfg(windows)]
+pub fn cursor_screen_pos() -> Option<(i32, i32)> {
+    use windows::Win32::UI::WindowsAndMessaging::{CURSORINFO, GetCursorInfo};
+    unsafe {
+        let mut info = CURSORINFO {
+            cbSize: std::mem::size_of::<CURSORINFO>() as u32,
+            ..Default::default()
+        };
+        if GetCursorInfo(&mut info).is_ok() {
+            Some((info.ptScreenPos.x, info.ptScreenPos.y))
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn cursor_screen_pos() -> Option<(i32, i32)> {
+    None
+}
+
+/// Draw the cursor highlight ring (see `effects`) around the live cursor onto a
+/// capture. `origin` is the screen-space top-left of `img`; the ring is placed
+/// relative to it.
+#[cfg(windows)]
+pub fn composite_cursor_effects(
+    img: &mut RgbaImage,
+    origin: (i32, i32),
+    highlight: [u8; 3],
+    radius: u32,
+) {
+    if let Some((cx, cy)) = cursor_screen_pos() {
+        crate::effects::highlight_ring(img, (cx - origin.0, cy - origin.1), highlight, radius);
+    }
+}
+
+#[cfg(not(windows))]
+pub fn composite_cursor_effects(
+    _img: &mut RgbaImage,
+    _origin: (i32, i32),
+    _highlight: [u8; 3],
+    _radius: u32,
+) {
+}
+
+/// Bitmask of currently-pressed mouse buttons: `1` = left, `2` = right,
+/// `4` = middle. Polled (not hooked) so it works from any thread, including the
+/// recorder worker which has no message pump for a low-level mouse hook.
+#[cfg(windows)]
+pub fn mouse_buttons_down() -> u8 {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_LBUTTON, VK_MBUTTON, VK_RBUTTON,
+    };
+    let mut mask = 0u8;
+    unsafe {
+        if GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0 {
+            mask |= 1;
+        }
+        if GetAsyncKeyState(VK_RBUTTON.0 as i32) < 0 {
+            mask |= 2;
+        }
+        if GetAsyncKeyState(VK_MBUTTON.0 as i32) < 0 {
+            mask |= 4;
+        }
+    }
+    mask
+}
+
+#[cfg(not(windows))]
+pub fn mouse_buttons_down() -> u8 {
+    0
+}
+
 /// True when every sampled pixel of `img` is black — the signature of a failed
 /// capture rather than a dark desktop. A genuinely black screen is harmless:
 /// the fallback returns the same black image and the caller keeps the first.

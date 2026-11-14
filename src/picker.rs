@@ -84,6 +84,8 @@ pub enum ColorTarget {
     PinTextFg,
     DecoBorder,
     DecoShadow,
+    CursorHighlight,
+    CursorClick,
 }
 
 impl ColorTarget {
@@ -98,6 +100,8 @@ impl ColorTarget {
             Self::PinTextFg => t.pin_text_fg,
             Self::DecoBorder => t.deco_border_color,
             Self::DecoShadow => t.deco_shadow_color,
+            Self::CursorHighlight => t.cursor_highlight_color,
+            Self::CursorClick => t.cursor_click_color,
         }
     }
 }

@@ -199,6 +199,14 @@ pub struct RecordOptions {
     pub mic: Option<String>,
     /// Pre-recording countdown seconds.
     pub countdown: u32,
+    /// Draw a highlight ring around the cursor and expanding ripples on clicks.
+    pub cursor_effects: bool,
+    /// Colour of the cursor highlight ring, RGB.
+    pub cursor_highlight_color: [u8; 3],
+    /// Colour of the click ripple, RGB.
+    pub cursor_click_color: [u8; 3],
+    /// Radius (px) of the cursor highlight ring.
+    pub cursor_ring_radius: u32,
     /// Optional watermark burned into every frame. Shares the screenshot
     /// decoration settings, so a user who set one gets it on video too.
     pub watermark: Option<crate::decorate::WatermarkDeco>,
@@ -396,6 +404,16 @@ fn run(
     // a warning instead of an unqualified "saved" toast.
     let mut capture_failed: Option<String> = None;
 
+    // Cursor effects state. The recorder worker has no message pump, so clicks
+    // are detected by polling `GetAsyncKeyState` for down-edges rather than via
+    // a low-level mouse hook. Only used on Windows; declared under cfg so the
+    // symbols do not dangle on other platforms.
+    #[cfg(windows)]
+    let mut active_clicks =
+        crate::effects::ActiveClicks::new(450, opts.cursor_ring_radius.saturating_mul(4).max(8));
+    #[cfg(windows)]
+    let mut prev_buttons: u8 = 0;
+
     // Enumerate monitors once. `Monitor::all()` is expensive; calling it every
     // frame (15–30×/s) starved the compositor and made the live cursor stutter
     // and jump during recording. A monitor cannot change mid-recording, so
@@ -428,7 +446,7 @@ fn run(
             }
         }
         let tick = Instant::now();
-        let image = match mon.capture_region(rx, ry, rw, rh) {
+        let mut image = match mon.capture_region(rx, ry, rw, rh) {
             Ok(image) => image,
             Err(err) => {
                 if frames == 0 {
@@ -444,6 +462,32 @@ fn run(
                 break;
             }
         };
+
+        // Cursor effects: highlight ring around the live cursor plus expanding
+        // ripples on recent clicks. Composited in image space, so the region
+        // origin (rx, ry) is subtracted from screen coordinates.
+        #[cfg(windows)]
+        if opts.cursor_effects {
+            let origin = (rx as i32, ry as i32);
+            if let Some((cx, cy)) = capture::cursor_screen_pos() {
+                crate::effects::highlight_ring(
+                    &mut image,
+                    (cx - origin.0, cy - origin.1),
+                    opts.cursor_highlight_color,
+                    opts.cursor_ring_radius,
+                );
+            }
+            let mask = capture::mouse_buttons_down();
+            let pressed = mask & 1 != 0 && prev_buttons & 1 == 0;
+            if pressed {
+                if let Some((cx, cy)) = capture::cursor_screen_pos() {
+                    active_clicks.push(cx, cy);
+                }
+            }
+            prev_buttons = mask;
+            active_clicks.draw(&mut image, origin, opts.cursor_click_color);
+        }
+
         if let Err(e) = sink.write(&image, fps) {
             // ffmpeg crashed or its stdin closed mid-stream: abandon it. The
             // PartGuard drops the partial `.part` output so we ship nothing.

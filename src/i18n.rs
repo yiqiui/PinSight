@@ -450,6 +450,11 @@ strings! {
     cap_magnifier_size { en: "Magnifier area", zh: "放大镜范围", tw: "放大鏡範圍", ja: "拡大範囲", ko: "돋보기 범위", fr: "Zone de la loupe", de: "Lupenbereich" }
     cap_color_format { en: "Colour value", zh: "颜色值格式", tw: "顏色值格式", ja: "色の表記", ko: "색상 표기", fr: "Format de couleur", de: "Farbformat" }
     cap_pointer { en: "Capture the mouse cursor", zh: "捕捉鼠标指针", tw: "捕捉滑鼠指標", ja: "マウスカーソルを含める", ko: "마우스 커서 포함", fr: "Inclure le curseur", de: "Mauszeiger aufnehmen" }
+    cursor_effects { en: "Cursor effects", zh: "光标特效", tw: "游標特效", ja: "カーソルエフェクト", ko: "커서 효과", fr: "Effets de curseur", de: "Cursor-Effekte" }
+    cursor_effects_hint { en: "Highlight ring on the cursor and an expanding ripple on clicks, burned into screenshots and recordings.", zh: "在光标处加高亮圆环，点击时叠加扩散涟漪，写入截图与录屏。", tw: "在游標處加高亮圓環，點擊時疊加擴散漣漪，寫入截圖與錄影。", ja: "カーソルにハイライトリング、クリック時に広がる波紋を截图と録画に焼き込みます。", ko: "커서에 강조 링을 그리고 클릭 시 퍼지는 물결을 캡처와 녹화에 삽입합니다.", fr: "Anneau sur le curseur et onde à chaque clic, inclus dans les captures et vidéos.", de: "Ring um den Cursor und Welle bei Klicks, in Screenshots und Videos eingebrannt." }
+    cursor_highlight_color { en: "Highlight colour", zh: "高亮颜色", tw: "高亮顏色", ja: "ハイライト色", ko: "강조 색", fr: "Couleur de surbrillance", de: "Hervorhebungsfarbe" }
+    cursor_click_color { en: "Click ripple colour", zh: "点击涟漪颜色", tw: "點擊漣漪顏色", ja: "クリック波紋色", ko: "클릭 물결 색", fr: "Couleur de l'onde", de: "Klick-Wellenfarbe" }
+    cursor_ring_radius { en: "Ring radius (px)", zh: "圆环半径（像素）", tw: "圓環半徑（像素）", ja: "リング半径（px）", ko: "링 반지름(px)", fr: "Rayon de l'anneau (px)", de: "Ringradius (px)" }
     fmt_hex { en: "HEX", zh: "十六进制", tw: "十六進位", ja: "HEX", ko: "HEX", fr: "HEX", de: "HEX" }
     fmt_rgb { en: "RGB", zh: "RGB", tw: "RGB", ja: "RGB", ko: "RGB", fr: "RVB", de: "RGB" }
     fmt_hsl { en: "HSL", zh: "HSL", tw: "HSL", ja: "HSL", ko: "HSL", fr: "TSL", de: "HSL" }

@@ -716,6 +716,8 @@ impl PinSightApp {
                 .as_ref()
                 .map(|s| s.color)
                 .unwrap_or([0, 0, 0]),
+            ColorTarget::CursorHighlight => self.config.cursor_highlight_color,
+            ColorTarget::CursorClick => self.config.cursor_click_color,
         };
         self.picker = Some(crate::picker::ColorPicker::new(
             target,
@@ -753,6 +755,8 @@ impl PinSightApp {
                     s.color = rgb;
                 }
             }
+            ColorTarget::CursorHighlight => self.config.cursor_highlight_color = rgb,
+            ColorTarget::CursorClick => self.config.cursor_click_color = rgb,
         }
         let _ = self.config.save();
     }
@@ -1379,6 +1383,14 @@ impl PinSightApp {
                         if pointer {
                             capture::composite_cursor(&mut image, (monitor.rect.x, monitor.rect.y));
                         }
+                        if self.config.show_cursor_effects {
+                            capture::composite_cursor_effects(
+                                &mut image,
+                                (monitor.rect.x, monitor.rect.y),
+                                self.config.cursor_highlight_color,
+                                self.config.cursor_ring_radius,
+                            );
+                        }
                         Ok((monitor, image))
                     });
                     self.restore_root(ctx);
@@ -1444,6 +1456,14 @@ impl PinSightApp {
                         if pointer {
                             capture::composite_cursor(&mut image, (monitor.rect.x, monitor.rect.y));
                         }
+                        if self.config.show_cursor_effects {
+                            capture::composite_cursor_effects(
+                                &mut image,
+                                (monitor.rect.x, monitor.rect.y),
+                                self.config.cursor_highlight_color,
+                                self.config.cursor_ring_radius,
+                            );
+                        }
                         (monitor, image)
                     });
                     self.restore_root(ctx);
@@ -1479,6 +1499,14 @@ impl PinSightApp {
                         .map(|mut image| {
                             if pointer {
                                 capture::composite_cursor(&mut image, (rect.x, rect.y));
+                            }
+                            if self.config.show_cursor_effects {
+                                capture::composite_cursor_effects(
+                                    &mut image,
+                                    (rect.x, rect.y),
+                                    self.config.cursor_highlight_color,
+                                    self.config.cursor_ring_radius,
+                                );
                             }
                             image
                         });
@@ -2212,6 +2240,10 @@ impl PinSightApp {
                 None
             },
             countdown: c.record_countdown,
+            cursor_effects: c.show_cursor_effects,
+            cursor_highlight_color: c.cursor_highlight_color,
+            cursor_click_color: c.cursor_click_color,
+            cursor_ring_radius: c.cursor_ring_radius,
             // The watermark is shared with screenshots: one switch covers both.
             watermark: c.decorations.watermark.clone(),
         }
@@ -2401,8 +2433,8 @@ impl PinSightApp {
                 // Render a waveform thumbnail (or a plain accent card if the
                 // WAV cannot be parsed) and pin it with the audio attached so
                 // the user can double-click to play it back.
-                let image = crate::voice::thumbnail(&path)
-                    .unwrap_or_else(crate::voice::fallback_thumbnail);
+                let image =
+                    crate::voice::thumbnail(&path).unwrap_or_else(crate::voice::fallback_thumbnail);
                 self.add_pin(image, Some(path.clone()));
                 self.toast(self.tr.tr.voice_pinned, false);
                 self.voice_rx = None;
@@ -6732,6 +6764,47 @@ impl PinSightApp {
 
             ui::field_row(ui, p, t.cap_pointer, |ui| {
                 if ui::toggle(ui, p, &mut self.config.capture_pointer).changed() {
+                    let _ = self.config.save();
+                }
+            });
+
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new(t.cursor_effects)
+                    .size(13.0)
+                    .color(p.text)
+                    .strong(),
+            );
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(t.cursor_effects_hint)
+                        .size(11.0)
+                        .color(p.text_weak),
+                )
+                .wrap(),
+            );
+            ui.add_space(4.0);
+            ui::field_row(ui, p, t.cursor_effects, |ui| {
+                if ui::toggle(ui, p, &mut self.config.show_cursor_effects).changed() {
+                    let _ = self.config.save();
+                }
+            });
+            ui::field_row(ui, p, t.cursor_highlight_color, |ui| {
+                let rgb = self.config.cursor_highlight_color;
+                if ui::color_field(ui, p, rgb).clicked() {
+                    self.open_color_picker(crate::picker::ColorTarget::CursorHighlight);
+                }
+            });
+            ui::field_row(ui, p, t.cursor_click_color, |ui| {
+                let rgb = self.config.cursor_click_color;
+                if ui::color_field(ui, p, rgb).clicked() {
+                    self.open_color_picker(crate::picker::ColorTarget::CursorClick);
+                }
+            });
+            ui::field_row(ui, p, t.cursor_ring_radius, |ui| {
+                let mut value = self.config.cursor_ring_radius as f32;
+                if ui::slider(ui, p, &mut value, 6.0..=48.0, 0, " px").changed() {
+                    self.config.cursor_ring_radius = value.round() as u32;
                     let _ = self.config.save();
                 }
             });

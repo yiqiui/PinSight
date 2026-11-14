@@ -414,6 +414,16 @@ pub struct Config {
     pub color_format: ColorFormat,
     /// Composite the mouse cursor into full-screen captures.
     pub capture_pointer: bool,
+    /// Draw a highlight ring around the cursor on captures and recordings so it
+    /// reads clearly against busy backgrounds. Independent of `capture_pointer`:
+    /// the ring marks the cursor position even when the arrow itself is absent.
+    pub show_cursor_effects: bool,
+    /// Colour of the cursor highlight ring, RGB.
+    pub cursor_highlight_color: [u8; 3],
+    /// Colour of the click ripple, RGB.
+    pub cursor_click_color: [u8; 3],
+    /// Radius (px) of the cursor highlight ring.
+    pub cursor_ring_radius: u32,
     /// Seconds to wait after a capture is triggered before grabbing (0 = now).
     /// Lets the user open a menu, hover a tooltip or arrange a window first.
     pub capture_delay_secs: u32,
@@ -924,6 +934,10 @@ impl Default for Config {
             capture_magnifier_size: 15,
             color_format: ColorFormat::Hex,
             capture_pointer: false,
+            show_cursor_effects: true,
+            cursor_highlight_color: [78, 205, 196],
+            cursor_click_color: [255, 96, 96],
+            cursor_ring_radius: 18,
             capture_delay_secs: 0,
             decorations: crate::decorate::Decorations::default(),
             window_shadow: crate::window_shadow::Mode::Off,

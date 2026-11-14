@@ -34,6 +34,7 @@ mod cli;
 mod clipboard;
 mod config;
 mod decorate;
+mod effects;
 mod filters;
 mod fonts;
 mod gifedit;

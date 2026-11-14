@@ -77,6 +77,14 @@ _Nothing yet — changes land here until the next tagged release._
   WAV-PCM parser (`voice::parse_pcm`) so the waveform is correct for 8/16/24/32-bit
   mono/stereo files; a plain accent card is used as a fallback when the audio
   cannot be parsed. In-app decoding stays out of scope on purpose.
+- **Cursor effects for captures and recordings.** Settings → Capture → Cursor
+  effects adds a highlight ring around the live cursor and an expanding ripple on
+  every mouse click, burned into screenshots and screen recordings (the existing
+  webcam picture-in-picture is unaffected). Colours and ring radius are
+  configurable; clicks are detected by polling `GetAsyncKeyState` so the ripple
+  works from the recorder worker thread, which has no message pump for a
+  low-level mouse hook. The ring/ripple geometry lives in a pure, unit-tested
+  `effects` module.
 
 ### Changed
 
