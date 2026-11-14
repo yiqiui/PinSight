@@ -85,6 +85,36 @@ _Nothing yet — changes land here until the next tagged release._
   works from the recorder worker thread, which has no message pump for a
   low-level mouse hook. The ring/ripple geometry lives in a pure, unit-tested
   `effects` module.
+- **Control-level smart capture ("capture the control at the cursor"), cross-platform.**
+  A new action snaps the UI control under the cursor instead of a hand-drawn
+  region, using each platform's own detection engine: **Windows** hits the point
+  with UI Automation first (resolving buttons, inputs, list rows and tabs in
+  modern UWP/WinUI/Electron apps whose controls are not real window handles),
+  then falls back to a Win32 hit-test for legacy widgets; **macOS** uses the
+  Accessibility API (`AXUIElementCopyElementAtPosition`, hand-written FFI with no
+  new dependencies) and silently degrades to the window level when the user has
+  not granted Accessibility permission; **Linux under X11 or XWayland** walks the
+  X11 window tree (`x11rb`, pure Rust, no system libraries) and takes the deepest
+  mapped window under the point. The resolved rectangle is grabbed from the
+  desktop and opened straight in the annotation editor, so you can crop-tighten,
+  mark up and copy/pin/save it like any other capture. A "control capture level"
+  setting (Control / Container / Window) chooses how much of the surrounding UI
+  is included — Window uses the exact Win32 root-window hit-test on Windows and
+  the cross-platform window list elsewhere. Every non-Windows level also falls
+  back to the smallest window containing the cursor, so the action still produces
+  a sensible capture when the platform engine cannot resolve a widget. Known
+  ceilings, stated honestly: modern GTK/Qt widgets are not X11 windows, so on
+  Linux they resolve to their nearest mapped ancestor (a true widget-level hit
+  would need an AT-SPI/D-Bus bridge); native Wayland exposes no window geometry
+  to clients, so there the action degrades to the window-list fallback or reports
+  "no control found"; macOS widget-level detection requires the user to grant
+  Accessibility permission first. Windows runs the detection on a throwaway MTA
+  worker (UIA is a classic COM API that must not block the STA GUI thread)
+  bounded by an 800 ms timeout so a hung provider can never freeze the action.
+  Reachable from the Capture page, the tray menu and a configurable hotkey
+  (default `Ctrl+Shift+J`). The engine lives in a pure, unit-tested `snap`
+  module; only the Windows and Linux paths can be compiled and tested locally —
+  the macOS path is verified by the CI matrix builds.
 
 ### Changed
 

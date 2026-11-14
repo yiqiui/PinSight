@@ -24,6 +24,8 @@ pub enum Action {
     RepeatCapture,
     /// Open the screen colour picker (Snipaste-style eyedropper).
     PickColor,
+    /// Snap the UI control under the cursor (smart / control-level capture).
+    CaptureControl,
     /// Toggle one pin group's visibility; the payload is the group id.
     ToggleGroup(u32),
 }
@@ -115,6 +117,7 @@ impl Hotkeys {
             (&config.toggle_pins, Action::TogglePins),
             (&config.repeat_capture, Action::RepeatCapture),
             (&config.pick_color, Action::PickColor),
+            (&config.capture_control, Action::CaptureControl),
         ];
         // Per-group visibility toggles: one action per bound group, carrying
         // the group id so the handler knows which set of pins to flip.

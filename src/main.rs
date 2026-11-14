@@ -57,6 +57,7 @@ mod pin_viewport;
 mod qr;
 mod record;
 mod single_instance;
+mod snap;
 mod startup;
 mod text_font;
 mod theme;

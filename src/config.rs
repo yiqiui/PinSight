@@ -424,6 +424,10 @@ pub struct Config {
     pub cursor_click_color: [u8; 3],
     /// Radius (px) of the cursor highlight ring.
     pub cursor_ring_radius: u32,
+    /// What the "capture control at cursor" action snaps: the leaf control, its
+    /// immediate container, or the whole top-level window.
+    #[serde(default)]
+    pub control_snap_level: crate::snap::ControlLevel,
     /// Seconds to wait after a capture is triggered before grabbing (0 = now).
     /// Lets the user open a menu, hover a tooltip or arrange a window first.
     pub capture_delay_secs: u32,
@@ -806,10 +810,17 @@ pub struct Hotkeys {
     /// Open the screen colour picker (Snipaste-style eyedropper).
     #[serde(default = "default_pick_color_hotkey")]
     pub pick_color: String,
+    /// Snap the UI control under the cursor (smart / control-level capture).
+    #[serde(default = "default_capture_control_hotkey")]
+    pub capture_control: String,
 }
 
 fn default_pick_color_hotkey() -> String {
     "Ctrl+Shift+K".into()
+}
+
+fn default_capture_control_hotkey() -> String {
+    "Ctrl+Shift+J".into()
 }
 
 fn default_repeat_capture_hotkey() -> String {
@@ -838,6 +849,7 @@ impl Hotkeys {
             Action::TogglePins => &self.toggle_pins,
             Action::RepeatCapture => &self.repeat_capture,
             Action::PickColor => &self.pick_color,
+            Action::CaptureControl => &self.capture_control,
             // Group hotkeys live on the groups, not here; the status readout
             // never needs their text.
             Action::ToggleGroup(_) => "",
@@ -845,7 +857,7 @@ impl Hotkeys {
     }
 
     /// Every binding in settings-row order, for conflict checks.
-    pub fn all(&self) -> [&str; 9] {
+    pub fn all(&self) -> [&str; 10] {
         [
             &self.capture_area,
             &self.capture_full,
@@ -856,6 +868,7 @@ impl Hotkeys {
             &self.toggle_pins,
             &self.repeat_capture,
             &self.pick_color,
+            &self.capture_control,
         ]
     }
 }
@@ -938,6 +951,7 @@ impl Default for Config {
             cursor_highlight_color: [78, 205, 196],
             cursor_click_color: [255, 96, 96],
             cursor_ring_radius: 18,
+            control_snap_level: crate::snap::ControlLevel::Control,
             capture_delay_secs: 0,
             decorations: crate::decorate::Decorations::default(),
             window_shadow: crate::window_shadow::Mode::Off,
@@ -999,6 +1013,7 @@ impl Default for Hotkeys {
             toggle_pins: default_toggle_pins_hotkey(),
             repeat_capture: default_repeat_capture_hotkey(),
             pick_color: default_pick_color_hotkey(),
+            capture_control: default_capture_control_hotkey(),
         }
     }
 }

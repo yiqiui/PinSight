@@ -80,6 +80,9 @@ enum AreaJob {
     /// (Snipaste's "repeat last area"). The payload decides what happens
     /// to the new frame.
     Repeat(RepeatAction),
+    /// Snap the UI control under the cursor (smart / control-level capture):
+    /// detect its rect, grab it, and open the editor on it.
+    Control,
 }
 
 /// Which hotkey slot the recorder writes into.
@@ -159,6 +162,8 @@ pub(crate) enum TrayCommand {
     RepeatLast(RepeatAction),
     /// Temporarily release every global hotkey.
     ToggleHotkeys,
+    /// Snap the UI control under the cursor (smart / control-level capture).
+    CaptureControl,
     /// Open the releases page in the browser.
     CheckUpdate,
     /// Relaunch the process.
@@ -1563,6 +1568,107 @@ impl PinSightApp {
                         }
                     }
                 }
+                AreaJob::Control => {
+                    let level = self.config.control_snap_level;
+                    let Some((cx, cy)) = crate::snap::cursor_pos() else {
+                        self.restore_root(ctx);
+                        self.toast(self.tr.tr.capture_failed, true);
+                        return;
+                    };
+                    let Some(rect) = crate::snap::control_rect_at((cx, cy), level) else {
+                        self.restore_root(ctx);
+                        self.toast(self.tr.tr.control_not_found, true);
+                        return;
+                    };
+                    let result = capture::grab_physical_rect(rect).map(|mut image| {
+                        if self.config.capture_pointer {
+                            capture::composite_cursor(&mut image, (rect.x, rect.y));
+                        }
+                        if self.config.show_cursor_effects {
+                            capture::composite_cursor_effects(
+                                &mut image,
+                                (rect.x, rect.y),
+                                self.config.cursor_highlight_color,
+                                self.config.cursor_ring_radius,
+                            );
+                        }
+                        image
+                    });
+                    self.restore_root(ctx);
+                    match result {
+                        Ok(image) => {
+                            // The editor needs a monitor to size/position its
+                            // viewport. Build a synthetic one whose rectangle is
+                            // exactly the control so the viewport is 1:1 with the
+                            // grab and pinning lands it back where it was.
+                            let monitor = capture::monitor_at(cx, cy)
+                                .ok()
+                                .or_else(|| capture::monitor_at_cursor().ok());
+                            let (id, name, primary) = match monitor {
+                                Some(m) => (m.id, m.name.clone(), m.primary),
+                                None => (0u32, String::new(), false),
+                            };
+                            let synthetic = crate::capture::MonitorInfo {
+                                id,
+                                name,
+                                rect,
+                                scale: 1.0,
+                                primary,
+                            };
+                            let tr = self.tr.tr;
+                            let palette = match self.config.theme {
+                                ThemeMode::Light => Palette::for_theme(
+                                    egui::Theme::Light,
+                                    self.config.accent,
+                                    self.config.accent_custom,
+                                ),
+                                ThemeMode::Dark => Palette::for_theme(
+                                    egui::Theme::Dark,
+                                    self.config.accent,
+                                    self.config.accent_custom,
+                                ),
+                                ThemeMode::System => Palette::for_theme(
+                                    ctx.theme(),
+                                    self.config.accent,
+                                    self.config.accent_custom,
+                                ),
+                            };
+                            let mut session =
+                                CaptureSession::new(synthetic, image, Intent::Copy, tr, palette);
+                            session.prefs = crate::overlay::OverlayPrefs {
+                                border_width: self.config.capture_border_width,
+                                mask_alpha: self.config.capture_mask_alpha,
+                                mask_color: self.config.capture_mask_color,
+                                anchors: self.config.capture_anchors,
+                                anchor_color: self.config.capture_anchor_color,
+                                crosshair: self.config.capture_crosshair,
+                                hints: self.config.capture_hints,
+                                esc_confirm: self.config.capture_esc_confirm,
+                                double_click: self.config.capture_double_click,
+                                middle_click: self.config.capture_middle_click,
+                                keys: self.config.app_keys.clone(),
+                                magnifier: self.config.capture_magnifier,
+                                magnifier_size: self.config.capture_magnifier_size,
+                                color_format: self.config.color_format,
+                                translate: self.config.translate.clone(),
+                                translate_proxy: crate::update::proxy_url(&self.config),
+                            };
+                            // Skip the selection phase: the detected control rect
+                            // is already the region, so the editor opens straight
+                            // on the capture.
+                            session.selection = Some(crate::annotate::ImgRect::from_min_size(
+                                0.0,
+                                0.0,
+                                session.image.width() as f32,
+                                session.image.height() as f32,
+                            ));
+                            self.capture = Some(session);
+                        }
+                        Err(err) => {
+                            self.toast(format!("{}: {err}", self.tr.tr.capture_failed), true)
+                        }
+                    }
+                }
             }
         }
 
@@ -2166,6 +2272,12 @@ impl PinSightApp {
                         continue;
                     }
                     self.begin_area(Intent::PickColor, ctx)
+                }
+                Action::CaptureControl => {
+                    if blocked {
+                        continue;
+                    }
+                    self.start_pending(AreaJob::Control, ctx)
                 }
                 Action::ToggleGroup(id) => self.toggle_group(id),
             }
@@ -3538,6 +3650,11 @@ impl PinSightApp {
                 command: TrayCommand::CaptureFull,
             },
             TrayItem::Command {
+                id: 22,
+                label: row(t.tray_capture_control, &hk.capture_control),
+                command: TrayCommand::CaptureControl,
+            },
+            TrayItem::Command {
                 id: 3,
                 label: row(t.tray_pin_clipboard, &hk.pin_clipboard),
                 command: TrayCommand::PinClipboard,
@@ -3727,6 +3844,12 @@ impl PinSightApp {
                         continue;
                     }
                     self.begin_full_copy(ctx)
+                }
+                TrayCommand::CaptureControl => {
+                    if blocked {
+                        continue;
+                    }
+                    self.start_pending(AreaJob::Control, ctx)
                 }
                 TrayCommand::PinClipboard => self.pin_clipboard(),
                 TrayCommand::LongCapture => {
@@ -4755,7 +4878,7 @@ impl PinSightApp {
             .show(ui, |ui| {
                 let hk = self.config.hotkeys.clone();
                 let recording = self.record_job.is_some();
-                let specs: [(Icon, &'static str, &'static str, String, bool, TileAction); 6] = [
+                let specs: [(Icon, &'static str, &'static str, String, bool, TileAction); 7] = [
                     (
                         Icon::Crop,
                         t.act_area_title,
@@ -4808,6 +4931,14 @@ impl PinSightApp {
                         false,
                         TileAction::SaveLast,
                     ),
+                    (
+                        Icon::Cursor,
+                        t.act_control_title,
+                        t.act_control_desc,
+                        hk.capture_control.clone(),
+                        false,
+                        TileAction::CaptureControl,
+                    ),
                 ];
 
                 let gap = 12.0;
@@ -4845,6 +4976,7 @@ impl PinSightApp {
                             }
                         }
                         TileAction::SaveLast => self.save_last(),
+                        TileAction::CaptureControl => self.start_pending(AreaJob::Control, &ctx),
                     }
                 }
 
@@ -6769,6 +6901,32 @@ impl PinSightApp {
             });
 
             ui.add_space(8.0);
+            ui::field_row(ui, p, t.control_snap_level, |ui| {
+                let level_options: [(crate::snap::ControlLevel, &str); 3] = [
+                    (crate::snap::ControlLevel::Control, t.control_level_control),
+                    (
+                        crate::snap::ControlLevel::Container,
+                        t.control_level_container,
+                    ),
+                    (crate::snap::ControlLevel::Window, t.control_level_window),
+                ];
+                if let Some(level) =
+                    ui::segmented(ui, p, self.config.control_snap_level, &level_options)
+                {
+                    self.config.control_snap_level = level;
+                    let _ = self.config.save();
+                }
+            });
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(t.control_snap_hint)
+                        .size(11.0)
+                        .color(p.text_weak),
+                )
+                .wrap(),
+            );
+
+            ui.add_space(8.0);
             ui.label(
                 egui::RichText::new(t.cursor_effects)
                     .size(13.0)
@@ -8111,8 +8269,9 @@ impl PinSightApp {
                 self.hotkeys.failure_for(Action::TogglePins),
                 self.hotkeys.failure_for(Action::RepeatCapture),
                 self.hotkeys.failure_for(Action::PickColor),
+                self.hotkeys.failure_for(Action::CaptureControl),
             ];
-            let fields: [(&mut String, &str); 9] = [
+            let fields: [(&mut String, &str); 10] = [
                 (&mut self.hotkey_draft.capture_area, t.hk_capture_area),
                 (&mut self.hotkey_draft.capture_full, t.hk_capture_full),
                 (&mut self.hotkey_draft.pin_clipboard, t.hk_pin_clipboard),
@@ -8122,6 +8281,7 @@ impl PinSightApp {
                 (&mut self.hotkey_draft.toggle_pins, t.hk_toggle_pins),
                 (&mut self.hotkey_draft.repeat_capture, t.hk_repeat_capture),
                 (&mut self.hotkey_draft.pick_color, t.hk_pick_color),
+                (&mut self.hotkey_draft.capture_control, t.hk_capture_control),
             ];
 
             for (i, (value, label)) in fields.into_iter().enumerate() {
@@ -8306,6 +8466,7 @@ impl PinSightApp {
                     6 => &mut self.hotkey_draft.toggle_pins,
                     7 => &mut self.hotkey_draft.repeat_capture,
                     8 => &mut self.hotkey_draft.pick_color,
+                    9 => &mut self.hotkey_draft.capture_control,
                     _ => &mut self.hotkey_draft.capture_area,
                 };
                 *field = text;
@@ -8649,6 +8810,7 @@ enum TileAction {
     LongShot,
     Record,
     SaveLast,
+    CaptureControl,
 }
 
 #[derive(Clone, Copy)]

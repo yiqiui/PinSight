@@ -273,6 +273,14 @@ strings! {
     window_picker_empty { en: "No capturable windows found", zh: "没有可截取的窗口", tw: "沒有可截取的視窗", ja: "撮影できるウィンドウがありません", ko: "캡처할 창이 없습니다", fr: "Aucune fenêtre capturable", de: "Keine aufnehmbaren Fenster" }
     act_full_title { en: "Full screen", zh: "全屏截图", tw: "全螢幕截圖", ja: "全画面", ko: "전체 화면", fr: "Plein écran", de: "Ganzer Bildschirm" }
     act_full_desc { en: "Copy the display under the cursor", zh: "截取光标所在显示器并复制", tw: "截取游標所在螢幕並複製", ja: "カーソル下のディスプレイをコピー", ko: "커서가 있는 모니터를 복사", fr: "Copier l'écran sous le curseur", de: "Bildschirm unter dem Cursor kopieren" }
+    act_control_title { en: "Capture control", zh: "控件截图", tw: "控制項截圖", ja: "コントロールを撮影", ko: "컨트롤 캡처", fr: "Capturer un contrôle", de: "Steuerelement aufnehmen" }
+    act_control_desc { en: "Snap the UI control under the cursor", zh: "截取光标下的界面控件", tw: "截取游標下的介面控制項", ja: "カーソル下のコントロールを撮影", ko: "커서 아래 UI 컨트롤 캡처", fr: "Capture le contrôle sous le curseur", de: "Das Steuerelement unter dem Cursor aufnehmen" }
+    control_snap_level { en: "Control capture level", zh: "控件截取层级", tw: "控制項截取層級", ja: "コントロール撮影の階層", ko: "컨트롤 캡처 단계", fr: "Niveau de capture du contrôle", de: "Ebene der Steuerelementaufnahme" }
+    control_snap_hint { en: "How much of the surrounding UI the cursor snap grabs", zh: "光标吸附控件时截取的范围", tw: "游標吸附控制項時截取的範圍", ja: "カーソル吸着で取得する範囲", ko: "커서 스냅이 잡는 범위", fr: "Étendue capturée par l'aimantation", de: "Umfang der Cursor-Aufnahme" }
+    control_level_control { en: "Control", zh: "控件", tw: "控制項", ja: "コントロール", ko: "컨트롤", fr: "Contrôle", de: "Steuerelement" }
+    control_level_container { en: "Container", zh: "容器", tw: "容器", ja: "コンテナ", ko: "컨테이너", fr: "Conteneur", de: "Container" }
+    control_level_window { en: "Window", zh: "窗口", tw: "視窗", ja: "ウィンドウ", ko: "창", fr: "Fenêtre", de: "Fenster" }
+    control_not_found { en: "No control found at the cursor", zh: "光标处没有可截取的控件", tw: "游標處沒有可截取的控制項", ja: "カーソル位置にコントロールがありません", ko: "커서 위에 컨트롤이 없습니다", fr: "Aucun contrôle sous le curseur", de: "Kein Steuerelement unter dem Cursor" }
     act_pin_title { en: "Pin clipboard", zh: "贴图剪贴板", tw: "貼圖剪貼簿", ja: "クリップボードを固定", ko: "클립보드 고정", fr: "Épingler le presse-papiers", de: "Zwischenablage anheften" }
     act_pin_desc { en: "Float the clipboard image on top", zh: "把剪贴板图片钉在屏幕最上层", tw: "把剪貼簿圖片釘在最上層", ja: "クリップボード画像を最前面に表示", ko: "클립보드 이미지를 항상 위에 표시", fr: "Afficher l'image du presse-papiers au premier plan", de: "Bild aus der Zwischenablage schwebend anzeigen" }
     act_long_title { en: "Scroll capture", zh: "长截图", tw: "長截圖", ja: "スクロール撮影", ko: "스크롤 캡처", fr: "Capture défilante", de: "Scroll-Aufnahme" }
@@ -348,6 +356,7 @@ strings! {
     hk_toggle_pins { en: "Show / hide pins", zh: "显示 / 隐藏贴图", tw: "顯示 / 隱藏貼圖", ja: "ピン表示切替", ko: "핀 표시 전환", fr: "Afficher / masquer les épingles", de: "Pins ein-/ausblenden" }
     hk_repeat_capture { en: "Repeat last area", zh: "重复上次区域", tw: "重複上次區域", ja: "前回の範囲を再取得", ko: "마지막 영역 반복", fr: "Répéter la dernière zone", de: "Letzten Bereich wiederholen" }
     hk_pick_color { en: "Colour picker", zh: "取色", tw: "取色", ja: "カラー選択", ko: "색상 추출", fr: "Pipette de couleur", de: "Farbpipette" }
+    hk_capture_control { en: "Capture control", zh: "控件截图", tw: "控制項截圖", ja: "コントロール撮影", ko: "컨트롤 캡처", fr: "Capturer un contrôle", de: "Steuerelement aufnehmen" }
     hk_group_hotkey { en: "Group hotkey", zh: "分组热键", tw: "分組熱鍵", ja: "グループ ホットキー", ko: "그룹 단축키", fr: "Raccourci du groupe", de: "Gruppen-Kürzel" }
     tray_repeat_last { en: "Repeat last area", zh: "重复上次区域", tw: "重複上次區域", ja: "前回の範囲を再取得", ko: "마지막 영역 반복", fr: "Répéter la dernière zone", de: "Letzten Bereich wiederholen" }
     tray_repeat_copy { en: "Copy", zh: "复制", tw: "複製", ja: "コピー", ko: "복사", fr: "Copier", de: "Kopieren" }
@@ -767,6 +776,7 @@ strings! {
     tray_show { en: "Open PinSight", zh: "打开 PinSight", tw: "開啟 PinSight", ja: "PinSight を開く", ko: "PinSight 열기", fr: "Ouvrir PinSight", de: "PinSight öffnen" }
     tray_capture_area { en: "Capture area", zh: "区域截图", tw: "區域截圖", ja: "範囲を撮影", ko: "영역 캡처", fr: "Capturer une zone", de: "Bereich aufnehmen" }
     tray_capture_full { en: "Full screen", zh: "全屏截图", tw: "全螢幕截圖", ja: "全画面", ko: "전체 화면", fr: "Plein écran", de: "Ganzer Bildschirm" }
+    tray_capture_control { en: "Capture control", zh: "控件截图", tw: "控制項截圖", ja: "コントロール撮影", ko: "컨트롤 캡처", fr: "Capturer un contrôle", de: "Steuerelement aufnehmen" }
     tray_pin_clipboard { en: "Pin clipboard", zh: "贴图剪贴板", tw: "貼圖剪貼簿", ja: "クリップボード固定", ko: "클립보드 고정", fr: "Épingler le presse-papiers", de: "Zwischenablage anheften" }
     tray_long_capture { en: "Scroll capture", zh: "长截图", tw: "長截圖", ja: "スクロール撮影", ko: "스크롤 캡처", fr: "Capture défilante", de: "Scroll-Aufnahme" }
     tray_record { en: "Record area", zh: "区域录屏", tw: "區域錄影", ja: "範囲を録画", ko: "영역 녹화", fr: "Enregistrer une zone", de: "Bereich aufzeichnen" }
