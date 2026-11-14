@@ -1304,7 +1304,9 @@ impl Pin {
                 y,
                 width,
                 height,
-                audio,
+                // Cloned: the viewport takes ownership of one copy and the pin
+                // keeps another for its `audio_path` field below.
+                audio.clone(),
                 tx,
             );
             Ok(Self {

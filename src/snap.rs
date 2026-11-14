@@ -262,13 +262,13 @@ mod ax {
     const K_CF_NUMBER_FLOAT64: isize = 6;
 
     #[link(name = "CoreFoundation", kind = "framework")]
-    extern "C" {
+    unsafe extern "C" {
         fn CFStringCreateWithCString(alloc: CF, cstr: *const u8, encoding: u32) -> CF;
         fn CFRelease(cf: CF);
     }
 
     #[link(name = "ApplicationServices", kind = "framework")]
-    extern "C" {
+    unsafe extern "C" {
         fn AXUIElementCreateSystemWide() -> CF;
         fn AXUIElementCopyElementAtPosition(element: CF, x: f64, y: f64, out: *mut CF) -> i32;
         fn AXUIElementCopyAttributeValue(element: CF, attr: CF, out: *mut CF) -> i32;
@@ -283,7 +283,7 @@ mod ax {
     fn cf_str(s: &str) -> CF {
         let mut bytes = s.as_bytes().to_vec();
         bytes.push(0);
-        unsafe { CFStringCreateWithCString(std::ptr::null(), bytes.as_ptr(), K_CF_STRING_UTF8) }
+        unsafe { CFStringCreateWithCString(std::ptr::null_mut(), bytes.as_ptr(), K_CF_STRING_UTF8) }
     }
 
     /// Rect (x, y, w, h in screen points) of the accessibility element at the
