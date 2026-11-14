@@ -355,9 +355,11 @@ mod tests {
     fn degrade_low_contrast(img: &RgbaImage, factor: f32) -> RgbaImage {
         let mut out = img.clone();
         for p in out.pixels_mut() {
-            for c in 0..3 {
-                let v = p.0[c] as f32;
-                p.0[c] = (128.0 + (v - 128.0) * factor).clamp(0.0, 255.0) as u8;
+            // Iterate the RGB channels as a slice: rustc 1.100 denies a loop
+            // variable that only indexes a single tuple field (`p.0[c]`).
+            for channel in &mut p.0[..3] {
+                let v = *channel as f32;
+                *channel = (128.0 + (v - 128.0) * factor).clamp(0.0, 255.0) as u8;
             }
         }
         out
