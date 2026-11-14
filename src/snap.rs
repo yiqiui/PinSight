@@ -273,8 +273,42 @@ mod ax {
         fn AXUIElementCopyElementAtPosition(element: CF, x: f64, y: f64, out: *mut CF) -> i32;
         fn AXUIElementCopyAttributeValue(element: CF, attr: CF, out: *mut CF) -> i32;
         fn AXValueGetValue(value: CF, ty: CF, out: *mut c_void) -> u8;
-        static kAXValueCGPointType: CF;
-        static kAXValueCGSizeType: CF;
+    }
+
+    // The `kAXValue*Type` constants are CFStringRef globals exported by the
+    // HIServices sub-framework. The ApplicationServices umbrella still links
+    // functions, but its tbd file no longer lists these constants, so a static
+    // `extern static` fails at link time ("Undefined symbols"). Resolve them at
+    // runtime through dlsym instead — libSystem provides dlopen/dlsym, so no
+    // extra link flag is needed.
+    unsafe extern "C" {
+        fn dlopen(filename: *const c_char, flag: i32) -> *mut c_void;
+        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+    }
+    /// `RTLD_NOW` on macOS.
+    const RTLD_NOW: i32 = 2;
+
+    /// Look up an exported CFStringRef constant by name. Returns `None` when
+    /// the framework cannot be opened or the symbol is missing.
+    fn ax_constant(name: &str) -> Option<CF> {
+        const FRAMEWORK: &[u8] =
+            b"/System/Library/Frameworks/ApplicationServices.framework/Versions/Current/ApplicationServices\0";
+        static HANDLE: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+        let handle = *HANDLE.get_or_init(|| unsafe {
+            dlopen(FRAMEWORK.as_ptr() as *const c_char, RTLD_NOW) as usize
+        });
+        if handle == 0 {
+            return None;
+        }
+        let mut symbol = name.as_bytes().to_vec();
+        symbol.push(0);
+        let address = unsafe { dlsym(handle as *mut c_void, symbol.as_ptr() as *const c_char) };
+        if address.is_null() {
+            None
+        } else {
+            // The symbol points at the CFStringRef; read its value once.
+            Some(unsafe { *(address as *const CF) })
+        }
     }
 
     /// Create a CFString from a Rust string. Leaks intentionally: these are a
@@ -335,16 +369,14 @@ mod ax {
 
             let mut pt = Pt::default();
             let mut sz = Sz::default();
-            let ok_pos = AXValueGetValue(
-                pos_value,
-                kAXValueCGPointType,
-                &mut pt as *mut Pt as *mut c_void,
-            );
-            let ok_size = AXValueGetValue(
-                size_value,
-                kAXValueCGSizeType,
-                &mut sz as *mut Sz as *mut c_void,
-            );
+            let Some(point_type) = ax_constant("kAXValueCGPointType") else {
+                return None;
+            };
+            let Some(size_type) = ax_constant("kAXValueCGSizeType") else {
+                return None;
+            };
+            let ok_pos = AXValueGetValue(pos_value, point_type, &mut pt as *mut Pt as *mut c_void);
+            let ok_size = AXValueGetValue(size_value, size_type, &mut sz as *mut Sz as *mut c_void);
             if ok_pos == 0 || ok_size == 0 {
                 return None;
             }

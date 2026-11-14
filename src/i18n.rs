@@ -245,6 +245,9 @@ strings! {
     nav_history { en: "History", zh: "图库", tw: "圖庫", ja: "履歴", ko: "기록", fr: "Historique", de: "Verlauf" }
     history_title { en: "Capture history", zh: "截图历史", tw: "截圖歷史", ja: "キャプチャ履歴", ko: "캡처 기록", fr: "Historique des captures", de: "Aufnahmeverlauf" }
     history_subtitle { en: "Everything saved to your capture folder", zh: "保存目录里的所有截图", tw: "儲存目錄裡的所有截圖", ja: "保存フォルダ内のすべてのキャプチャ", ko: "저장 폴더의 모든 캡처", fr: "Toutes les captures du dossier", de: "Alle Aufnahmen im Speicherordner" }
+    hist_search { en: "Search text and file names…", zh: "搜索图片文字与文件名…", tw: "搜尋圖片文字與檔名…", ja: "テキストとファイル名を検索…", ko: "텍스트와 파일명 검색…", fr: "Rechercher texte et noms…", de: "Text und Dateinamen suchen…" }
+    hist_indexing { en: "Reading text: {done}/{total}", zh: "读取文字中：{done}/{total}", tw: "讀取文字中：{done}/{total}", ja: "テキスト認識中: {done}/{total}", ko: "텍스트 인식 중: {done}/{total}", fr: "Lecture du texte : {done}/{total}", de: "Texterkennung: {done}/{total}" }
+    hist_no_match { en: "No captures match the search", zh: "没有匹配搜索的截图", tw: "沒有符合搜尋的截圖", ja: "検索に一致するキャプチャはありません", ko: "검색과 일치하는 캡처가 없습니다", fr: "Aucune capture ne correspond", de: "Keine Aufnahmen passen zur Suche" }
     history_empty { en: "No captures yet", zh: "还没有截图", tw: "還沒有截圖", ja: "キャプチャはまだありません", ko: "아직 캡처가 없습니다", fr: "Aucune capture pour l'instant", de: "Noch keine Aufnahmen" }
     history_pin { en: "Pin to screen", zh: "贴到屏幕", tw: "貼到螢幕", ja: "画面に固定", ko: "화면에 고정", fr: "Épingler", de: "Anheften" }
     history_delete { en: "Delete", zh: "删除", tw: "刪除", ja: "削除", ko: "삭제", fr: "Supprimer", de: "Löschen" }
@@ -899,6 +902,8 @@ strings! {
     ov_ocr_title { en: "Recognised text", zh: "识别出的文字", tw: "辨識出的文字", ja: "認識した文字", ko: "인식된 텍스트", fr: "Texte reconnu", de: "Erkannter Text" }
     ov_ocr_words { en: "words", zh: "个词", tw: "個詞", ja: "語", ko: "단어", fr: "mots", de: "Wörter" }
     ov_ocr_copy { en: "Copy text", zh: "复制文字", tw: "複製文字", ja: "テキストをコピー", ko: "텍스트 복사", fr: "Copier le texte", de: "Text kopieren" }
+    ov_ocr_export { en: "Export .txt", zh: "导出 .txt", tw: "匯出 .txt", ja: ".txt に書き出し", ko: ".txt 내보내기", fr: "Exporter .txt", de: ".txt exportieren" }
+    ov_ocr_exported { en: "Exported to", zh: "已导出到", tw: "已匯出到", ja: "書き出し先", ko: "내보낸 위치", fr: "Exporté vers", de: "Exportiert nach" }
     ov_ocr_close { en: "Close", zh: "关闭", tw: "關閉", ja: "閉じる", ko: "닫기", fr: "Fermer", de: "Schließen" }
     ov_ocr_empty { en: "No text was found in this region.", zh: "这片区域里没有识别到文字。", tw: "這片區域裡沒有辨識到文字。", ja: "この領域から文字が見つかりませんでした。", ko: "이 영역에서 텍스트를 찾지 못했습니다.", fr: "Aucun texte trouvé dans cette zone.", de: "In diesem Bereich wurde kein Text gefunden." }
     ov_ocr_hint { en: "Recognise text in the selection", zh: "识别选区内的文字", tw: "辨識選區內的文字", ja: "選択範囲の文字を認識", ko: "선택 영역의 텍스트 인식", fr: "Reconnaître le texte de la sélection", de: "Text in der Auswahl erkennen" }

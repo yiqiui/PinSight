@@ -47,6 +47,7 @@ mod marklayer;
 mod mcp;
 mod naming;
 mod ocr;
+mod ocr_text;
 mod overlay;
 mod pdf;
 mod picker;

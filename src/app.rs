@@ -133,6 +133,12 @@ struct HistoryFile {
     modified: std::time::SystemTime,
 }
 
+/// Gallery search query plus its background OCR index (#132).
+struct HistorySearch {
+    query: String,
+    index: crate::ocr_text::OcrSearch,
+}
+
 /// Commands the native tray menu can send back into the UI loop. Only Windows
 /// builds one, so the variants look unused everywhere else.
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -323,6 +329,8 @@ pub struct PinSightApp {
     /// arms it, the second (within the same selection) actually deletes. Reset
     /// whenever the selection changes so it can never delete stale ticks.
     history_delete_armed: bool,
+    /// Gallery search box + the background OCR index backing it (#132).
+    history_search: HistorySearch,
     pending_mcp: Option<PendingMcpCapture>,
     long_job: Option<LongShotJob>,
     record_job: Option<RecordJob>,
@@ -529,6 +537,10 @@ impl PinSightApp {
             history_scan: None,
             history_selection: Default::default(),
             history_delete_armed: false,
+            history_search: HistorySearch {
+                query: String::new(),
+                index: crate::ocr_text::OcrSearch::new(),
+            },
             pending_mcp: None,
             long_job: None,
             record_job: None,
@@ -1446,6 +1458,7 @@ impl PinSightApp {
                                 color_format: self.config.color_format,
                                 translate: self.config.translate.clone(),
                                 translate_proxy: crate::update::proxy_url(&self.config),
+                                ocr_export_dir: self.config.save_dir.clone(),
                             };
                             self.capture = Some(session);
                         }
@@ -1652,6 +1665,7 @@ impl PinSightApp {
                                 color_format: self.config.color_format,
                                 translate: self.config.translate.clone(),
                                 translate_proxy: crate::update::proxy_url(&self.config),
+                                ocr_export_dir: self.config.save_dir.clone(),
                             };
                             // Skip the selection phase: the detected control rect
                             // is already the region, so the editor opens straight
@@ -4538,6 +4552,52 @@ impl PinSightApp {
             ui.label(egui::RichText::new(t.history_empty).color(p.text_weak));
             return;
         }
+
+        // ---- gallery search (#132) --------------------------------------
+        // Drive the background OCR indexer and collect what it produced, so
+        // the filter below always sees the freshest recognised text.
+        let snapshot: Vec<(PathBuf, std::time::SystemTime)> =
+            files.iter().map(|f| (f.path.clone(), f.modified)).collect();
+        self.history_search.index.poll();
+        self.history_search.index.ensure_started(&snapshot);
+        let indexing = self.history_search.index.pending();
+
+        // Search box + quiet indexing progress.
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(8.0, 0.0);
+            ui.add(
+                egui::TextEdit::singleline(&mut self.history_search.query)
+                    .hint_text(t.hist_search)
+                    .desired_width(300.0),
+            );
+            if indexing > 0 {
+                let done = files.len().saturating_sub(indexing);
+                let progress = t
+                    .hist_indexing
+                    .replace("{done}", &done.to_string())
+                    .replace("{total}", &files.len().to_string());
+                ui.label(egui::RichText::new(progress).size(11.0).color(p.text_weak));
+            }
+        });
+        ui.add_space(6.0);
+
+        let query = self.history_search.query.clone();
+        let filtered: Vec<HistoryFile> = files
+            .iter()
+            .filter(|f| {
+                self.history_search
+                    .index
+                    .matches(&f.path, f.modified, &query)
+            })
+            .cloned()
+            .collect();
+        let searching = !query.trim().is_empty();
+        if filtered.is_empty() && searching {
+            ui.label(egui::RichText::new(t.hist_no_match).color(p.text_weak));
+            return;
+        }
+
+        let files = filtered;
 
         let sel_count = self.history_selection.len();
         let armed = self.history_delete_armed;

@@ -133,6 +133,8 @@ pub struct OverlayPrefs {
     pub translate: crate::config::TranslatePrefs,
     /// Resolved proxy URL for translation requests (`None` = direct).
     pub translate_proxy: Option<String>,
+    /// Directory the OCR panel's "export text" button writes `.txt` files to.
+    pub ocr_export_dir: std::path::PathBuf,
 }
 
 impl Default for OverlayPrefs {
@@ -154,6 +156,7 @@ impl Default for OverlayPrefs {
             color_format: crate::config::ColorFormat::Hex,
             translate: crate::config::TranslatePrefs::default(),
             translate_proxy: None,
+            ocr_export_dir: std::path::PathBuf::new(),
         }
     }
 }
@@ -197,6 +200,12 @@ pub struct CaptureSession {
     ocr_rx: Option<std::sync::mpsc::Receiver<Result<Vec<crate::ocr::OcrWord>, String>>>,
     /// Last OCR result (or error) for the region below.
     ocr_words: Option<Result<Vec<crate::ocr::OcrWord>, String>>,
+    /// The user's edit of the recognised text (`None` until a result exists —
+    /// the panel seeds it from the recognition so copy/translate/export all
+    /// operate on what is actually shown).
+    ocr_edit: Option<String>,
+    /// Where "export text" last wrote, shown as a quiet confirmation line.
+    ocr_exported: Option<std::path::PathBuf>,
     /// Region (image pixels) the pending/finished OCR ran on.
     ocr_rect: Option<ImgRect>,
     /// Whether the OCR results panel is open.
@@ -255,6 +264,8 @@ impl CaptureSession {
             magnifier: None,
             ocr_rx: None,
             ocr_words: None,
+            ocr_edit: None,
+            ocr_exported: None,
             ocr_rect: None,
             ocr_open: false,
             qr_rx: None,
@@ -1902,6 +1913,10 @@ impl CaptureSession {
         match rx.try_recv() {
             Ok(result) => {
                 self.ocr_words = Some(result);
+                // A fresh recognition resets the edit buffer and the export
+                // confirmation so the panel always reflects the newest text.
+                self.ocr_edit = None;
+                self.ocr_exported = None;
                 self.ocr_rx = None;
             }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
@@ -1923,7 +1938,12 @@ impl CaptureSession {
         let Some(Ok(words)) = self.ocr_words.as_ref() else {
             return;
         };
-        let text = crate::ocr::words_to_text(words);
+        // Translate whatever the panel is showing — the user's edit when they
+        // have touched it, the raw recognition otherwise.
+        let text = self
+            .ocr_edit
+            .clone()
+            .unwrap_or_else(|| crate::ocr::words_to_text(words));
         if text.trim().is_empty() {
             return;
         }
@@ -2036,18 +2056,32 @@ impl CaptureSession {
                             if ui.button(t.ov_ocr_close).clicked() {
                                 self.ocr_open = false;
                             }
-                        } else if let Some(text) = words_opt {
-                            if text.is_empty() {
+                        } else if let Some(recognised) = words_opt {
+                            if recognised.is_empty() {
                                 ui.label(t.ov_ocr_empty);
                             } else {
                                 ui.label(format!("{} {}", count, t.ov_ocr_words));
                                 ui.separator();
+                                // Editable buffer, seeded from the recognition:
+                                // copy / translate / export all operate on what
+                                // is actually on screen, so a mis-recognised
+                                // word can be fixed before it leaves the panel.
+                                let buf = self.ocr_edit.get_or_insert_with(|| recognised.clone());
                                 egui::ScrollArea::vertical()
                                     .max_height(220.0)
                                     .show(ui, |ui| {
-                                        ui.monospace(text.as_str());
+                                        ui.add(
+                                            egui::TextEdit::multiline(buf)
+                                                .font(egui::TextStyle::Monospace)
+                                                .desired_width(f32::INFINITY),
+                                        );
                                     });
                                 ui.separator();
+                                // Snapshot for the actions: owned String, so
+                                // the mutable borrow of the buffer is over and
+                                // the buttons can call `&mut self` freely.
+                                let edited =
+                                    self.ocr_edit.clone().unwrap_or_else(|| recognised.clone());
                                 ui.horizontal(|ui| {
                                     let translating = self.ocr_tr_rx.is_some();
                                     if ui
@@ -2060,9 +2094,27 @@ impl CaptureSession {
                                         self.start_translate();
                                     }
                                     if ui.button(t.ov_ocr_copy).clicked() {
-                                        let _ = crate::clipboard::copy_text(&text);
+                                        let _ = crate::clipboard::copy_text(&edited);
+                                    }
+                                    if ui.button(t.ov_ocr_export).clicked() {
+                                        self.ocr_exported = crate::ocr_text::export_text(
+                                            &self.prefs.ocr_export_dir,
+                                            &edited,
+                                        )
+                                        .ok();
                                     }
                                 });
+                                if let Some(path) = &self.ocr_exported {
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{} {}",
+                                            t.ov_ocr_exported,
+                                            path.display()
+                                        ))
+                                        .size(11.0)
+                                        .color(p.text_weak),
+                                    );
+                                }
                                 // Translated output (once a run settles).
                                 if self.ocr_tr_rx.is_some() {
                                     ui.label(t.ov_tr_running);
