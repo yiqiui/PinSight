@@ -907,7 +907,7 @@ impl PinSightApp {
                 }
             }
             Some(crate::qr::GenAction::Pin(img)) => {
-                self.add_pin(img.as_ref().clone());
+                self.add_pin(img.as_ref().clone(), None);
                 self.toast(t.pinned, false);
             }
             None => {}
@@ -1525,7 +1525,7 @@ impl PinSightApp {
                                         .toast(format!("{}: {err}", self.tr.tr.save_failed), true),
                                 },
                                 RepeatAction::Pin => {
-                                    self.add_pin(image);
+                                    self.add_pin(image, None);
                                     self.toast(self.tr.tr.clipboard_pinned, false);
                                 }
                             }
@@ -1637,7 +1637,7 @@ impl PinSightApp {
                 reply,
             } => {
                 let result = load_image(path.as_deref(), base64.as_deref())
-                    .map(|image| self.add_pin(image))
+                    .map(|image| self.add_pin(image, None))
                     .map_err(|e| e.to_string());
                 let _ = reply.send(result);
             }
@@ -2149,7 +2149,7 @@ impl PinSightApp {
         // An image is the common case; text is rendered to an image when the
         // "convert text to an image" option is on.
         if let Ok(image) = clipboard_image() {
-            self.add_pin(image);
+            self.add_pin(image, None);
             self.toast(self.tr.tr.clipboard_pinned, false);
             return;
         }
@@ -2169,7 +2169,7 @@ impl PinSightApp {
                     self.config.pin_text_bg,
                     self.config.pin_text_fg,
                 ) {
-                    self.add_pin(image);
+                    self.add_pin(image, None);
                     self.toast(self.tr.tr.clipboard_pinned, false);
                     return;
                 }
@@ -2300,6 +2300,7 @@ impl PinSightApp {
             self.config.pin_middle_close,
             self.config.pin_gestures.encoded(),
             group,
+            None,
             self.pin_tx.clone(),
         ) {
             Ok(mut pin) => {
@@ -2390,17 +2391,20 @@ impl PinSightApp {
         self.toast(self.tr.tr.voice_recording, false);
     }
 
-    /// Receive a finished voice-note recording and report it.
+    /// Receive a finished voice-note recording and pin it as a voice pin.
     fn poll_voice(&mut self) {
         let Some(rx) = self.voice_rx.as_ref() else {
             return;
         };
         match rx.try_recv() {
             Ok(Ok(path)) => {
-                self.toast(
-                    format!("{}: {}", self.tr.tr.voice_done, path.display()),
-                    false,
-                );
+                // Render a waveform thumbnail (or a plain accent card if the
+                // WAV cannot be parsed) and pin it with the audio attached so
+                // the user can double-click to play it back.
+                let image = crate::voice::thumbnail(&path)
+                    .unwrap_or_else(crate::voice::fallback_thumbnail);
+                self.add_pin(image, Some(path.clone()));
+                self.toast(self.tr.tr.voice_pinned, false);
                 self.voice_rx = None;
             }
             Ok(Err(err)) => {
@@ -2924,7 +2928,7 @@ impl PinSightApp {
         }
     }
 
-    fn add_pin(&mut self, image: RgbaImage) -> u64 {
+    fn add_pin(&mut self, image: RgbaImage, audio: Option<PathBuf>) -> u64 {
         let id = self.next_pin_id;
         self.next_pin_id += 1;
 
@@ -2978,6 +2982,7 @@ impl PinSightApp {
             self.config.pin_middle_close,
             self.config.pin_gestures.encoded(),
             self.active_group,
+            audio,
             self.pin_tx.clone(),
         ) {
             Ok(mut pin) => {
@@ -2991,11 +2996,17 @@ impl PinSightApp {
         id
     }
 
-    fn add_pin_at(&mut self, image: RgbaImage, pos: egui::Pos2, size: egui::Vec2) -> u64 {
+    fn add_pin_at(
+        &mut self,
+        image: RgbaImage,
+        pos: egui::Pos2,
+        size: egui::Vec2,
+        audio: Option<PathBuf>,
+    ) -> u64 {
         // "Reuse the capture position" off means the pin is centred on the
         // monitor instead of sitting exactly where the region was.
         if !self.config.pin_keep_position {
-            return self.add_pin(image);
+            return self.add_pin(image, audio);
         }
         let id = self.next_pin_id;
         self.next_pin_id += 1;
@@ -3028,6 +3039,7 @@ impl PinSightApp {
             self.config.pin_middle_close,
             self.config.pin_gestures.encoded(),
             self.active_group,
+            audio,
             self.pin_tx.clone(),
         ) {
             Ok(mut pin) => {
@@ -3092,6 +3104,17 @@ impl PinSightApp {
                                     self.toast(format!("{}: {err}", self.tr.tr.pin_saved), true)
                                 }
                             }
+                        }
+                    }
+                }
+                PinEvent::Play(id) => {
+                    // A voice-note pin: open the attached audio with the OS
+                    // default player. Nothing to do for a bare image pin, but
+                    // the event is only ever sent when `audio_path` is set.
+                    if let Some(pin) = self.pins.iter().find(|p| p.id == id) {
+                        if let Some(path) = pin.audio_path.clone() {
+                            crate::util::open_path(&path);
+                            self.toast(self.tr.tr.pin_playing, false);
                         }
                     }
                 }
@@ -3943,7 +3966,7 @@ impl PinSightApp {
                                 egui::vec2(image.width() as f32, image.height() as f32),
                             )
                         });
-                        self.add_pin_at(image, pos, size);
+                        self.add_pin_at(image, pos, size, None);
                         self.toast(self.tr.tr.pinned, false);
                     }
                     OverlayAction::Save => {
@@ -4671,7 +4694,7 @@ impl PinSightApp {
                 let image = Arc::new(img.to_rgba8());
                 self.last_image = Some(image.clone());
                 self.push_history(&image);
-                self.add_pin((*image).clone());
+                self.add_pin((*image).clone(), None);
             }
             Err(err) => self.toast(format!("{}: {err}", self.tr.tr.capture_failed), true),
         }
@@ -4875,7 +4898,7 @@ impl PinSightApp {
                             }
                             if ui::link_button(ui, p, Icon::Pin, t.ov_pin).clicked() {
                                 let image = (*image).clone();
-                                self.add_pin(image);
+                                self.add_pin(image, None);
                                 self.toast(self.tr.tr.pinned, false);
                             }
                         });

@@ -5,6 +5,7 @@
 //! relying on egui's child viewports (which are optimised for transient
 //! windows). Each pin owns a small message-loop thread.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use image::RgbaImage;
@@ -18,12 +19,15 @@ pub enum PinEvent {
     Copy(u64),
     /// Right-click → Save as…: handled on the UI thread (file dialog).
     SaveAs(u64),
+    /// A voice-pin was asked to play its attached audio (double-click or menu).
+    Play(u64),
 }
 
 #[cfg(windows)]
 #[allow(unsafe_op_in_unsafe_fn)]
 mod imp {
     use std::ffi::c_void;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::sync::mpsc::Sender;
     use std::time::Duration;
@@ -78,6 +82,7 @@ mod imp {
     const IDM_THROUGH: usize = WM_APP as usize + 107;
     const IDM_CLOSE: usize = WM_APP as usize + 108;
     const IDM_DESTROY: usize = WM_APP as usize + 109;
+    const IDM_PLAY: usize = WM_APP as usize + 110;
 
     struct PinCtx {
         id: u64,
@@ -106,6 +111,8 @@ mod imp {
         layered: bool,
         on_top: bool,
         through: bool,
+        /// Attached audio note: double-click or the menu "Play" opens it.
+        audio_path: Option<PathBuf>,
         tx: Sender<PinEvent>,
     }
 
@@ -131,6 +138,7 @@ mod imp {
         smooth_zoom: bool,
         middle_close: bool,
         gestures: [u32; 6],
+        audio: Option<PathBuf>,
         tx: Sender<PinEvent>,
     ) -> Result<NativePin, String> {
         let (ready_tx, ready_rx) = std::sync::mpsc::channel::<isize>();
@@ -153,6 +161,7 @@ mod imp {
                     smooth_zoom,
                     middle_close,
                     gestures,
+                    audio,
                     tx,
                     ready_tx,
                 )
@@ -181,6 +190,7 @@ mod imp {
         smooth_zoom: bool,
         middle_close: bool,
         gestures: [u32; 6],
+        audio: Option<PathBuf>,
         tx: Sender<PinEvent>,
         ready_tx: Sender<isize>,
     ) {
@@ -206,6 +216,7 @@ mod imp {
             layered: false,
             on_top: true,
             through: false,
+            audio_path: audio,
             tx,
         });
         let ctx_ptr = Box::into_raw(ctx);
@@ -551,6 +562,15 @@ mod imp {
             IDM_SAVE_AS,
             &HSTRING::from(t.pin_menu_save_as),
         );
+        // A voice note pins with an attached audio file: offer to play it.
+        if ctx.audio_path.is_some() {
+            let _ = AppendMenuW(
+                menu,
+                flags(MENU_ITEM_FLAGS(0)),
+                IDM_PLAY,
+                &HSTRING::from(t.pin_menu_play),
+            );
+        }
         let _ = AppendMenuW(menu, MENU_ITEM_FLAGS(MF_SEPARATOR.0), 0, &HSTRING::new());
 
         // Zoom presets as a submenu.
@@ -643,6 +663,9 @@ mod imp {
             }
             IDM_SAVE_AS => {
                 let _ = ctx.tx.send(PinEvent::SaveAs(ctx.id));
+            }
+            IDM_PLAY => {
+                let _ = ctx.tx.send(PinEvent::Play(ctx.id));
             }
             IDM_ZOOM_25 | IDM_ZOOM_50 | IDM_ZOOM_100 | IDM_ZOOM_200 => {
                 let zoom = match cmd {
@@ -845,6 +868,16 @@ mod imp {
             // Double-click variants: the single-click handlers below must not
             // also fire, so a double-click swallows the press.
             m if m == WM_LBUTTONDBLCLK || m == WM_MBUTTONDBLCLK || m == WM_RBUTTONDBLCLK => {
+                // A voice note plays on the primary (left) double-click instead
+                // of running the configured gesture.
+                if m == WM_LBUTTONDBLCLK {
+                    if let Some(ctx) = ctx_from(hwnd) {
+                        if ctx.audio_path.is_some() {
+                            let _ = ctx.tx.send(PinEvent::Play(ctx.id));
+                            return LRESULT(0);
+                        }
+                    }
+                }
                 let button = if m == WM_LBUTTONDBLCLK {
                     1
                 } else if m == WM_MBUTTONDBLCLK {
@@ -1186,6 +1219,8 @@ pub struct Pin {
     pub passthrough: bool,
     /// Which group this pin belongs to (see `config::PinGroup`).
     pub group: u32,
+    /// Attached audio note (a voice pin). `None` for ordinary image pins.
+    pub audio_path: Option<PathBuf>,
     #[cfg(windows)]
     native: imp::NativePin,
 }
@@ -1210,6 +1245,7 @@ impl Pin {
         middle_close: bool,
         gestures: [u32; 6],
         group: u32,
+        audio: Option<PathBuf>,
         tx: std::sync::mpsc::Sender<PinEvent>,
     ) -> Result<Self, String> {
         #[cfg(windows)]
@@ -1230,6 +1266,7 @@ impl Pin {
                 smooth_zoom,
                 middle_close,
                 gestures,
+                audio.clone(),
                 tx,
             )?;
             Ok(Self {
@@ -1242,6 +1279,7 @@ impl Pin {
                 zoom: 1.0,
                 passthrough: false,
                 group,
+                audio_path: audio,
                 native,
             })
         }
@@ -1259,8 +1297,16 @@ impl Pin {
             let _ = middle_close;
             let _ = gestures;
             let _ = group;
-            let vp =
-                crate::pin_viewport::ViewportPin::new(id, image.clone(), x, y, width, height, tx);
+            let vp = crate::pin_viewport::ViewportPin::new(
+                id,
+                image.clone(),
+                x,
+                y,
+                width,
+                height,
+                audio,
+                tx,
+            );
             Ok(Self {
                 id,
                 image,
@@ -1271,6 +1317,7 @@ impl Pin {
                 zoom: 1.0,
                 passthrough: false,
                 group,
+                audio_path: audio,
                 vp,
             })
         }

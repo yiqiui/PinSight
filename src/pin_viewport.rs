@@ -10,6 +10,7 @@
 //! closure captures by clone. Interaction results are written back into that
 //! state and turned into viewport commands after the closure returns.
 
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
@@ -33,6 +34,8 @@ struct PinState {
     closed: bool,
     /// The pin is hidden — the viewport is not shown at all.
     visible: bool,
+    /// Attached audio note (a voice pin).
+    audio_path: Option<PathBuf>,
 }
 
 impl PinState {
@@ -56,6 +59,7 @@ impl ViewportPin {
         y: i32,
         w: u32,
         h: u32,
+        audio: Option<PathBuf>,
         tx: Sender<PinEvent>,
     ) -> Self {
         let state = PinState {
@@ -70,6 +74,7 @@ impl ViewportPin {
             passthrough: false,
             closed: false,
             visible: true,
+            audio_path: audio,
         };
         Self {
             id,
@@ -77,6 +82,11 @@ impl ViewportPin {
             viewport_id: egui::ViewportId::from_hash_of(("pinsight-pin", id)),
             tx,
         }
+    }
+
+    /// Path of the attached voice note, if this is a voice pin.
+    pub fn audio_path(&self) -> Option<PathBuf> {
+        self.state.lock().ok().and_then(|s| s.audio_path.clone())
     }
 
     /// Ask this pin to disappear. The viewport stops being registered on the

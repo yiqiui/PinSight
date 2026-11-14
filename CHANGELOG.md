@@ -68,6 +68,15 @@ _Nothing yet — changes land here until the next tagged release._
   in Settings → Pins → Display (default 16 px; 1 disables rounding). The layout
   maths lives in a pure, unit-tested `pin_layout` module and `Pin::move_to` keeps
   the stored coordinates in sync so a restored pin returns to its slot.
+- **Voice-note pins with click-to-play.** The tray "Record voice note" action
+  now captures the default microphone to a WAV (via ffmpeg), renders a 340×120
+  thumbnail card with a play button and a waveform drawn from the audio, and
+  pins it with the recording attached. A voice pin plays back through the OS
+  default player on **double-click** or via its right-click **"Play voice note"**
+  menu item (`PinEvent::Play`). The thumbnail is produced by a pure, unit-tested
+  WAV-PCM parser (`voice::parse_pcm`) so the waveform is correct for 8/16/24/32-bit
+  mono/stereo files; a plain accent card is used as a fallback when the audio
+  cannot be parsed. In-app decoding stays out of scope on purpose.
 
 ### Changed
 

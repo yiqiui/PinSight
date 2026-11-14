@@ -301,6 +301,7 @@ strings! {
     pin_close { en: "Close", zh: "关闭", tw: "關閉", ja: "閉じる", ko: "닫기", fr: "Fermer", de: "Schließen" }
     pin_menu_copy { en: "Copy image", zh: "复制图像", tw: "複製圖像", ja: "画像をコピー", ko: "이미지 복사", fr: "Copier l'image", de: "Bild kopieren" }
     pin_menu_save_as { en: "Save as...", zh: "图像另存为...", tw: "圖像另存為...", ja: "名前を付けて保存...", ko: "다른 이름으로 저장...", fr: "Enregistrer sous...", de: "Speichern unter..." }
+    pin_menu_play { en: "Play voice note", zh: "播放语音便签", tw: "播放語音便籤", ja: "音声メモを再生", ko: "음성 메모 재생", fr: "Lire le mémo vocal", de: "Sprachnotiz abspielen" }
     pin_menu_zoom { en: "Zoom", zh: "缩放", tw: "縮放", ja: "拡大縮小", ko: "확대/축소", fr: "Zoom", de: "Zoom" }
     pin_menu_ontop { en: "Always on top", zh: "总是置顶", tw: "總是置頂", ja: "常に前面表示", ko: "항상 위", fr: "Toujours devant", de: "Immer im Vordergrund" }
     pin_menu_through { en: "Click-through", zh: "点击穿透", tw: "點擊穿透", ja: "クリック透過", ko: "클릭 통과", fr: "Clic traversant", de: "Klick durch" }
@@ -969,8 +970,9 @@ strings! {
     tray_qr_gen { en: "QR generator", zh: "二维码生成", tw: "二維碼產生", ja: "QR 生成", ko: "QR 생성", fr: "Générateur QR", de: "QR-Generator" }
     tray_record_voice { en: "Record voice note", zh: "录制语音便签", tw: "錄製語音便籤", ja: "音声メモ録音", ko: "음성 메모 녹음", fr: "Mémo vocal", de: "Sprachnotiz" }
     voice_recording { en: "Recording voice note…", zh: "正在录制语音便签…", tw: "正在錄製語音便籤…", ja: "音声メモ録音中…", ko: "음성 메모 녹음 중…", fr: "Enregistrement vocal…", de: "Sprachnotiz aufnehmen…" }
-    voice_done { en: "Voice note saved", zh: "语音便签已保存", tw: "語音便籤已儲存", ja: "音声メモを保存", ko: "음성 메모 저장됨", fr: "Mémo vocal enregistré", de: "Sprachnotiz gespeichert" }
     voice_failed { en: "Voice note failed", zh: "语音便签失败", tw: "語音便籤失敗", ja: "音声メモ失敗", ko: "음성 메모 실패", fr: "Échec du mémo vocal", de: "Sprachnotiz fehlgeschlagen" }
+    voice_pinned { en: "Voice note pinned — double-click to play", zh: "语音便签已贴图，双击即可播放", tw: "語音便籤已貼圖，雙擊即可播放", ja: "音声メモをピン留めしました。ダブルクリックで再生", ko: "음성 메모를 핀에 붙였습니다. 더블 클릭으로 재생", fr: "Mémo vocal épinglé — double-cliquez pour lire", de: "Sprachnotiz angeheftet — Doppelklick zum Abspielen" }
+    pin_playing { en: "Playing voice note…", zh: "正在播放语音便签…", tw: "正在播放語音便籤…", ja: "音声メモを再生中…", ko: "음성 메모 재생 중…", fr: "Lecture du mémo vocal…", de: "Sprachnotiz wird abgespielt…" }
     // ---- automation (unattended captures + after-capture workflow) -------
     auto_done { en: "Automatic capture", zh: "自动截图完成", tw: "自動截圖完成", ja: "自動キャプチャ完了", ko: "자동 캡처 완료", fr: "Capture automatique", de: "Automatische Aufnahme" }
     auto_failed { en: "Automatic capture failed", zh: "自动截图失败", tw: "自動截圖失敗", ja: "自動キャプチャ失敗", ko: "자동 캡처 실패", fr: "Échec de la capture automatique", de: "Automatische Aufnahme fehlgeschlagen" }
