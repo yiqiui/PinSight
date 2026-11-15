@@ -21,6 +21,8 @@ Native Rust screenshot · annotation · pin · long-capture · recording tool wi
 [![License](https://img.shields.io/badge/license-Apache--2.0-2EA043)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-stdio-6B5BFF)](https://github.com/yiqiui/PinSight/blob/main/README.zh-CN.md#mcp-集成)
 [![Rust](https://img.shields.io/badge/Rust-1.85%2B-000?logo=rust)](https://www.rust-lang.org)
+[![Build](https://img.shields.io/github/actions/workflow/status/yiqiui/PinSight/ci.yml?label=build&logo=github)](https://github.com/yiqiui/PinSight/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/github/downloads/yiqiui/PinSight/total)](https://github.com/yiqiui/PinSight/releases)
 
 [![Windows](https://img.shields.io/badge/Windows-x64%20%C2%B7%20ARM64-0078D6)](https://github.com/yiqiui/PinSight/releases)
 [![macOS](https://img.shields.io/badge/macOS-Intel%20%C2%B7%20Apple%20Silicon-0078D6)](https://github.com/yiqiui/PinSight/releases)
@@ -153,6 +155,12 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 ---
 
 ## 快速开始
+
+### 下载（普通用户）
+
+直接从 [Releases](https://github.com/yiqiui/PinSight/releases) 页面取预编译包：Windows 提供安装包（`.exe`）和便携 `.zip`；macOS / Linux 提供 `.zip` / `.tar.gz` 压缩包（各含 x64 与 ARM64）。解压即可运行，无需安装 Rust。
+
+> 想从源码构建？见下方[构建与运行](#构建与运行)。
 
 ### 环境要求
 
