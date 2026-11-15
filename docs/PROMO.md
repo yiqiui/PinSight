@@ -194,6 +194,22 @@ https://github.com/yiqiui/PinSight #rust #foss #screenshot
 - [ ] 投稿 This Week in Rust newsletter（提交入口在官网，附一句话 + 链接）
 - [ ] 在 r/opensource、r/software 也转一份（按需）
 - [ ] 发版时套用第 7 节 Release 模板
+- [ ] 发技术深度文（掘金 / 知乎 / r/rust：控件级截图三后端 + dlsym 暗雷，稿源见 [docs/TECH_POST.md](TECH_POST.md)）
 - [ ] 前 3 天盯 Issue / 评论，当日响应；给早期 contributor 标 `good first issue`
 
 > 节奏建议：同一天集中发 Show HN + Reddit + 长文，制造「当日热度」互相带动；之后每天一条短帖维持曝光。
+
+---
+
+## 9. 技术深度文（引流长文，稿源已备）
+
+`docs/TECH_POST.md` 是一篇可直接发的**中文技术深度文**，讲 PinSight 如何用 Rust 实现跨平台「控件级截图」：
+
+- Windows：UI Automation + Win32 兜底，同步 COM 在 STA 主线程死锁 → MTA worker + 800ms 超时
+- macOS：手写 Accessibility FFI，`kAXValue*Type` 链接器「未定义符号」→ `dlopen`+`dlsym` 运行时解析
+- Linux：X11 窗口树遍历，现代 GTK/Qt 控件不是 X11 窗口的能力天花板
+- 跨平台坐标空间统一约定（零转换）
+
+文末附**英文 abstract**，可直接贴 r/rust / Hacker News 评论区。
+
+**投放建议**：掘金 / 知乎技术专栏（中文全文）+ r/rust（英文 abstract 扩写成帖）。这类「真实踩坑 + 可运行代码」内容在技术社区传播最好，且能吸引会写 Rust 的贡献者。
