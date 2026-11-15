@@ -213,3 +213,17 @@ https://github.com/yiqiui/PinSight #rust #foss #screenshot
 文末附**英文 abstract**，可直接贴 r/rust / Hacker News 评论区。
 
 **投放建议**：掘金 / 知乎技术专栏（中文全文）+ r/rust（英文 abstract 扩写成帖）。这类「真实踩坑 + 可运行代码」内容在技术社区传播最好，且能吸引会写 Rust 的贡献者。
+
+---
+
+## 10. 技术深度文（二）：WGC vs GDI 黑块
+
+`docs/TECH_POST_2.md` 是系列第二篇，讲截图工具最隐蔽的坑——**自己的悬浮窗被烤成纯黑矩形**的根因：
+
+- 两条后端：WGC（Win10 1803+，尊重 `WDA_EXCLUDEFROMCAPTURE`）vs GDI `BitBlt`（读帧缓冲）
+- 黑块根因：`xcap` **默认不带 `wgc` feature → 静默退回 GDI**；GDI 无法合成分层窗口 → 黑矩形
+- 一行修复：`xcap` 加 `features = ["wgc"]`
+- HDR 第二坑：WGC 在 HDR 下发白（scRGB clamp 非 tone-map），需 DXGI 检测 `RGB_FULL_G2084_NONE_P2020` 回退 GDI
+- 文末英文 abstract，可贴 r/rust / HN
+
+**投放建议**：与第一篇错开发（隔 1–2 周），形成「PinSight 技术踩坑系列」，持续给掘金/r/rust 引流。
