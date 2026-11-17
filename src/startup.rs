@@ -42,20 +42,34 @@ fn set_platform(_enabled: bool) -> bool {
     false
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-
-/// The executable we would launch at sign-in.
-fn executable() -> Option<PathBuf> {
-    std::env::current_exe().ok()
-}
-
 // ---------------------------------------------------------------------------
 // Windows
 // ---------------------------------------------------------------------------
 
-/// The executable we would launch at sign-in.
+/// The executable we would launch at sign-in. Shared by all backends.
+/// (Only one definition: a second cfg-gated copy used to break non-Windows-
+/// Linux-macOS builds with E0428.)
 fn executable() -> Option<PathBuf> {
     std::env::current_exe().ok()
+}
+
+/// Escape a path for the `Exec=` line of a freedesktop `.desktop` file.
+/// The value is a shell-like token list: wrap in single quotes so spaces work,
+/// and escape any embedded single quote as the POSIX `'\\''` sequence.
+#[cfg(target_os = "linux")]
+fn desktop_exec(path: &std::path::Path) -> String {
+    let s = path.to_string_lossy();
+    format!("'{}'", s.replace('\\', "\\\\").replace('\'', "'\\''"))
+}
+
+/// Escape arbitrary text for use inside an XML character data section.
+#[cfg(target_os = "macos")]
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 #[cfg(target_os = "windows")]
@@ -134,7 +148,7 @@ fn set_linux(enabled: bool) -> bool {
     };
     let entry = format!(
         "[Desktop Entry]\nType=Application\nName=PinSight\nComment=Capture, pin and record\nExec={}\nTerminal=false\nCategories=Utility;\nX-GNOME-Autostart-enabled=true\n",
-        exe.display()
+        desktop_exec(&exe)
     );
     if let Some(parent) = path.parent() {
         if let Err(err) = std::fs::create_dir_all(parent) {
@@ -188,11 +202,11 @@ fn set_macos(enabled: bool) -> bool {
          <plist version=\"1.0\">\n\
          <dict>\n\
          \x20 <key>Label</key><string>com.pinsight.app</string>\n\
-         \x20 <key>ProgramArguments</key><array><string>{}</string></array>\n\
-         \x20 <key>RunAtLoad</key><true/>\n\
-         </dict>\n\
-         </plist>\n",
-        exe.display()
+        \x20 <key>ProgramArguments</key><array><string>{}</string></array>\n\
+        \x20 <key>RunAtLoad</key><true/>\n\
+        </dict>\n\
+        </plist>\n",
+        xml_escape(&exe.to_string_lossy())
     );
     if let Some(parent) = path.parent() {
         if let Err(err) = std::fs::create_dir_all(parent) {
@@ -217,6 +231,32 @@ fn set_macos(enabled: bool) -> bool {
 mod tests {
     /// The desktop entry must stay a valid INI file: an unbalanced bracket or a
     /// missing `Exec` line silently disables the autostart entry.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn desktop_exec_quotes_spaces_and_squotes() {
+        assert_eq!(
+            desktop_exec(std::path::Path::new("/opt/pinsight")),
+            "'/opt/pinsight'"
+        );
+        assert_eq!(
+            desktop_exec(std::path::Path::new("/home/me/My Tools/pinsight")),
+            "'/home/me/My Tools/pinsight'"
+        );
+        assert_eq!(
+            desktop_exec(std::path::Path::new("/home/o'brien/pinsight")),
+            "'/home/o'\\''brien/pinsight'"
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn xml_escape_handles_special_chars() {
+        assert_eq!(
+            xml_escape("a&b<c>d\"e'f"),
+            "a&amp;b&lt;c&gt;d&quot;e&apos;f"
+        );
+    }
+
     #[test]
     #[cfg(target_os = "linux")]
     fn desktop_entry_is_well_formed() {

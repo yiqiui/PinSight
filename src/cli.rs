@@ -123,6 +123,21 @@ fn run_update_check(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// Parse `--delay` seconds into a value safe for `Duration::from_secs_f32`.
+/// That constructor panics on NaN, infinities, negatives, and values beyond
+/// the u64-second range — unacceptable in a headless CLI where a bad argument
+/// must produce a clean stderr message, never an abort.
+/// The upper bound is 24 h, well past any sane "wait before capture" use.
+fn parse_delay(value: &str) -> Result<f32> {
+    let seconds: f32 = value.parse().context("--delay expects a number")?;
+    if !seconds.is_finite() || seconds < 0.0 || seconds > 86_400.0 {
+        return Err(anyhow!(
+            "--delay must be a finite number of seconds between 0 and 86400 (got `{value}`)"
+        ));
+    }
+    Ok(seconds)
+}
+
 fn run(args: &[String]) -> Result<()> {
     let mut out: Option<PathBuf> = None;
     let mut region: Option<PhysRect> = None;
@@ -172,7 +187,7 @@ fn run(args: &[String]) -> Result<()> {
                 let value = args
                     .get(i)
                     .ok_or_else(|| anyhow!("--delay needs seconds"))?;
-                delay = value.parse().context("--delay expects a number")?;
+                delay = parse_delay(value)?;
             }
             "--filter" | "-f" => {
                 i += 1;
@@ -749,6 +764,20 @@ mod tests {
                 .unwrap()
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn parse_delay_rejects_panicking_values() {
+        assert_eq!(parse_delay("2.5").unwrap(), 2.5);
+        assert_eq!(parse_delay("0").unwrap(), 0.0);
+        assert!(parse_delay("inf").is_err());
+        assert!(parse_delay("-inf").is_err());
+        assert!(parse_delay("NaN").is_err());
+        assert!(parse_delay("-1").is_err());
+        assert!(parse_delay("1e20").is_err());
+        assert!(parse_delay("86401").is_err());
+        assert!(parse_delay("86400").is_ok());
+        assert!(parse_delay("abc").is_err());
     }
 
     #[test]
