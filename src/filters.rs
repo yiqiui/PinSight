@@ -76,9 +76,21 @@ impl Filter {
             "emboss" => Some(Filter::Emboss),
             other => {
                 if let Some(rest) = other.strip_prefix("blur:") {
-                    rest.parse::<f32>().ok().map(Filter::Blur)
+                    // image's Gaussian blur asserts sigma.is_normal(); inf,
+                    // NaN and subnormals would abort the process (panic=abort).
+                    // Cap the upper bound too, so a huge finite sigma cannot
+                    // build a u32::MAX-sized kernel.
+                    match rest.parse::<f32>() {
+                        Ok(s) if s.is_normal() && s <= 100.0 => Some(Filter::Blur(s)),
+                        _ => None,
+                    }
                 } else if let Some(rest) = other.strip_prefix("rotate:") {
-                    rest.parse::<f32>().ok().map(Filter::Rotate)
+                    // Non-finite degrees make sin_cos() return NaN and silently
+                    // blank the image.
+                    match rest.parse::<f32>() {
+                        Ok(d) if d.is_finite() => Some(Filter::Rotate(d)),
+                        _ => None,
+                    }
                 } else {
                     None
                 }
@@ -305,6 +317,14 @@ mod tests {
         assert_eq!(Filter::from_code("blur:1.5"), Some(Filter::Blur(1.5)));
         assert_eq!(Filter::from_code("rotate:30"), Some(Filter::Rotate(30.0)));
         assert_eq!(Filter::from_code("nope"), None);
+        // Non-finite / out-of-range numeric filters must be rejected, never
+        // handed to image's blur (which asserts is_normal) or sin_cos.
+        assert_eq!(Filter::from_code("blur:inf"), None);
+        assert_eq!(Filter::from_code("blur:NaN"), None);
+        assert_eq!(Filter::from_code("blur:1e-40"), None);
+        assert_eq!(Filter::from_code("blur:101"), None);
+        assert_eq!(Filter::from_code("rotate:inf"), None);
+        assert_eq!(Filter::from_code("rotate:NaN"), None);
     }
 
     #[test]

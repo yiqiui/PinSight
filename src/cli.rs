@@ -358,7 +358,7 @@ fn run(args: &[String]) -> Result<()> {
             anyhow::bail!("--workflow contained no valid codes (see --list-workflow)");
         }
         let plan = crate::automation::plan(&actions);
-        let report = crate::autorun::execute(&image, &plan, &params);
+        let report = crate::autorun::execute(&image, &plan, &params, None);
         for path in &report.saved {
             println!("{}", path.display());
         }
@@ -721,8 +721,12 @@ fn parse_region(value: &str) -> Result<PhysRect> {
         .collect::<Result<_>>()?;
     let x = i32::try_from(nums[0]).map_err(|_| anyhow!("--region x is out of i32 range"))?;
     let y = i32::try_from(nums[1]).map_err(|_| anyhow!("--region y is out of i32 range"))?;
-    let w = u32::try_from(nums[2].max(1)).map_err(|_| anyhow!("--region w is out of u32 range"))?;
-    let h = u32::try_from(nums[3].max(1)).map_err(|_| anyhow!("--region h is out of u32 range"))?;
+    // Clamp dimensions: a hostile huge w/h would make grab_physical_rect
+    // allocate w*h*4 bytes and abort the process. 16384 covers every real
+    // display (mirrors the MCP tool's parse_region guard).
+    const MAX_SIDE: i64 = 16_384;
+    let w = (nums[2].clamp(1, MAX_SIDE)) as u32;
+    let h = (nums[3].clamp(1, MAX_SIDE)) as u32;
     Ok(PhysRect { x, y, w, h })
 }
 
@@ -741,6 +745,15 @@ mod tests {
         assert!(parse_region("10,20,640").is_err());
         assert!(parse_region("a,b,c,d").is_err());
         assert!(parse_region("10,20,0,0").is_ok(), "zero size clamps to 1");
+    }
+
+    #[test]
+    fn region_dimensions_are_clamped_to_a_sane_maximum() {
+        // A hostile huge size must not reach RgbaImage::new and abort (panic=abort).
+        let r = parse_region("0,0,4294967295,4294967295").unwrap();
+        assert_eq!((r.w, r.h), (16384, 16384));
+        let r = parse_region("0,0,-50,-50").unwrap();
+        assert_eq!((r.w, r.h), (1, 1));
     }
 
     #[test]
