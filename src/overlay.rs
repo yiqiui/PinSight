@@ -2067,6 +2067,7 @@ impl CaptureSession {
                                 // is actually on screen, so a mis-recognised
                                 // word can be fixed before it leaves the panel.
                                 let buf = self.ocr_edit.get_or_insert_with(|| recognised.clone());
+                                let before_edit = buf.clone();
                                 egui::ScrollArea::vertical()
                                     .max_height(220.0)
                                     .show(ui, |ui| {
@@ -2076,6 +2077,14 @@ impl CaptureSession {
                                                 .desired_width(f32::INFINITY),
                                         );
                                     });
+                                // Editing the recognised text invalidates any
+                                // translation produced from the old text. Clear
+                                // it so the panel never shows a stale result
+                                // under freshly edited source text.
+                                if self.ocr_edit.as_deref() != Some(before_edit.as_str()) {
+                                    self.ocr_translation = None;
+                                    self.ocr_tr_rx = None;
+                                }
                                 ui.separator();
                                 // Snapshot for the actions: owned String, so
                                 // the mutable borrow of the buffer is over and

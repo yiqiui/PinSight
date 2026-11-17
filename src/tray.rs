@@ -18,7 +18,8 @@ use std::sync::mpsc::Sender;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Shell::{
-    NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW, Shell_NotifyIconW,
+    NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NOTIFYICONDATAW,
+    Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreateIconFromResourceEx, CreatePopupMenu, CreateWindowExW, DefWindowProcW,
@@ -263,6 +264,33 @@ impl Tray {
         if let Some(state) = slot.as_mut() {
             state.items = items;
         }
+    }
+
+    /// Update the hover tooltip (e.g. after switching UI language). The menu
+    /// rows come from `set_items`; the tip needs a shell NIM_MODIFY because it
+    /// is cached in the notification-area icon, not rebuilt on menu open.
+    pub fn set_tip(&self, tip: String) {
+        let mut slot = match TRAY_STATE.lock() {
+            Ok(slot) => slot,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let Some(state) = slot.as_mut() else {
+            return;
+        };
+        state.tip = tip;
+        let mut wide: [u16; 128] = [0; 128];
+        for (dst, unit) in wide.iter_mut().zip(state.tip.encode_utf16()) {
+            *dst = unit;
+        }
+        let data = NOTIFYICONDATAW {
+            cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
+            hWnd: state.hwnd.0,
+            uID: 1,
+            uFlags: NIF_TIP,
+            szTip: wide,
+            ..Default::default()
+        };
+        let _ = unsafe { Shell_NotifyIconW(NIM_MODIFY, &data) };
     }
 }
 

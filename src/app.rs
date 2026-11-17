@@ -434,7 +434,7 @@ pub struct PinSightApp {
     /// shown: pin count, global hide, hotkeys, enhanced menu, and the group
     /// table (ids, names, hidden flags).
     #[allow(clippy::type_complexity)]
-    tray_sig: (usize, bool, bool, bool, Vec<(u32, String, bool)>),
+    tray_sig: (Vec<u64>, bool, bool, bool, Vec<(u32, String, bool)>),
 }
 
 impl PinSightApp {
@@ -591,7 +591,7 @@ impl PinSightApp {
             #[cfg(windows)]
             tray: None,
             #[cfg(windows)]
-            tray_sig: (0, false, true, true, Vec::new()),
+            tray_sig: (Vec::new(), false, true, true, Vec::new()),
         };
 
         app.install_tray(&cc.egui_ctx);
@@ -2582,6 +2582,17 @@ impl PinSightApp {
     /// scheduled from the effective cadence so an idle, tray-hidden process
     /// still wakes up on time without polling every frame.
     fn poll_automation(&mut self, ctx: &egui::Context) {
+        // If automation was switched off mid-tick, discard the in-flight
+        // result instead of popping a "capture done/failed" toast for a run
+        // the user already cancelled. Also drop the cached frame.
+        if !self.config.automation.enabled {
+            if self.auto_rx.take().is_some() {
+                tracing::debug!("automation disabled; dropping in-flight tick");
+            }
+            self.auto_prev_frame = None;
+            return;
+        }
+
         // 1. Harvest a finished tick before considering a new one.
         if let Some(rx) = self.auto_rx.as_ref() {
             match rx.try_recv() {
@@ -2623,12 +2634,7 @@ impl PinSightApp {
         }
 
         let cfg = self.config.automation.clone();
-        if !cfg.enabled {
-            // Drop the cached frame so a re-enabled monitor starts fresh and
-            // we don't hold a full-screen buffer while automation is off.
-            self.auto_prev_frame = None;
-            return;
-        }
+        // (Disabled state already returned at the top of this method.)
         // Never layer an automatic capture over an active overlay/recording.
         if self.busy_with_capture() || self.capture_blocked_by_ui(ctx) {
             return;
@@ -3425,7 +3431,10 @@ impl PinSightApp {
     #[cfg(windows)]
     fn sync_tray_menu(&mut self) {
         let sig = (
-            self.pins.len(),
+            // Include the actual pin ids, not just the count: closing pin #5
+            // and creating #8 leaves the count at 1 but the Pins submenu label
+            // (which shows `pin.id` and issues FocusPin(id)) would stay stale.
+            self.pins.iter().map(|p| p.id).collect::<Vec<_>>(),
             self.config.pin_hidden,
             self.config.hotkeys_enabled,
             self.config.enhanced_tray,
@@ -4453,10 +4462,12 @@ impl PinSightApp {
         }
         let _ = self.config.save();
         ctx.request_repaint();
-        // The tray labels are translated, so rebuild them on language change.
+        // The tray labels AND the hover tip are translated, so refresh both
+        // on language change (the tip needs NIM_MODIFY, set_items alone won't).
         #[cfg(windows)]
         if let Some(tray) = self.tray.as_ref() {
             tray.set_items(self.tray_items());
+            tray.set_tip(self.tr.tr.tray_tip.to_string());
         }
     }
 

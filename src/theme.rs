@@ -65,14 +65,17 @@ impl Accent {
     }
 
     /// Black or white, whichever reads better on top of the accent fill.
-    fn on_accent(self, custom: [u8; 3]) -> egui::Color32 {
-        let rgb = match self {
-            Self::Custom => custom,
-            _ => {
-                let c = self.color();
-                [c.r(), c.g(), c.b()]
-            }
+    /// `dark` must match the theme, because the light theme uses the darker
+    /// `resolve_light()` fill — computing brightness from the dark-theme colour
+    /// picked white-on-light for emerald/amber/rose/cyan/violet, which was
+    /// effectively unreadable.
+    fn on_accent(self, custom: [u8; 3], dark: bool) -> egui::Color32 {
+        let c = if dark {
+            self.resolve(custom)
+        } else {
+            self.resolve_light(custom)
         };
+        let rgb = [c.r(), c.g(), c.b()];
         let lum = 0.299 * rgb[0] as f32 + 0.587 * rgb[1] as f32 + 0.114 * rgb[2] as f32;
         if lum > 150.0 {
             egui::Color32::from_rgb(0x08, 0x0C, 0x12)
@@ -147,7 +150,7 @@ impl Palette {
                 text_weak: egui::Color32::from_rgb(0x8B, 0x95, 0xA7),
                 accent: accent.resolve(custom),
                 accent_soft: with_alpha(accent.resolve(custom), 34),
-                on_accent: accent.on_accent(custom),
+                on_accent: accent.on_accent(custom, true),
                 success: egui::Color32::from_rgb(0x3D, 0xD6, 0x8C),
                 warn: egui::Color32::from_rgb(0xF5, 0xB5, 0x4B),
                 danger: egui::Color32::from_rgb(0xF8, 0x71, 0x71),
@@ -164,7 +167,7 @@ impl Palette {
                 text_weak: egui::Color32::from_rgb(0x64, 0x6E, 0x7E),
                 accent: accent.resolve_light(custom),
                 accent_soft: with_alpha(accent.resolve_light(custom), 26),
-                on_accent: accent.on_accent(custom),
+                on_accent: accent.on_accent(custom, false),
                 success: egui::Color32::from_rgb(0x0F, 0x9D, 0x62),
                 warn: egui::Color32::from_rgb(0xB4, 0x6B, 0x05),
                 danger: egui::Color32::from_rgb(0xD9, 0x3A, 0x3A),
@@ -356,4 +359,57 @@ fn visuals_for(p: Palette) -> egui::Visuals {
     };
 
     v
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn luma(c: egui::Color32) -> f32 {
+        0.299 * c.r() as f32 + 0.587 * c.g() as f32 + 0.114 * c.b() as f32
+    }
+
+    #[test]
+    fn light_theme_accent_text_has_contrast() {
+        // Regression: light fills are the darkened resolve_light() colours.
+        // on_accent must be computed from those, not the bright dark-theme ones.
+        for accent in [
+            Accent::Blue,
+            Accent::Violet,
+            Accent::Emerald,
+            Accent::Amber,
+            Accent::Rose,
+            Accent::Cyan,
+        ] {
+            let p = Palette::for_theme(egui::Theme::Light, accent, [0x5B, 0x9D, 0xFF]);
+            let delta = (luma(p.accent) - luma(p.on_accent)).abs();
+            assert!(
+                delta > 80.0,
+                "light accent {:?}: text/fill brightness delta {:.0} too small",
+                accent,
+                delta
+            );
+        }
+    }
+
+    #[test]
+    fn dark_theme_accent_text_has_contrast() {
+        for accent in [
+            Accent::Blue,
+            Accent::Violet,
+            Accent::Emerald,
+            Accent::Amber,
+            Accent::Rose,
+            Accent::Cyan,
+        ] {
+            let p = Palette::for_theme(egui::Theme::Dark, accent, [0x5B, 0x9D, 0xFF]);
+            let delta = (luma(p.accent) - luma(p.on_accent)).abs();
+            assert!(
+                delta > 80.0,
+                "dark accent {:?}: text/fill brightness delta {:.0} too small",
+                accent,
+                delta
+            );
+        }
+    }
 }
