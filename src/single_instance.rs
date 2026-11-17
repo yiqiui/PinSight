@@ -303,11 +303,31 @@ fn acquire_lock_file() -> Option<Guard> {
 
 #[cfg(not(windows))]
 fn pid_alive(pid: u32) -> bool {
-    // `kill(pid, 0)` is the portable liveness probe: no signal is sent, but a
-    // dead PID reports ESRCH. Permission errors mean the process exists but
-    // belongs to someone else — still "alive" for our purposes.
+    // `kill(pid, 0)` is the portable liveness probe: no signal is sent.
+    // Return 0 means alive; -1 needs the errno to disambiguate ESRCH (the
+    // process is gone → stale lock) from EPERM (exists but owned by another
+    // user → still alive). Treating every -1 as alive made a lock left by a
+    // crashed instance permanent, so the app could never start again.
     let r = unsafe { libc_kill(pid as i32, 0) };
-    r == 0 || r == -1
+    let errno = if r == -1 {
+        std::io::Error::last_os_error().raw_os_error()
+    } else {
+        None
+    };
+    kill_probe_alive(r, errno)
+}
+
+/// Pure decision logic for the `kill(pid, 0)` liveness probe, split out so the
+/// ESRCH-vs-EPERM distinction can be unit-tested without touching real PIDs.
+#[cfg(not(windows))]
+fn kill_probe_alive(result: i32, errno: Option<i32>) -> bool {
+    const ESRCH: i32 = 3; // POSIX "No such process" — identical on Linux & macOS.
+    if result == 0 {
+        return true;
+    }
+    // Any non-ESRCH failure (EPERM, EINVAL, ...) means we cannot prove the
+    // process is gone, so keep the lock rather than risk two live instances.
+    errno != Some(ESRCH)
 }
 
 #[cfg(not(windows))]
@@ -350,6 +370,20 @@ impl Drop for Guard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(not(windows))]
+    #[test]
+    fn kill_probe_distinguishes_dead_from_alive() {
+        // kill() == 0: definitely alive.
+        assert!(kill_probe_alive(0, None));
+        // kill() == -1 + ESRCH(3): process gone → stale lock must be cleared.
+        assert!(!kill_probe_alive(-1, Some(3)));
+        // kill() == -1 + EPERM(1): alive in another user's session → keep lock.
+        assert!(kill_probe_alive(-1, Some(1)));
+        // Unknown errno: cannot prove death → stay conservative (keep lock).
+        assert!(kill_probe_alive(-1, None));
+        assert!(kill_probe_alive(-1, Some(22)));
+    }
 
     #[test]
     fn second_acquire_is_refused() {

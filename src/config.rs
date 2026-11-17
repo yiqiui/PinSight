@@ -1470,8 +1470,17 @@ impl Config {
 /// no disk side effect. Kept as a free function so it can be unit-tested with an
 /// arbitrary path, independent of the global resolved config location.
 fn read_config(path: &Path) -> (Config, Option<PathBuf>) {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return (Config::default(), None);
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return (Config::default(), None),
+        Err(err) => {
+            // InvalidData (e.g. non-UTF-8 bytes) is a corrupt config just as
+            // much as invalid JSON. Preserve it instead of silently resetting
+            // and letting the next save destroy the user's settings.
+            tracing::warn!(?path, %err, "config is unreadable; preserving it and resetting to defaults");
+            let corrupt = preserve_corrupt(path);
+            return (Config::default(), corrupt);
+        }
     };
     match serde_json::from_str::<Config>(&text) {
         Ok(cfg) => (cfg, None),
@@ -1613,6 +1622,23 @@ mod tests {
         assert_eq!(cfg.image_quality, 90);
         let Some(bad) = corrupt else {
             panic!("expected the corrupt file to be preserved");
+        };
+        assert!(bad.exists(), "preserved file should exist");
+        assert!(!path.exists(), "original should have been moved aside");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_config_preserves_non_utf8_file() {
+        let dir = std::env::temp_dir().join(format!("ps-cfg-nonutf8-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("config.json");
+        // Invalid UTF-8: read_to_string returns InvalidData, not a JSON error.
+        std::fs::write(&path, [0x7B, 0xFF, 0xFE, 0x7D]).unwrap();
+        let (cfg, corrupt) = read_config(&path);
+        assert_eq!(cfg.image_quality, 90, "default survived");
+        let Some(bad) = corrupt else {
+            panic!("non-UTF-8 config must be preserved, not silently discarded");
         };
         assert!(bad.exists(), "preserved file should exist");
         assert!(!path.exists(), "original should have been moved aside");
