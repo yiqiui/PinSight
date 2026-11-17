@@ -6,7 +6,41 @@ All notable changes to PinSight are documented here. The format follows
 
 ## [Unreleased]
 
-_Nothing yet — changes land here until the next tagged release._
+### Fixed
+
+- **Stale single-instance lock no longer blocks startup on macOS/Linux.**
+  `kill(pid, 0)` returns `-1` for both "process gone" (ESRCH) and "process
+  exists but owned by another user" (EPERM); treating every `-1` as alive made
+  a lock left by a crashed instance permanent, so the app could never restart.
+  The liveness probe now distinguishes the two by errno.
+- **Non-UTF-8 config files are preserved instead of silently discarded.**
+  `read_to_string` failing with `InvalidData` used to fall back to defaults
+  without moving the bad file aside, so the next save destroyed all settings.
+  It is now handled like invalid JSON (backed up to `*.corrupt-<ts>`).
+- **`--delay inf` / huge values no longer crash the CLI.** `Duration::from_secs_f32`
+  panicked on non-finite/out-of-range values (abort in release builds); the
+  argument is now validated to a finite 0–86400 seconds with a clear error.
+- **Run-at-startup works with spaces and special characters in the path.**
+  Linux `.desktop` `Exec=` is now single-quote escaped and macOS LaunchAgent
+  plist paths are XML-escaped. Also removed a duplicate `executable()` that
+  broke compilation on non-Windows/macOS/Linux targets.
+- **"Always on top" on pins actually toggles now.** The menu command passed
+  `SWP_NOZORDER` together with `HWND_TOPMOST`, which Win32 silently ignores;
+  the flag is removed (and `SWP_NOSIZE` added so the zero cx/cy can't shrink the pin).
+- **Clipboard `CF_HDROP` no longer leaks HGLOBAL / locks the clipboard.** All
+  `GlobalLock`/`OpenClipboard`/`EmptyClipboard` failure paths now free the handle
+  and close the clipboard; previously other apps could be locked out.
+- **Large captures no longer abort on an allocation failure.** `Pixmap::new`
+  returning `None` no longer panics in the annotation rasteriser.
+- **Tray menu and tooltip stay in sync.** The Pins submenu now keys on the actual
+  pin id set (closing #5 and adding #8 previously left a stale `FocusPin(5)`
+  row); switching language now refreshes the hover tooltip too.
+- **Editing OCR text invalidates the stale translation** shown below it, and
+  disabling automation mid-tick no longer pops a completion toast for a cancelled run.
+- **Light theme accent buttons are readable again.** `on_accent` computed text
+  brightness from the dark-theme colour while the light theme paints a darker
+  fill, leaving 5 of 6 accents dark-on-dark; brightness is now computed from the
+  actual light fill.
 
 ## [0.1.3] - 2026-11-11
 
