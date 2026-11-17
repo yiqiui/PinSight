@@ -270,21 +270,28 @@ impl Tray {
     /// rows come from `set_items`; the tip needs a shell NIM_MODIFY because it
     /// is cached in the notification-area icon, not rebuilt on menu open.
     pub fn set_tip(&self, tip: String) {
-        let mut slot = match TRAY_STATE.lock() {
-            Ok(slot) => slot,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        let Some(state) = slot.as_mut() else {
-            return;
-        };
-        state.tip = tip;
-        let mut wide: [u16; 128] = [0; 128];
-        for (dst, unit) in wide.iter_mut().zip(state.tip.encode_utf16()) {
-            *dst = unit;
-        }
+        // Copy out what we need, drop the guard, THEN call into the shell.
+        // Holding TRAY_STATE across Shell_NotifyIconW (which waits on explorer)
+        // would block the tray wndproc's own lock_state calls and freeze the
+        // whole tray if explorer stalled — the same rule Drop/show_menu follow.
+        let (hwnd, wide) = {
+            let mut slot = match TRAY_STATE.lock() {
+                Ok(slot) => slot,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            let Some(state) = slot.as_mut() else {
+                return;
+            };
+            state.tip = tip;
+            let mut wide: [u16; 128] = [0; 128];
+            for (dst, unit) in wide.iter_mut().zip(state.tip.encode_utf16()) {
+                *dst = unit;
+            }
+            (state.hwnd.0, wide)
+        }; // guard released here
         let data = NOTIFYICONDATAW {
             cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
-            hWnd: state.hwnd.0,
+            hWnd: hwnd,
             uID: 1,
             uFlags: NIF_TIP,
             szTip: wide,

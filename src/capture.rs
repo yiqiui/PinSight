@@ -416,7 +416,15 @@ pub fn composite_cursor(img: &mut RgbaImage, origin: (i32, i32)) {
             };
             let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
             let dc = CreateCompatibleDC(None);
-            let bmp = CreateDIBSection(Some(dc), &bmi, DIB_RGB_COLORS, &mut bits, None, 0).ok()?;
+            let bmp = match CreateDIBSection(Some(dc), &bmi, DIB_RGB_COLORS, &mut bits, None, 0) {
+                Ok(bmp) => bmp,
+                Err(_) => {
+                    // Don't leak the DC on this early-return path (the bits-null
+                    // branch below already cleans up correctly).
+                    let _ = DeleteDC(dc);
+                    return None;
+                }
+            };
             if bits.is_null() {
                 let _ = DeleteObject(HGDIOBJ(bmp.0));
                 let _ = DeleteDC(dc);
