@@ -18,6 +18,18 @@ All notable changes to PinSight are documented here. The format follows
 
 ### Fixed
 
+- **CLI no longer aborts on hostile input.** `--region` width/height are now
+  clamped to 16384 px (a huge value used to make the allocator abort under
+  `panic=abort`), and `--filter blur:` / `rotate:` reject non-finite or
+  subnormal numbers that crashed image's blur or blanked rotated images.
+- **Pin dragging is robust to lost mouse-up and zooming.** A modal right-click
+  menu that swallowed `WM_LBUTTONUP` no longer leaves the pin stuck to the
+  cursor; zooming mid-drag no longer snaps the window back to a stale position.
+- **Cancelling an automation no longer lets an in-flight tick keep saving /
+  uploading.** A cancel flag is now checked before each workflow step, and a
+  command batch stops immediately after Quit/Restart.
+- **GDI DC leak on DIBSection failure** and **tray lock held across a blocking
+  shell call** (which could freeze tray interaction when explorer stalled) fixed.
 - **Double-click on a pin now works.** The pin window lacked `CS_DBLCLKS` and
   its left-button press entered a modal caption drag that swallowed the second
   click, so `WM_LBUTTONDBLCLK` never fired — voice-note playback and configured
