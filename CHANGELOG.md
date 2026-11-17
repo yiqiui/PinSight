@@ -6,7 +6,27 @@ All notable changes to PinSight are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Horizontal long capture.** Settings → Capture → Direction now offers
+  Vertical (default) and Horizontal. Horizontal mode rotates each grabbed frame
+  90° before feeding the existing hardened vertical stitcher, then rotates the
+  result back — so overlap alignment, sticky-edge stripping and footer handling
+  are reused unchanged. Auto mode posts `WM_MOUSEHWHEEL` / `Axis::Horizontal`;
+  manual mode works by scrolling sideways yourself. Note: some apps map a bare
+  horizontal wheel to zoom — use manual mode there.
+
 ### Fixed
+
+- **Double-click on a pin now works.** The pin window lacked `CS_DBLCLKS` and
+  its left-button press entered a modal caption drag that swallowed the second
+  click, so `WM_LBUTTONDBLCLK` never fired — voice-note playback and configured
+  double-click gestures were dead. Dragging is now tracked manually past a 4px
+  threshold, leaving double-click messages free to arrive.
+- **A batch of tray commands can no longer stack a capture over a window opened
+  by an earlier command in the same batch** (e.g. ShowSettings followed by
+  CaptureArea). egui focus only updates next frame, so the guard now tracks
+  window-opening commands explicitly instead of re-reading stale focus.
 
 - **Stale single-instance lock no longer blocks startup on macOS/Linux.**
   `kill(pid, 0)` returns `-1` for both "process gone" (ESRCH) and "process

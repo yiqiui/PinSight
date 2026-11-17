@@ -69,7 +69,7 @@ PinSight is still iterating quickly: edge cases of scrolling long capture (fixed
 | Pin to screen | ✅ | Native always-on-top borderless window on Windows, egui viewport elsewhere; drag, wheel zoom, `Ctrl+wheel` opacity, click-through, middle/Esc to close; a **context menu** offers copy / save as / zoom presets / topmost / click-through / close / destroy |
 | Pin groups | ✅ | Group management (create/rename/delete/hide as a whole), each group can bind its **own global hotkey** to toggle visibility; plus a global show/hide toggle |
 | Pin from clipboard | ✅ | Pin whatever image is on the clipboard in one keystroke |
-| Long capture | 🧪 | Automatic scrolling + frame stitching after selection; best on static pages without sticky headers |
+| Long capture | 🧪 | Automatic scrolling + frame stitching after selection, **vertical or horizontal** (toggle in Settings → Capture); best on static pages without sticky headers |
 | Screen recording | ✅ | Frame-by-frame capture of a region; MP4 when `ffmpeg` is installed, GIF otherwise |
 | Offline OCR | ✅ | Windows uses the built-in `Windows.Media.Ocr`, macOS uses Vision, Linux uses Tesseract; one-click region OCR in the toolbar; CLI `pinsight shot --ocr` for full screen |
 | Image upload | ✅ | Toolbar upload button + CLI `--upload`; defaults to a local backend writing into `<save dir>/uploaded/`, switchable to HTTP (POST/PUT, form or JSON responses) |
