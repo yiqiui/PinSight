@@ -44,7 +44,7 @@ mod imp {
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        GetKeyState, ReleaseCapture, SetCapture, VK_CONTROL, VK_ESCAPE,
+        GetKeyState, ReleaseCapture, SetCapture, VK_CONTROL, VK_ESCAPE, VK_LBUTTON,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         AppendMenuW, CREATESTRUCTW, CS_DBLCLKS, CS_HREDRAW, CS_VREDRAW, CreatePopupMenu,
@@ -902,6 +902,18 @@ mod imp {
                 LRESULT(0)
             }
             WM_MOUSEMOVE => {
+                // A modal popup (e.g. the right-click menu) can swallow the
+                // WM_LBUTTONUP, leaving a stale drag that makes the pin follow
+                // the cursor on empty movement. The authoritative state is the
+                // physical button, so clear the drag if it is no longer held.
+                if unsafe { GetKeyState(VK_LBUTTON.0 as i32) } >= 0 {
+                    if let Some(ctx) = ctx_from(hwnd) {
+                        if ctx.drag.take().is_some() {
+                            let _ = ReleaseCapture();
+                        }
+                    }
+                    return LRESULT(0);
+                }
                 if let Some(ctx) = ctx_from(hwnd) {
                     if let Some(mut drag) = ctx.drag {
                         let mut pt = POINT::default();
@@ -1058,6 +1070,12 @@ mod imp {
             }
             WM_MOUSEWHEEL => {
                 if let Some(ctx) = ctx_from(hwnd) {
+                    // Zooming changes size/position; any in-progress drag's
+                    // recorded origin would be stale and snap the window back
+                    // on the next mouse move. Abandon the drag on zoom.
+                    if ctx.drag.take().is_some() {
+                        let _ = ReleaseCapture();
+                    }
                     let delta = ((wparam.0 >> 16) & 0xffff) as i16 as f32 / 120.0;
                     // A configured binding wins over the legacy flags.
                     if let Some(action) =
