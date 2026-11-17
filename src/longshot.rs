@@ -105,6 +105,15 @@ fn spawn_esc_watcher(stop: Arc<AtomicBool>, done: Arc<AtomicBool>) {
 use crate::capture;
 use crate::util;
 
+/// Scroll axis for a long capture. Vertical is the classic scrolling page;
+/// Horizontal stitches wide content (wide tables, timelines, side-scrollers).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Direction {
+    #[default]
+    Vertical,
+    Horizontal,
+}
+
 pub enum LongShotUpdate {
     Progress {
         frames: u32,
@@ -161,6 +170,9 @@ pub struct LongShotOptions {
     pub manual_idle_limit: u32,
     /// Hard cap on sampling rounds.
     pub max_frames: u32,
+    /// Scroll axis. Horizontal mode rotates each grabbed frame 90° before the
+    /// (unchanged) vertical stitcher and rotates the result back at the end.
+    pub direction: Direction,
 }
 
 impl Default for LongShotOptions {
@@ -177,6 +189,7 @@ impl Default for LongShotOptions {
             // duplicate.  The hard `max_frames` cap still bounds a forgotten job.
             manual_idle_limit: 200,
             max_frames: 400,
+            direction: Direction::Vertical,
         }
     }
 }
@@ -280,7 +293,11 @@ fn run(
     let ry = region.y.round().max(0.0) as u32;
     let rw = region.w.round().max(2.0) as u32;
     let rh = region.h.round().max(2.0) as u32;
-    let max_height = options.max_height.max(rh + 64);
+    let horizontal = options.direction == Direction::Horizontal;
+    // In horizontal mode every frame is rotated 90°, so the stitcher's "height"
+    // is really the original width. Use the along-axis start/cap accordingly.
+    let axis_start = if horizontal { rw } else { rh };
+    let max_height = options.max_height.max(axis_start + 64);
     let manual = options.scroll_ticks == 0;
 
     std::thread::sleep(Duration::from_millis(220));
@@ -301,7 +318,16 @@ fn run(
     // of the first UI frame — is already clean. WGC then drops the pill from the
     // frame entirely (no black rectangle, no hide/show flicker).
     let _ = crate::capture::set_capture_exclusion(crate::hud::LONG_WINDOW_TITLE);
-    let first = crate::capture::grab_physical_rect(abs_rect).map_err(|e| e.to_string())?;
+    let grab_first = crate::capture::grab_physical_rect(abs_rect).map_err(|e| e.to_string())?;
+    // Rotate into stitch space: a clockwise 90° turn maps the original right
+    // edge to the bottom row, so horizontal forward scroll becomes `Scroll::Down`
+    // in the unchanged vertical stitcher. Rotating the result back at the end
+    // yields a wide image whose width grew.
+    let first = if horizontal {
+        image::imageops::rotate90(&grab_first)
+    } else {
+        grab_first
+    };
     let mut output = Stitch::from_image(&first);
     let mut previous_frame = first.clone();
     let mut frames = 0u32;
@@ -347,7 +373,7 @@ fn run(
             // real input the user is already producing, and it lets them decide
             // exactly how long the capture is. Auto mode posts the wheel.
             if !manual {
-                scroll_at(abs_x, abs_y, options.scroll_ticks as i32);
+                scroll_at(abs_x, abs_y, options.scroll_ticks as i32, options.direction);
             }
         }
 
@@ -366,11 +392,16 @@ fn run(
         // The pill stays excluded via `WDA_EXCLUDEFROMCAPTURE` (re-asserted by
         // the UI thread every frame), so each region grab is already clean — no
         // per-frame hide/show flicker.
-        let next = match crate::capture::grab_physical_rect(abs_rect) {
+        let grabbed = match crate::capture::grab_physical_rect(abs_rect) {
             Ok(next) => next,
             Err(_) => {
                 break;
             }
+        };
+        let next = if horizontal {
+            image::imageops::rotate90(&grabbed)
+        } else {
+            grabbed
         };
         frames += 1;
         dump_frame(frames, &next);
@@ -524,7 +555,7 @@ fn run(
         // Stopped on demand (Esc / the finish button). Keep whatever was
         // captured rather than throwing it away — stopping early is a normal
         // way to end a capture, not a failure.
-        if output.height() > rh {
+        if output.height() > axis_start {
             tracing::info!(
                 frames,
                 output_height = output.height(),
@@ -533,6 +564,10 @@ fn run(
             let mut image = output.into_image();
             if let Some(band) = footer {
                 image = append_band(&image, &band, true);
+            }
+            // Rotate back out of stitch space (footer already re-attached there).
+            if horizontal {
+                image = image::imageops::rotate270(&image);
             }
             let _ = tx.send(LongShotUpdate::Finished {
                 image,
@@ -543,7 +578,7 @@ fn run(
         }
         return Ok(());
     }
-    if output.height() <= rh {
+    if output.height() <= axis_start {
         tracing::warn!("long screenshot produced no new content");
         return Err(
             "No scrollable content detected. Select a region over the scrolling area, \
@@ -559,6 +594,11 @@ fn run(
     let mut image = output.into_image();
     if let Some(band) = footer {
         image = append_band(&image, &band, true);
+    }
+    // Inverse of the entry rotation: the stitcher grew the image "downward"
+    // in rotated space, which is rightward in the real screenshot.
+    if horizontal {
+        image = image::imageops::rotate270(&image);
     }
     let _ = tx.send(LongShotUpdate::Finished {
         image,
@@ -607,10 +647,11 @@ fn frame_difference(a: &RgbaImage, b: &RgbaImage) -> f32 {
 /// injecting it through the input queue as well made some apps scroll twice
 /// per step (see the note in the function body).
 #[cfg(windows)]
-fn scroll_at(x: i32, y: i32, clicks: i32) {
+fn scroll_at(x: i32, y: i32, clicks: i32, direction: Direction) {
     use windows::Win32::Foundation::{LPARAM, POINT, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
-        GA_ROOT, GetAncestor, PostMessageW, SetCursorPos, WM_MOUSEWHEEL, WindowFromPoint,
+        GA_ROOT, GetAncestor, PostMessageW, SetCursorPos, WM_MOUSEHWHEEL, WM_MOUSEWHEEL,
+        WindowFromPoint,
     };
 
     let clicks = clicks.max(1);
@@ -636,11 +677,17 @@ fn scroll_at(x: i32, y: i32, clicks: i32) {
         if !inner.is_invalid() {
             let root = GetAncestor(inner, GA_ROOT);
             let target = if !root.is_invalid() { root } else { inner };
-            // High word of wParam is the signed wheel delta (negative = down).
-            let wparam = WPARAM(((-120 * clicks) as u16 as usize) << 16);
+            // High word of wParam is the signed wheel delta. Vertical:
+            // negative = scroll down (forward). Horizontal: positive = scroll
+            // right (forward), which the 90°-rotated stitcher sees as "down".
+            let (message, delta) = match direction {
+                Direction::Vertical => (WM_MOUSEWHEEL, -120 * clicks),
+                Direction::Horizontal => (WM_MOUSEHWHEEL, 120 * clicks),
+            };
+            let wparam = WPARAM((delta as u16 as usize) << 16);
             let lparam = LPARAM((((y as u16 as usize) << 16) | (x as u16 as usize)) as isize);
             for _ in 0..clicks {
-                let _ = PostMessageW(Some(target), WM_MOUSEWHEEL, wparam, lparam);
+                let _ = PostMessageW(Some(target), message, wparam, lparam);
             }
         }
         // No SendInput fallback here: with the overlay gone the injected wheel
@@ -656,7 +703,7 @@ fn scroll_at(x: i32, y: i32, clicks: i32) {
 /// works everywhere. Windows uses the raw SendInput path above because enigo's
 /// wheel did not move the target window there.
 #[cfg(not(windows))]
-fn scroll_at(x: i32, y: i32, clicks: i32) {
+fn scroll_at(x: i32, y: i32, clicks: i32, direction: Direction) {
     use enigo::{Axis, Coordinate, Mouse};
     let settings = enigo::Settings::default();
     let Ok(mut enigo) = enigo::Enigo::new(&settings) else {
@@ -664,9 +711,12 @@ fn scroll_at(x: i32, y: i32, clicks: i32) {
     };
     let _ = enigo.move_mouse(x, y, Coordinate::Abs);
     std::thread::sleep(Duration::from_millis(40));
-    // Positive vertical length scrolls towards the end of the document on
-    // macOS and Linux.
-    let _ = enigo.scroll(clicks.max(1), Axis::Vertical);
+    // Positive length scrolls towards the end of the document on macOS/Linux.
+    let axis = match direction {
+        Direction::Vertical => Axis::Vertical,
+        Direction::Horizontal => Axis::Horizontal,
+    };
+    let _ = enigo.scroll(clicks.max(1), axis);
 }
 
 /// Mean channel value of an image: 0 for a black frame, ~255 for white. Used
@@ -1826,6 +1876,89 @@ mod tests {
                     stitched.get_pixel(xx, yy),
                     source.get_pixel(xx, yy),
                     "row {yy} does not match the source"
+                );
+            }
+        }
+    }
+
+    // ---- horizontal direction (rotate-in / rotate-out) --------------------
+
+    #[test]
+    fn rotation_round_trip_is_identity() {
+        // The horizontal engine relies on rotate270(rotate90(img)) == img.
+        let img = text_page(37, 53);
+        let rotated = image::imageops::rotate90(&img);
+        assert_eq!(rotated.dimensions(), (img.height(), img.width()));
+        let back = image::imageops::rotate270(&rotated);
+        assert_eq!(back.dimensions(), img.dimensions());
+        for y in 0..img.height() {
+            for x in 0..img.width() {
+                assert_eq!(back.get_pixel(x, y), img.get_pixel(x, y));
+            }
+        }
+    }
+
+    #[test]
+    fn rightward_scroll_maps_to_down_after_rotate90() {
+        // A rightward scroll of the original frame must be classified as
+        // Scroll::Down in rotated space, or the worker would skip it as "back".
+        let source = text_page(600, 120);
+        let first = image::imageops::crop_imm(&source, 0, 0, 300, 120).to_image();
+        let next = image::imageops::crop_imm(&source, 120, 0, 300, 120).to_image();
+        let a = image::imageops::rotate90(&first);
+        let b = image::imageops::rotate90(&next);
+        assert!(
+            matches!(classify_scroll(&a, &b), Scroll::Down(_)),
+            "rightward scroll must become Down in stitch space"
+        );
+    }
+
+    /// Full horizontal capture: stitch a wide page by stepping right per frame,
+    /// using the exact rotate-in → vertical-stitch → rotate-out pipeline that
+    /// `run` uses in horizontal mode. Every source column must appear once.
+    #[test]
+    fn stitches_a_full_horizontal_scroll_without_duplication_or_gaps() {
+        // Encode each column's absolute x in its colour so no two columns look
+        // alike — overlap alignment is then unambiguous (text/gradient patterns
+        // repeat and can match at a wrong offset).
+        // Scale x by 53 so adjacent columns differ by 53 (> the 12 pixel
+        // tolerance), and the high byte breaks the 256-column periodicity that
+        // a plain x&0xFF gradient would have (which let overlap match a wrong
+        // offset 256px away).
+        let source = RgbaImage::from_fn(3000, 220, |x, _y| {
+            let v = x * 53;
+            Rgba([
+                (v & 0xFF) as u8,
+                ((v >> 8) & 0xFF) as u8,
+                (((v >> 16) & 0xFF) as u8).wrapping_add(64),
+                255,
+            ])
+        });
+        let frame_w = 600u32;
+        let step = 300u32;
+        let frame_h = source.height();
+        let first_raw = image::imageops::crop_imm(&source, 0, 0, frame_w, frame_h).to_image();
+        let first = image::imageops::rotate90(&first_raw);
+        let mut out = Stitch::from_image(&first);
+        let mut prev = first;
+        let mut x = step;
+        while x + frame_w <= source.width() {
+            let raw = image::imageops::crop_imm(&source, x, 0, frame_w, frame_h).to_image();
+            let next = image::imageops::rotate90(&raw);
+            let overlap = find_overlap(&prev, &next).expect("overlap");
+            out.push_rows(&next, overlap, next.height() - overlap);
+            prev = next;
+            x += step;
+        }
+        let stitched_rot = out.into_image();
+        let stitched = image::imageops::rotate270(&stitched_rot);
+        assert_eq!(stitched.dimensions(), source.dimensions());
+        for yy in 0..source.height() {
+            for xx in 0..source.width() {
+                assert_eq!(
+                    stitched.get_pixel(xx, yy),
+                    source.get_pixel(xx, yy),
+                    "column {xx} does not match the source"
                 );
             }
         }

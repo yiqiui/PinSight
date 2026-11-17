@@ -471,6 +471,9 @@ strings! {
     fmt_rgb { en: "RGB", zh: "RGB", tw: "RGB", ja: "RGB", ko: "RGB", fr: "RVB", de: "RGB" }
     fmt_hsl { en: "HSL", zh: "HSL", tw: "HSL", ja: "HSL", ko: "HSL", fr: "TSL", de: "HSL" }
     long_settings { en: "Scrolling capture", zh: "长截图", tw: "長截圖", ja: "スクロール撮影", ko: "스크롤 캡처", fr: "Capture défilante", de: "Scroll-Aufnahme" }
+    long_direction { en: "Direction", zh: "拼接方向", tw: "拼接方向", ja: "方向", ko: "방향", fr: "Direction", de: "Richtung" }
+    long_dir_vertical { en: "Vertical", zh: "纵向", tw: "縱向", ja: "縦", ko: "세로", fr: "Vertical", de: "Vertikal" }
+    long_dir_horizontal { en: "Horizontal", zh: "横向", tw: "橫向", ja: "横", ko: "가로", fr: "Horizontal", de: "Horizontal" }
     long_max_height { en: "Maximum height", zh: "最长结果高度", tw: "最長結果高度", ja: "結果の最大高さ", ko: "최대 결과 높이", fr: "Hauteur maximale", de: "Maximale Höhe" }
     long_scroll_ticks { en: "Scroll per step", zh: "每次滚动行数", tw: "每次滾動行數", ja: "1ステップのスクロール量", ko: "단계당 스크롤 량", fr: "Défilement par pas", de: "Scroll pro Schritt" }
     long_scroll_delay { en: "Settle time", zh: "滚动后等待", tw: "滾動後等待", ja: "スクロール後の待機", ko: "스크롤 후 대기", fr: "Temps de stabilisation", de: "Wartezeit" }

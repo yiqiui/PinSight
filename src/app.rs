@@ -4214,6 +4214,11 @@ impl PinSightApp {
                     region,
                     longshot::LongShotOptions {
                         max_height: self.config.long_capture_max_height,
+                        direction: if self.config.long_capture_horizontal {
+                            longshot::Direction::Horizontal
+                        } else {
+                            longshot::Direction::Vertical
+                        },
                         // Auto mode: the configured number of notches per step
                         // (a single notch barely moves the page on some
                         // machines; four reliably scrolls, and when it
@@ -7092,6 +7097,15 @@ impl PinSightApp {
         // ---- scrolling capture --------------------------------------------
         ui::card(ui, p, |ui| {
             ui::section_header(ui, p, Icon::Crop, t.long_settings);
+            ui::field_row(ui, p, t.long_direction, |ui| {
+                let options = [(false, t.long_dir_vertical), (true, t.long_dir_horizontal)];
+                if let Some(horizontal) =
+                    ui::segmented(ui, p, self.config.long_capture_horizontal, &options)
+                {
+                    self.config.long_capture_horizontal = horizontal;
+                    let _ = self.config.save();
+                }
+            });
             ui::field_row(ui, p, t.long_max_height, |ui| {
                 let mut value = self.config.long_capture_max_height as f32;
                 if ui::slider(ui, p, &mut value, 2000.0..=60000.0, 0, " px").changed() {

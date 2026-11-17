@@ -304,6 +304,10 @@ pub struct Config {
     /// Duration (seconds) of a voice-note recording triggered from the tray.
     pub voice_seconds: u32,
     pub long_capture_max_height: u32,
+    /// Stitch horizontally (left↔right) instead of top↔bottom. Default false
+    /// keeps existing configs and the classic scrolling-page behaviour.
+    #[serde(default)]
+    pub long_capture_horizontal: bool,
     /// Wheel notches posted per sampling step in auto mode. The overlay's
     /// manual mode always passes 0 — PinSight never scrolls there.
     pub long_scroll_ticks: u32,
@@ -898,6 +902,7 @@ impl Default for Config {
             mic_device: String::new(),
             voice_seconds: 10,
             long_capture_max_height: 20_000,
+            long_capture_horizontal: false,
             long_scroll_ticks: 4,
             long_scroll_delay_ms: 420,
             long_diff_threshold: 1.5,
