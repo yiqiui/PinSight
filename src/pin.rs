@@ -689,6 +689,8 @@ mod imp {
                 } else {
                     HWND_NOTOPMOST
                 };
+                // NOTE: do NOT pass SWP_NOZORDER here — it makes Win32 ignore
+                // hWndInsertAfter, which would leave the topmost state unchanged.
                 let _ = SetWindowPos(
                     hwnd,
                     Some(insert),
@@ -696,7 +698,7 @@ mod imp {
                     0,
                     0,
                     0,
-                    SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
                 );
             }
             IDM_THROUGH => {

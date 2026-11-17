@@ -268,6 +268,7 @@ pub fn start(
     // The recorder thread gets its own handle to signal completion (so the Esc
     // watcher can unhook); the original `done` is returned inside the job.
     let done_thread = done.clone();
+    let done_for_spawn = done.clone();
     let spawn_res = std::thread::Builder::new()
         .name("pinsight-recorder".into())
         .spawn(move || {
@@ -289,9 +290,13 @@ pub fn start(
             // around to polling the final update. `poll()` also sets this, but
             // relying on it alone would leave the global hook installed if the
             // app closed or stopped pumping the channel mid-recording.
-            done_thread.store(true, Ordering::Relaxed);
+            done_for_spawn.store(true, Ordering::Relaxed);
         });
     if let Err(err) = spawn_res {
+        // No recorder thread exists to release the Esc watcher, so mark done
+        // here as well — otherwise the low-level keyboard hook can stay
+        // installed if the UI never polls the Failed update (e.g. closing).
+        done_thread.store(true, Ordering::Relaxed);
         let _ = fail_tx.send(RecordUpdate::Failed(format!(
             "could not start recorder thread: {err}"
         )));

@@ -95,38 +95,54 @@ fn set_clipboard_file(path: &Path) -> anyhow::Result<()> {
 
     unsafe {
         let hglobal = GlobalAlloc(GMEM_MOVEABLE, bytes)?;
-        let base = GlobalLock(hglobal) as *mut u8;
-        if base.is_null() {
-            return Err(anyhow::anyhow!("GlobalLock returned null"));
-        }
-        // DROPFILES.pFiles is the byte offset where the file list begins.
-        let header = DROPFILES {
-            pFiles: struct_size as u32,
-            pt: POINT { x: 0, y: 0 },
-            fNC: BOOL(0),
-            fWide: BOOL(1),
-        };
-        std::ptr::write(base as *mut DROPFILES, header);
-        let strings = base.add(struct_size) as *mut u16;
-        std::ptr::copy_nonoverlapping(wide.as_ptr(), strings, wide.len());
-        // Extra null terminator already accounted for by `wide.len() + 1`.
-        *strings.add(wide.len()) = 0;
-        let _ = GlobalUnlock(hglobal);
-
-        OpenClipboard(None)?;
-        EmptyClipboard()?;
-        // SetClipboardData takes ownership of the handle on SUCCESS only; on
-        // failure it does not, so we must free it ourselves to avoid leaking.
-        let result = SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(hglobal.0)));
-        let _ = CloseClipboard();
-        match result {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                // SetClipboardData did not take ownership on failure; release the
-                // handle ourselves so it does not leak.
+        // From here on, `hglobal` is owned by this scope until SetClipboardData
+        // succeeds (it takes ownership on success only). Every early return
+        // frees it exactly once; `handed_off` prevents a double free.
+        let mut handed_off = false;
+        let free_on_exit = |handed_off: bool| {
+            if !handed_off {
                 let _ = GlobalFree(Some(HGLOBAL(hglobal.0)));
-                Err(e.into())
             }
-        }
+        };
+
+        let result = (|| -> anyhow::Result<()> {
+            let base = GlobalLock(hglobal) as *mut u8;
+            if base.is_null() {
+                return Err(anyhow::anyhow!("GlobalLock returned null"));
+            }
+            // DROPFILES.pFiles is the byte offset where the file list begins.
+            let header = DROPFILES {
+                pFiles: struct_size as u32,
+                pt: POINT { x: 0, y: 0 },
+                fNC: BOOL(0),
+                fWide: BOOL(1),
+            };
+            std::ptr::write(base as *mut DROPFILES, header);
+            let strings = base.add(struct_size) as *mut u16;
+            std::ptr::copy_nonoverlapping(wide.as_ptr(), strings, wide.len());
+            // Extra null terminator already accounted for by `wide.len() + 1`.
+            *strings.add(wide.len()) = 0;
+            let _ = GlobalUnlock(hglobal);
+
+            OpenClipboard(None)?;
+            // Once the clipboard is open it MUST be closed on every path, even
+            // if EmptyClipboard fails — otherwise all other apps are blocked.
+            let clipboard_result = (|| -> anyhow::Result<()> {
+                EmptyClipboard()?;
+                let set = SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(hglobal.0)));
+                match set {
+                    Ok(_) => {
+                        handed_off = true;
+                        Ok(())
+                    }
+                    Err(e) => Err(e.into()),
+                }
+            })();
+            let _ = CloseClipboard();
+            clipboard_result
+        })();
+
+        free_on_exit(handed_off);
+        result
     }
 }

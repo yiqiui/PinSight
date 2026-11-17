@@ -560,7 +560,11 @@ pub fn rasterize(source: &RgbaImage, crop: ImgRect, annotations: &[Annotation]) 
         return out;
     }
 
-    let mut pixmap = Pixmap::new(ow, oh).expect("valid pixmap size");
+    // A huge capture can make tiny-skia's allocation fail. Degrade to the
+    // un-annotated crop instead of panicking (release builds abort on panic).
+    let Some(mut pixmap) = Pixmap::new(ow, oh) else {
+        return out;
+    };
     pixmap.data_mut().copy_from_slice(out.as_raw());
 
     for annotation in annotations {
@@ -581,16 +585,19 @@ pub fn rasterize(source: &RgbaImage, crop: ImgRect, annotations: &[Annotation]) 
     {
         // Rebuild the final image: start from the mosaic-processed base, then
         // replay only the vector annotations.
-        let mut final_pixmap = Pixmap::new(ow, oh).expect("valid pixmap size");
-        final_pixmap.data_mut().copy_from_slice(out.as_raw());
-        for annotation in annotations {
-            if !matches!(annotation, Annotation::Mosaic { .. }) {
-                draw_annotation(&mut final_pixmap, annotation, crop.x, crop.y);
+        if let Some(mut final_pixmap) = Pixmap::new(ow, oh) {
+            final_pixmap.data_mut().copy_from_slice(out.as_raw());
+            for annotation in annotations {
+                if !matches!(annotation, Annotation::Mosaic { .. }) {
+                    draw_annotation(&mut final_pixmap, annotation, crop.x, crop.y);
+                }
+            }
+            if let Some(image) = RgbaImage::from_raw(ow, oh, final_pixmap.data().to_vec()) {
+                out = image;
             }
         }
-        if let Some(image) = RgbaImage::from_raw(ow, oh, final_pixmap.data().to_vec()) {
-            out = image;
-        }
+        // On allocation failure `out` already carries the mosaic results —
+        // keep it rather than crashing.
     } else if let Some(image) = RgbaImage::from_raw(ow, oh, pixmap.data().to_vec()) {
         out = image;
     }
