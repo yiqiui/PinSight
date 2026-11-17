@@ -3853,23 +3853,29 @@ impl PinSightApp {
         // in it) has focus. The tray is usually clicked while the window is
         // unfocused, so `capture_blocked_by_ui` leaves those clicks working.
         let blocked = self.capture_blocked_by_ui(ctx);
+        // A previous command in this same batch may have shown + focused our
+        // window (e.g. ShowSettings). egui focus state is only updated next
+        // frame, so re-calling capture_blocked_by_ui() here would still read the
+        // stale value and let a following CaptureArea cover the just-opened
+        // window. Track it explicitly instead — reliable and focus-independent.
+        let mut ui_opened_this_batch = false;
 
         for command in commands {
             match command {
                 TrayCommand::CaptureArea => {
-                    if blocked {
+                    if blocked || ui_opened_this_batch {
                         continue;
                     }
                     self.begin_area(Intent::Copy, ctx)
                 }
                 TrayCommand::CaptureFull => {
-                    if blocked {
+                    if blocked || ui_opened_this_batch {
                         continue;
                     }
                     self.begin_full_copy(ctx)
                 }
                 TrayCommand::CaptureControl => {
-                    if blocked {
+                    if blocked || ui_opened_this_batch {
                         continue;
                     }
                     self.start_pending(AreaJob::Control, ctx)
@@ -3884,7 +3890,7 @@ impl PinSightApp {
                             job.stop();
                             self.toast(self.tr.tr.stopping_recording, false);
                         }
-                    } else if blocked {
+                    } else if blocked || ui_opened_this_batch {
                         // Our window/modal owns the input; not a real request
                         // to start a session.
                     } else {
@@ -3902,7 +3908,7 @@ impl PinSightApp {
                             job.stop();
                             self.toast(self.tr.tr.long_cancelled, false);
                         }
-                    } else if blocked {
+                    } else if blocked || ui_opened_this_batch {
                         // Our window/modal owns the input; not a real request
                         // to start a session.
                     } else {
@@ -3911,7 +3917,7 @@ impl PinSightApp {
                 }
                 TrayCommand::SaveLast => self.save_last(),
                 TrayCommand::RepeatLast(action) => {
-                    if blocked {
+                    if blocked || ui_opened_this_batch {
                         continue;
                     }
                     self.repeat_capture(action, ctx)
@@ -3957,6 +3963,7 @@ impl PinSightApp {
                 TrayCommand::CheckUpdate => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                    ui_opened_this_batch = true;
                     self.page = Page::Settings;
                     self.settings_tab = SettingsTab::Updates;
                     // Run a real check instead of just opening a web page.
@@ -3969,6 +3976,7 @@ impl PinSightApp {
                 TrayCommand::ShowSettings => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                    ui_opened_this_batch = true;
                     self.page = Page::Settings;
                 }
                 TrayCommand::Help => {
@@ -3980,10 +3988,12 @@ impl PinSightApp {
                 TrayCommand::ShowWindow => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                    ui_opened_this_batch = true;
                 }
                 TrayCommand::EditGif => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                    ui_opened_this_batch = true;
                     self.page = Page::Gif;
                 }
                 TrayCommand::RecordVoice => {
@@ -3992,6 +4002,7 @@ impl PinSightApp {
                 TrayCommand::QrGenerator => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                    ui_opened_this_batch = true;
                     self.qr_gen_open = true;
                 }
                 TrayCommand::TrimLastVideo => {
@@ -3999,6 +4010,7 @@ impl PinSightApp {
                         if path.exists() && duration >= 0.5 {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                            ui_opened_this_batch = true;
                             self.trim_dialog = Some(TrimDialog::new(path, duration));
                         } else {
                             self.toast(self.tr.tr.trim_no_video, true);
