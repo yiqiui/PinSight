@@ -44,20 +44,20 @@ mod imp {
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        GetKeyState, ReleaseCapture, VK_CONTROL, VK_ESCAPE,
+        GetKeyState, ReleaseCapture, SetCapture, VK_CONTROL, VK_ESCAPE,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        AppendMenuW, CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreatePopupMenu, CreateWindowExW,
-        DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW, GWL_EXSTYLE, GWLP_USERDATA,
-        GetClientRect, GetCursorPos, GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION,
+        AppendMenuW, CREATESTRUCTW, CS_DBLCLKS, CS_HREDRAW, CS_VREDRAW, CreatePopupMenu,
+        CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW, GWL_EXSTYLE,
+        GWLP_USERDATA, GetClientRect, GetCursorPos, GetMessageW, GetWindowLongPtrW, GetWindowRect,
         HWND_NOTOPMOST, HWND_TOPMOST, IDC_ARROW, LWA_ALPHA, LoadCursorW, MENU_ITEM_FLAGS,
         MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, PostMessageW,
         PostQuitMessage, RegisterClassW, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-        SWP_NOZORDER, SendMessageW, SetForegroundWindow, SetLayeredWindowAttributes,
-        SetWindowLongPtrW, SetWindowPos, ShowWindow, TPM_LEFTALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON,
-        TrackPopupMenu, TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_APP, WM_CLOSE,
-        WM_COMMAND, WM_DESTROY, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN,
-        WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MOUSEWHEEL, WM_NCCREATE, WM_NCLBUTTONDOWN, WM_PAINT,
+        SWP_NOZORDER, SetForegroundWindow, SetLayeredWindowAttributes, SetWindowLongPtrW,
+        SetWindowPos, ShowWindow, TPM_LEFTALIGN, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
+        TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_APP, WM_CLOSE, WM_COMMAND, WM_DESTROY,
+        WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
+        WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCCREATE, WM_PAINT,
         WM_RBUTTONDBLCLK, WM_RBUTTONUP, WNDCLASSW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
         WS_EX_TRANSPARENT, WS_POPUP, WS_VISIBLE,
     };
@@ -83,6 +83,23 @@ mod imp {
     const IDM_CLOSE: usize = WM_APP as usize + 108;
     const IDM_DESTROY: usize = WM_APP as usize + 109;
     const IDM_PLAY: usize = WM_APP as usize + 110;
+
+    /// State for left-button dragging, separated from clicking/double-clicking.
+    /// Tracking the press ourselves (instead of the modal
+    /// `SendMessage(WM_NCLBUTTONDOWN, HTCAPTION)`) is what lets double-click
+    /// messages reach the window: a modal caption drag swallows the second
+    /// click, so `WM_LBUTTONDBLCLK` never fired.
+    #[derive(Clone, Copy)]
+    struct DragState {
+        /// Cursor position (screen coords) at button-down.
+        start_x: i32,
+        start_y: i32,
+        /// Window position (screen coords) at button-down.
+        win_x: i32,
+        win_y: i32,
+        /// Set once the cursor moved past the drag threshold.
+        moved: bool,
+    }
 
     struct PinCtx {
         id: u64,
@@ -113,6 +130,8 @@ mod imp {
         through: bool,
         /// Attached audio note: double-click or the menu "Play" opens it.
         audio_path: Option<PathBuf>,
+        /// Active left-button drag, if any.
+        drag: Option<DragState>,
         tx: Sender<PinEvent>,
     }
 
@@ -217,6 +236,7 @@ mod imp {
             on_top: true,
             through: false,
             audio_path: audio,
+            drag: None,
             tx,
         });
         let ctx_ptr = Box::into_raw(ctx);
@@ -226,7 +246,9 @@ mod imp {
             let class = HSTRING::from(CLASS_NAME);
             let title = HSTRING::from(format!("PinSight pin #{id}"));
             let wc = WNDCLASSW {
-                style: CS_HREDRAW | CS_VREDRAW,
+                // CS_DBLCLKS is required for Windows to synthesise
+                // WM_LBUTTONDBLCLK / WM_RBUTTONDBLCLK / WM_MBUTTONDBLCLK.
+                style: CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS,
                 lpfnWndProc: Some(wndproc),
                 cbClsExtra: 0,
                 cbWndExtra: 0,
@@ -858,18 +880,74 @@ mod imp {
             }
             WM_ERASEBKGND => LRESULT(1),
             WM_LBUTTONDOWN => {
+                // Track the press ourselves instead of entering the modal
+                // caption drag. A modal drag swallows the second click, so
+                // WM_LBUTTONDBLCLK (voice playback / configured gestures) never
+                // arrived. Here we only remember the origin; movement past a
+                // small threshold starts a real drag in WM_MOUSEMOVE.
+                let mut pt = POINT::default();
+                let _ = GetCursorPos(&mut pt);
+                let mut rect = RECT::default();
+                let _ = GetWindowRect(hwnd, &mut rect);
+                if let Some(ctx) = ctx_from(hwnd) {
+                    ctx.drag = Some(DragState {
+                        start_x: pt.x,
+                        start_y: pt.y,
+                        win_x: rect.left,
+                        win_y: rect.top,
+                        moved: false,
+                    });
+                }
+                let _ = SetCapture(hwnd);
+                LRESULT(0)
+            }
+            WM_MOUSEMOVE => {
+                if let Some(ctx) = ctx_from(hwnd) {
+                    if let Some(mut drag) = ctx.drag {
+                        let mut pt = POINT::default();
+                        let _ = GetCursorPos(&mut pt);
+                        let dx = pt.x - drag.start_x;
+                        let dy = pt.y - drag.start_y;
+                        // Ignore jitter: a click is not a drag until the cursor
+                        // travels far enough. This threshold is what keeps a
+                        // double-click from also moving the pin.
+                        if !drag.moved && (dx.abs() > 4 || dy.abs() > 4) {
+                            drag.moved = true;
+                        }
+                        if drag.moved {
+                            let _ = SetWindowPos(
+                                hwnd,
+                                None,
+                                drag.win_x + dx,
+                                drag.win_y + dy,
+                                0,
+                                0,
+                                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+                            );
+                        }
+                        ctx.drag = Some(drag);
+                    }
+                }
+                LRESULT(0)
+            }
+            WM_LBUTTONUP => {
+                // End the press. Only cleanup here — left-button *actions* are
+                // the double-click branch's job. Firing a single-click gesture
+                // on this message would double-fire ahead of WM_LBUTTONDBLCLK
+                // (the standard sequence is DOWN, UP, DBLCLK, UP).
+                if let Some(ctx) = ctx_from(hwnd) {
+                    ctx.drag = None;
+                }
                 let _ = ReleaseCapture();
-                let _ = SendMessageW(
-                    hwnd,
-                    WM_NCLBUTTONDOWN,
-                    Some(WPARAM(HTCAPTION as usize)),
-                    Some(LPARAM(0)),
-                );
                 LRESULT(0)
             }
             // Double-click variants: the single-click handlers below must not
             // also fire, so a double-click swallows the press.
             m if m == WM_LBUTTONDBLCLK || m == WM_MBUTTONDBLCLK || m == WM_RBUTTONDBLCLK => {
+                // With CS_DBLCLKS set, Windows now delivers these messages —
+                // previously the modal caption drag swallowed them, so voice
+                // playback and double-click gestures never fired.
+                let _ = ReleaseCapture();
                 // A voice note plays on the primary (left) double-click instead
                 // of running the configured gesture.
                 if m == WM_LBUTTONDBLCLK {
