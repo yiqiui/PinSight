@@ -309,6 +309,9 @@ pub struct PinSightApp {
     /// In-flight automation worker. `Some` means a tick is running; the loop
     /// will not start another until it reports back.
     auto_rx: Option<std::sync::mpsc::Receiver<Result<crate::autorun::AutoTick, String>>>,
+    /// Set when automation is disabled, so an in-flight tick's worker stops
+    /// before performing more side effects (save/upload). Reset per tick.
+    auto_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     next_pin_id: u64,
     root_restore: Option<egui::Pos2>,
     pending_area: Option<PendingArea>,
@@ -528,6 +531,7 @@ impl PinSightApp {
             auto_prev_frame: None,
             auto_count: 0,
             auto_rx: None,
+            auto_cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             next_pin_id: 1,
             root_restore: None,
             pending_area: None,
@@ -2587,8 +2591,12 @@ impl PinSightApp {
         // the user already cancelled. Also drop the cached frame.
         if !self.config.automation.enabled {
             if self.auto_rx.take().is_some() {
-                tracing::debug!("automation disabled; dropping in-flight tick");
+                tracing::debug!("automation disabled; cancelling in-flight tick");
             }
+            // Signal the worker so it stops before any remaining side effects
+            // (save / upload) — discarding only the rx still lets those run.
+            self.auto_cancel
+                .store(true, std::sync::atomic::Ordering::Relaxed);
             self.auto_prev_frame = None;
             return;
         }
@@ -2705,6 +2713,10 @@ impl PinSightApp {
 
         let (tx, rx) = std::sync::mpsc::channel();
         self.auto_rx = Some(rx);
+        // Fresh cancel flag for this tick (clears any prior disable signal).
+        self.auto_cancel
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        let cancel = self.auto_cancel.clone();
         std::thread::Builder::new()
             .name("pinsight-automation".into())
             .spawn(move || {
@@ -2726,7 +2738,12 @@ impl PinSightApp {
                     // baseline (`prev == None`) and never produces a capture.
                     let fired = if fire_on_change { changed } else { true };
                     let report = if fired {
-                        Some(crate::autorun::execute(&frame, &plan, &params))
+                        Some(crate::autorun::execute(
+                            &frame,
+                            &plan,
+                            &params,
+                            Some(&cancel),
+                        ))
                     } else {
                         None
                     };
@@ -3972,6 +3989,9 @@ impl PinSightApp {
                 TrayCommand::Restart => {
                     self.toast(self.tr.tr.tray_restarting_toast, false);
                     self.restart_app(ctx);
+                    // The process/window is going away — do not run any command
+                    // that queued behind this in the same batch.
+                    break;
                 }
                 TrayCommand::ShowSettings => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
@@ -4026,6 +4046,9 @@ impl PinSightApp {
                     // instead of letting the process exit.
                     self.quitting = true;
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    // Stop processing the batch: a capture queued after Quit
+                    // must not start during shutdown.
+                    break;
                 }
             }
             ctx.request_repaint();

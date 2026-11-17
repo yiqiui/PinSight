@@ -4,6 +4,7 @@
 //! ShareX uses. Runs on a worker thread; never touches the GUI.
 
 use image::RgbaImage;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::automation::{ExtraFormat, WorkflowAction};
 use crate::config::UploadConfig;
@@ -54,13 +55,15 @@ pub struct WorkflowReport {
     pub copied_image: bool,
     pub copied_link: bool,
     pub notified: bool,
+    /// True when an in-flight tick was cancelled before it fully ran.
+    pub cancelled: bool,
     /// Per-step failures; the chain continues after each one.
     pub errors: Vec<String>,
 }
 
 impl WorkflowReport {
     pub fn ok(&self) -> bool {
-        self.errors.is_empty()
+        self.errors.is_empty() && !self.cancelled
     }
 
     /// A compact human summary used by the tray toast and the CLI.
@@ -83,9 +86,20 @@ impl WorkflowReport {
 }
 
 /// Execute `plan` against `image`. Safe to call off the GUI thread.
-pub fn execute(image: &RgbaImage, plan: &[WorkflowAction], params: &RunParams) -> WorkflowReport {
+pub fn execute(
+    image: &RgbaImage,
+    plan: &[WorkflowAction],
+    params: &RunParams,
+    cancel: Option<&AtomicBool>,
+) -> WorkflowReport {
     let mut report = WorkflowReport::default();
     for &action in plan {
+        // Let the GUI cancel an in-flight tick (e.g. automation switched off)
+        // before each side effect. A cancelled report is discarded by caller.
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            report.cancelled = true;
+            return report;
+        }
         match action {
             WorkflowAction::Save => {
                 match crate::util::save_image(image, &params.save_dir, &params.save_options) {
@@ -183,7 +197,7 @@ mod tests {
             WorkflowAction::Save,
             WorkflowAction::SaveExtra(ExtraFormat::Jpeg),
         ]);
-        let report = execute(&img, &actions, &params);
+        let report = execute(&img, &actions, &params, None);
         assert!(report.errors.is_empty(), "errors: {:?}", report.errors);
         assert_eq!(report.saved.len(), 2);
         for p in &report.saved {
@@ -208,7 +222,7 @@ mod tests {
             ..params
         };
         let actions = plan(&[WorkflowAction::CopyLink, WorkflowAction::Save]);
-        let report = execute(&img, &actions, &params);
+        let report = execute(&img, &actions, &params, None);
         // Save still ran even though upload failed.
         assert_eq!(report.saved.len(), 1);
         assert!(!report.ok());
@@ -234,10 +248,27 @@ mod tests {
             actions,
             vec![WorkflowAction::Upload, WorkflowAction::CopyLink]
         );
-        let report = execute(&img, &actions, &params);
+        let report = execute(&img, &actions, &params, None);
         assert!(report.link.is_some(), "errors: {:?}", report.errors);
         assert!(report.copied_link);
         assert!(report.summary().contains("uploaded"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cancel_before_start_skips_all_side_effects() {
+        use std::sync::atomic::AtomicBool;
+        let dir = std::env::temp_dir().join(format!("ps-autorun-cancel-{}", std::process::id()));
+        let params = local_params(&dir);
+        let img = RgbaImage::from_pixel(4, 4, Rgba([0, 0, 0, 255]));
+        let cancelled = AtomicBool::new(true);
+        let report = execute(&img, &[WorkflowAction::Save], &params, Some(&cancelled));
+        assert!(report.cancelled);
+        assert!(!report.ok());
+        assert!(
+            report.saved.is_empty(),
+            "no file should be written when cancelled"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -246,7 +277,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("ps-autorun-empty-{}", std::process::id()));
         let params = local_params(&dir);
         let img = RgbaImage::from_pixel(4, 4, Rgba([0, 0, 0, 255]));
-        let report = execute(&img, &[], &params);
+        let report = execute(&img, &[], &params, None);
         assert!(report.ok());
         assert_eq!(report.summary(), "done");
         // Keep the compiler honest about ClipboardMode being available.
