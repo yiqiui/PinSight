@@ -450,6 +450,25 @@ impl ColorPicker {
             if ui::button(ui, p, t.key_cancel).clicked() {
                 *open = false;
             }
+            // right_to_left: added later ⇒ appears further left. Copy buttons
+            // sit to the left of Cancel/OK. The active colour is always the
+            // current HSV value, regardless of what is typed in the HTML draft.
+            ui.add_space(8.0);
+            if ui::button(ui, p, t.color_copy_rgb).clicked() {
+                let rgb = self.rgb();
+                let _ = crate::clipboard::copy_text(&format!(
+                    "rgb({}, {}, {})",
+                    rgb[0], rgb[1], rgb[2]
+                ));
+            }
+            ui.add_space(4.0);
+            if ui::button(ui, p, t.color_copy_hex).clicked() {
+                let rgb = self.rgb();
+                let _ = crate::clipboard::copy_text(&format!(
+                    "#{:02X}{:02X}{:02X}",
+                    rgb[0], rgb[1], rgb[2]
+                ));
+            }
         });
     }
 

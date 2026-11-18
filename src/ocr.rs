@@ -9,6 +9,7 @@
 
 use anyhow::{Context, Result};
 use image::{DynamicImage, ImageFormat, RgbaImage};
+use serde::Serialize;
 
 // Shared by the three Linux-only helpers below (`recognize_tesseract`,
 // `leptess_new`, `tesseract_lang_codes`); hoisted here because function-local
@@ -19,7 +20,7 @@ use crate::i18n::Lang;
 use leptess::LepTess;
 
 /// One recognised word with its bounding box in image pixels.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct OcrWord {
     pub text: String,
     /// `(x, y, w, h)` in the coordinate space of the image that was recognised.

@@ -849,6 +849,8 @@ strings! {
     color_blue { en: "Blue", zh: "蓝色", tw: "藍色", ja: "青", ko: "파랑", fr: "Bleu", de: "Blau" }
     color_alpha { en: "Alpha", zh: "Alpha 通道", tw: "Alpha 通道", ja: "アルファ", ko: "알파", fr: "Alpha", de: "Alpha" }
     color_html { en: "HTML", zh: "HTML 值", tw: "HTML 值", ja: "HTML", ko: "HTML", fr: "HTML", de: "HTML" }
+    color_copy_hex { en: "Copy HEX", zh: "复制 HEX", tw: "複製 HEX", ja: "HEX をコピー", ko: "HEX 복사", fr: "Copier HEX", de: "HEX kopieren" }
+    color_copy_rgb { en: "Copy RGB", zh: "复制 RGB", tw: "複製 RGB", ja: "RGB をコピー", ko: "RGB 복사", fr: "Copier RGB", de: "RGB kopieren" }
     ok { en: "OK", zh: "确定", tw: "確定", ja: "OK", ko: "확인", fr: "OK", de: "OK" }
     accent_custom { en: "Custom", zh: "自定义", tw: "自訂", ja: "カスタム", ko: "사용자 지정", fr: "Personnalisé", de: "Eigene" }
     ov_hint_copy { en: "Drag to select · Enter to copy · Esc to cancel", zh: "拖拽选区 · Enter 复制 · Esc 取消", tw: "拖曳選區 · Enter 複製 · Esc 取消", ja: "ドラッグで選択 · Enter でコピー · Esc で中止", ko: "드래그로 선택 · Enter 복사 · Esc 취소", fr: "Glissez pour sélectionner · Entrée copier · Échap annuler", de: "Ziehen zum Auswählen · Enter kopieren · Esc abbrechen" }

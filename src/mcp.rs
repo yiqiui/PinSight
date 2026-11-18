@@ -15,10 +15,33 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
+use base64::Engine as _;
 use serde_json::{Value, json};
 
 use crate::annotate::ImgRect;
 use crate::util::PhysRect;
+
+/// Load an RGBA image from either a file path or a base64-encoded PNG/JPEG.
+/// Shared by tools that process an image on the MCP thread (no UI needed).
+fn load_image_arg(args: &Value) -> Result<image::RgbaImage, String> {
+    let path = args.get("path").and_then(Value::as_str).map(PathBuf::from);
+    let base64 = args
+        .get("base64")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let bytes = if let Some(path) = path {
+        std::fs::read(&path).map_err(|e| format!("cannot read image: {e}"))?
+    } else if let Some(b64) = base64 {
+        base64::engine::general_purpose::STANDARD
+            .decode(b64.trim())
+            .map_err(|e| format!("invalid base64 image: {e}"))?
+    } else {
+        return Err("provide either `path` or `base64`".into());
+    };
+    image::load_from_memory(&bytes)
+        .map(|img| img.to_rgba8())
+        .map_err(|e| format!("cannot decode image: {e}"))
+}
 
 pub struct McpHandle {
     pub requests: Arc<AtomicUsize>,
@@ -497,6 +520,19 @@ fn call_tool(
                 }
             }
         }
+        "ocr_image" => {
+            // Recognise text offline from a path or base64 image. Runs on the
+            // MCP thread; ocr::recognize spins its own MTA worker on Windows.
+            let image = load_image_arg(args)?;
+            let words = crate::ocr::recognize(image).map_err(|e| format!("OCR failed: {e}"))?;
+            let text = crate::ocr::words_to_text(&words);
+            Ok(json!({
+                "text": text,
+                "words": words,
+                "count": words.len()
+            })
+            .to_string())
+        }
         "get_status" => {
             let (tx, rx) = std::sync::mpsc::channel();
             ui_tx
@@ -652,6 +688,17 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "ocr_image",
+            "description": "Recognise text offline from an image file path or a base64 PNG/JPEG. Returns the full text plus each word with its bounding box. Uses the OS OCR engine (Windows Media.Ocr, macOS Vision, Linux Tesseract).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to an image file"},
+                    "base64": {"type": "string", "description": "Base64-encoded PNG/JPEG image"}
+                }
+            }
+        },
+        {
             "name": "get_status",
             "description": "Return PinSight version, pin count, recording state and output folder.",
             "inputSchema": {"type": "object", "properties": {}}
@@ -671,6 +718,8 @@ const _: fn() = || {
 #[cfg(test)]
 mod tests {
     use super::{LineOutcome, MAX_LINE_BYTES, read_line_bounded};
+    use base64::Engine as _;
+    use serde_json::{Value, json};
     use std::io::Cursor;
 
     fn next<R: std::io::BufRead>(r: &mut R, cap: usize) -> LineOutcome {
@@ -734,5 +783,39 @@ mod tests {
     fn empty_input_is_eof() {
         let mut input = Cursor::new(Vec::new());
         assert!(matches!(next(&mut input, MAX_LINE_BYTES), LineOutcome::Eof));
+    }
+
+    #[test]
+    fn ocr_image_tool_is_advertised() {
+        let defs = super::tool_definitions();
+        let names: Vec<&str> = defs
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|t| t.get("name").and_then(Value::as_str))
+            .collect();
+        assert!(
+            names.contains(&"ocr_image"),
+            "ocr_image tool must be listed"
+        );
+        assert_eq!(names.len(), 10, "nine original tools + ocr_image");
+    }
+
+    #[test]
+    fn load_image_arg_decodes_base64_and_rejects_garbage() {
+        // A 1x1 red PNG.
+        let png = image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 0, 0, 255]));
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgba8(png)
+            .write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png)
+            .unwrap();
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        let args = json!({"base64": b64});
+        let img = super::load_image_arg(&args).unwrap();
+        assert_eq!(img.dimensions(), (1, 1));
+        assert_eq!(img.get_pixel(0, 0)[0], 255);
+        // No path/base64 → clear error rather than a panic.
+        assert!(super::load_image_arg(&json!({})).is_err());
+        assert!(super::load_image_arg(&json!({"base64": "not-base64!!"})).is_err());
     }
 }
