@@ -2343,6 +2343,7 @@ impl PinSightApp {
         util::SaveOptions {
             template: self.config.name_template.clone(),
             quality: self.config.image_quality,
+            max_kb: (self.config.save_max_kb > 0).then(|| self.config.save_max_kb as usize),
             format: self.config.image_format,
             title: String::new(),
             decorations: self.config.decorations.clone(),
@@ -6138,6 +6139,13 @@ impl PinSightApp {
                     let mut value = self.config.image_quality as f32;
                     if ui::slider(ui, p, &mut value, 10.0..=100.0, 0, " %").changed() {
                         self.config.image_quality = value.round() as u8;
+                        let _ = self.config.save();
+                    }
+                });
+                ui::field_row(ui, p, t.out_max_kb, |ui| {
+                    let mut value = self.config.save_max_kb as f32;
+                    if ui::slider(ui, p, &mut value, 0.0..=20480.0, 0, " KB").changed() {
+                        self.config.save_max_kb = value.round() as u32;
                         let _ = self.config.save();
                     }
                 });

@@ -24,6 +24,9 @@ pub struct SaveOptions {
     pub template: String,
     /// Encoder quality, 1–100. Ignored by PNG.
     pub quality: u8,
+    /// If set (and the format is JPEG), lower quality until the file fits in
+    /// this many KiB. Lossless formats cannot honour a size target.
+    pub max_kb: Option<usize>,
     /// Image format of the written file.
     pub format: ImageFormat,
     /// Title of the active window, available to the template as `%title%`.
@@ -81,6 +84,7 @@ impl Default for SaveOptions {
         Self {
             template: crate::naming::DEFAULT_TEMPLATE.to_string(),
             quality: 90,
+            max_kb: None,
             format: ImageFormat::Png,
             title: String::new(),
             decorations: crate::decorate::Decorations::default(),
@@ -115,16 +119,52 @@ pub fn save_image(image: &RgbaImage, dir: &Path, options: &SaveOptions) -> anyho
                     |c: u8| -> u8 { ((c as u32 * alpha + 255 * (255 - alpha)) / 255) as u8 };
                 out.0 = [blend(src.0[0]), blend(src.0[1]), blend(src.0[2])];
             }
-            let mut jpeg = image::codecs::jpeg::JpegEncoder::new_with_quality(
-                std::fs::File::create(&path)?,
-                options.quality.clamp(1, 100),
-            );
-            jpeg.encode(
-                rgb.as_raw(),
-                rgb.width(),
-                rgb.height(),
-                image::ExtendedColorType::Rgb8,
-            )?;
+            // Encode into memory so a size target can retry at lower quality
+            // and, if needed, a smaller size. Writing straight to the file
+            // would leave a half-written image when a retry was needed.
+            let target_bytes = options.max_kb.map(|kb| kb.saturating_mul(1024));
+            let mut quality = options.quality.clamp(1, 100);
+            let mut current = rgb;
+            let bytes = loop {
+                let mut cursor = std::io::Cursor::new(Vec::new());
+                {
+                    let mut jpeg =
+                        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, quality);
+                    jpeg.encode(
+                        current.as_raw(),
+                        current.width(),
+                        current.height(),
+                        image::ExtendedColorType::Rgb8,
+                    )?;
+                }
+                let encoded = cursor.into_inner();
+                let Some(limit) = target_bytes else {
+                    break encoded;
+                };
+                if encoded.len() <= limit {
+                    break encoded;
+                }
+                // First lower quality; once at the floor, shrink the image.
+                // Pure noise cannot reach a tiny byte budget at quality 10
+                // alone, so without the resize step the cap would silently
+                // fail for exactly the images that need it most.
+                if quality > 10 {
+                    quality = quality.saturating_sub(8).max(10);
+                    continue;
+                }
+                if current.width() <= 16 || current.height() <= 16 {
+                    break encoded; // as small as we can make it
+                }
+                let nw = ((current.width() as f32 * 0.85).round() as u32).max(16);
+                let nh = ((current.height() as f32 * 0.85).round() as u32).max(16);
+                current = image::imageops::resize(
+                    &current,
+                    nw,
+                    nh,
+                    image::imageops::FilterType::Triangle,
+                );
+            };
+            std::fs::write(&path, &bytes)?;
         }
         ImageFormat::Webp => {
             image::DynamicImage::ImageRgba8(image.clone())
@@ -314,6 +354,7 @@ mod tests {
             let options = SaveOptions {
                 template: "T_$yyyy-MM-dd$".into(),
                 quality: 90,
+                max_kb: None,
                 format,
                 title: String::new(),
                 decorations: crate::decorate::Decorations::default(),
@@ -330,6 +371,41 @@ mod tests {
                 "template left unexpanded"
             );
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn jpeg_max_kb_lowers_quality_to_fit() {
+        // A noisy image compresses poorly, so a 2 KiB target forces retries.
+        let mut seed = 0x1234_5678u32;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            (seed & 0xFF) as u8
+        };
+        let image = RgbaImage::from_fn(160, 160, |_, _| image::Rgba([next(), next(), next(), 255]));
+        let dir = std::env::temp_dir().join(format!("pinsight-maxkb-{}", std::process::id()));
+        let base = SaveOptions {
+            template: "cap".into(),
+            quality: 95,
+            max_kb: None,
+            format: ImageFormat::Jpeg,
+            title: String::new(),
+            decorations: crate::decorate::Decorations::default(),
+        };
+        let full = save_image(&image, &dir, &base).unwrap();
+        let full_size = std::fs::metadata(&full).unwrap().len();
+        let mut capped = base.clone();
+        capped.max_kb = Some(2);
+        let small = save_image(&image, &dir, &capped).unwrap();
+        let small_size = std::fs::metadata(&small).unwrap().len();
+        assert!(full_size > 2 * 1024, "test image should exercise the cap");
+        assert!(
+            small_size <= 2 * 1024,
+            "capped file {small_size} > 2048 bytes"
+        );
+        assert!(small_size < full_size, "capped file should be smaller");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

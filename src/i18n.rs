@@ -661,6 +661,7 @@ strings! {
     out_reset_name { en: "Reset to default", zh: "恢复默认", tw: "回復預設", ja: "既定に戻す", ko: "기본값으로", fr: "Réinitialiser", de: "Zurücksetzen" }
     out_img_format { en: "Image format", zh: "图片格式", tw: "圖片格式", ja: "画像形式", ko: "이미지 형식", fr: "Format d'image", de: "Bildformat" }
     out_img_quality { en: "Quality", zh: "质量", tw: "品質", ja: "品質", ko: "품질", fr: "Qualité", de: "Qualität" }
+    out_max_kb { en: "Max size (JPEG)", zh: "最大体积（JPEG）", tw: "最大體積（JPEG）", ja: "最大サイズ (JPEG)", ko: "최대 크기 (JPEG)", fr: "Taille max (JPEG)", de: "Max. Größe (JPEG)" }
     out_decorations { en: "Save decorations", zh: "保存后处理", tw: "儲存後處理", ja: "保存時の装飾", ko: "저장 장식", fr: "Décorations d'enregistrement", de: "Speicher-Verzierung" }
     out_decorations_hint { en: "Border and shadow apply to saved captures. The watermark is also burned into recordings.", zh: "边框和阴影应用到保存的截图；水印同时会叠加到录屏画面中。", tw: "邊框和陰影套用到儲存的截圖；浮水印同時會疊加到錄屏畫面中。", ja: "枠と影は保存するキャプチャに、透かしは録画にも適用されます。", ko: "테두리와 그림자는 저장된 캡처에, 워터마크는 녹화 영상에도 적용됩니다.", fr: "Bordure et ombre s'appliquent aux captures ; le filigrane est aussi incrusté dans les enregistrements.", de: "Rahmen und Schatten gelten für Aufnahmen; das Wasserzeichen wird auch in Aufzeichnungen eingebrannt." }
     deco_border { en: "Border", zh: "边框", tw: "邊框", ja: "枠線", ko: "테두리", fr: "Bordure", de: "Rahmen" }

@@ -39,6 +39,7 @@ OPTIONS:
     --window-shadow <MODE>  off | system | synthetic (used with --window;
                         default follows Settings → Output → Window shadow)
     --clipboard         copy the image to the clipboard
+    --max-kb <KB>       save as JPEG under this size (not with --out)
     --ocr               recognise text with Windows.Media.Ocr and print it
     --delay <SECONDS>   wait before capturing
     --filter <CODE>     apply an image adjustment (repeatable, applied in order)
@@ -145,6 +146,7 @@ fn run(args: &[String]) -> Result<()> {
     let mut window_id: Option<u32> = None;
     let mut window_shadow: Option<crate::window_shadow::Mode> = None;
     let mut clipboard = false;
+    let mut cli_max_kb: Option<usize> = None;
     let mut delay = 0.0_f32;
     let mut ocr = false;
     let mut upload = false;
@@ -180,6 +182,19 @@ fn run(args: &[String]) -> Result<()> {
                 monitor_id = Some(value.parse().context("--monitor expects a number")?);
             }
             "--clipboard" | "-c" => clipboard = true,
+            "--max-kb" => {
+                i += 1;
+                let value = args
+                    .get(i)
+                    .ok_or_else(|| anyhow!("--max-kb needs a size in KiB"))?;
+                let kb: usize = value
+                    .parse()
+                    .context("--max-kb expects a positive integer")?;
+                if kb == 0 {
+                    return Err(anyhow!("--max-kb must be greater than zero"));
+                }
+                cli_max_kb = Some(kb);
+            }
             "--ocr" => ocr = true,
             "--upload" => upload = true,
             "--delay" | "-d" => {
@@ -241,6 +256,13 @@ fn run(args: &[String]) -> Result<()> {
             }
         }
         i += 1;
+    }
+
+    if out.is_some() && cli_max_kb.is_some() {
+        return Err(anyhow!(
+            "--max-kb cannot be combined with --out (which writes a lossless PNG); \
+             omit --out to use the configured output folder"
+        ));
     }
 
     if list {
@@ -408,7 +430,14 @@ fn run(args: &[String]) -> Result<()> {
                     &util::SaveOptions {
                         template: config.name_template.clone(),
                         quality: config.image_quality,
-                        format: util::ImageFormat::Png,
+                        max_kb: cli_max_kb,
+                        // A size target implies a lossy format (PNG cannot be
+                        // compressed down to an arbitrary byte budget).
+                        format: if cli_max_kb.is_some() {
+                            util::ImageFormat::Jpeg
+                        } else {
+                            config.image_format
+                        },
                         title: String::new(),
                         decorations: config.decorations.clone(),
                     },

@@ -497,6 +497,7 @@ fn call_tool(
                         let options = crate::util::SaveOptions {
                             template: crate::naming::DEFAULT_TEMPLATE.to_string(),
                             quality: 90,
+                            max_kb: None,
                             format: crate::util::ImageFormat::Png,
                             title: String::new(),
                             decorations: crate::decorate::Decorations::default(),

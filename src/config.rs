@@ -255,6 +255,10 @@ pub struct Config {
     /// Image quality for lossy formats. 1–100; 100 is visually lossless.
     /// PNG ignores this value.
     pub image_quality: u8,
+    /// Target size in KiB for saved JPEGs (0 = no limit). Lower quality until
+    /// the file fits; lossless formats ignore this.
+    #[serde(default)]
+    pub save_max_kb: u32,
     /// Default file format for saved captures.
     pub image_format: crate::util::ImageFormat,
     /// How a copied image reaches the clipboard.
@@ -891,6 +895,7 @@ impl Default for Config {
             save_dir: default_save_dir(),
             name_template: crate::naming::DEFAULT_TEMPLATE.to_string(),
             image_quality: 90,
+            save_max_kb: 0,
             image_format: crate::util::ImageFormat::Png,
             clipboard_mode: ClipboardMode::Image,
             gif_fps: 12,
