@@ -174,7 +174,8 @@ jobs:
               libxdo-dev \
               libpipewire-0.3-dev \
               libtesseract-dev \
-              libgbm-dev ; then
+              libgbm-dev \
+              libayatana-appindicator3-dev ; then
               ok=1
               break
             fi

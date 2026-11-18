@@ -102,6 +102,13 @@ objc2-vision = "0.3"
 leptess = "0.14"
 x11rb = { version = "0.14.0", default-features = false }
 
+# macOS / Linux system tray. Windows uses its own native Win32 implementation
+# in `tray.rs`; other platforms use tray-icon (NSStatusItem on macOS,
+# StatusNotifierItem/AppIndicator on Linux). Linux CI installs
+# libayatana-appindicator3-dev for the gtk feature.
+[target.'cfg(not(windows))'.dependencies]
+tray-icon = "0.24"
+
 # Native file pickers for the custom background image. rfd maps to the
 # platform dialog (IFileOpenDialog / NSOpenPanel / zenity) without a WebView.
 [dependencies.rfd]
