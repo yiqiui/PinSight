@@ -39,8 +39,9 @@ mod imp {
     use windows::Win32::Graphics::Gdi::{
         AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, BeginPaint,
         CreateCompatibleDC, CreateDIBSection, CreateSolidBrush, DIB_RGB_COLORS, DeleteDC,
-        DeleteObject, EndPaint, FrameRect, GetDC, HBRUSH, HGDIOBJ, InvalidateRect, PAINTSTRUCT,
-        RGBQUAD, ReleaseDC, SRCCOPY, SelectObject, StretchDIBits,
+        DeleteObject, EndPaint, FrameRect, GetDC, GetMonitorInfoW, HBRUSH, HGDIOBJ, InvalidateRect,
+        MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT, RGBQUAD, ReleaseDC,
+        SRCCOPY, SelectObject, StretchDIBits,
     };
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -464,6 +465,54 @@ mod imp {
         let _ = DeleteDC(mem);
         let _ = ReleaseDC(None, screen);
         ok
+    }
+
+    /// Snap a proposed window position to the nearest monitor's work area.
+    /// Within `threshold` px of an edge the window sticks to it; the window is
+    /// also kept fully on-screen so a pin can never be dragged out of reach.
+    /// Uses the *work area* (excludes the taskbar) and the nearest monitor, so
+    /// it behaves correctly on multi-monitor setups and negative coordinates.
+    unsafe fn snap_position(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) -> (i32, i32) {
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        if !GetMonitorInfoW(monitor, &mut info).as_bool() {
+            return (x, y);
+        }
+        let work = info.rcWork;
+        snap_to_bounds(x, y, w, h, work.left, work.top, work.right, work.bottom)
+    }
+
+    /// Pure snapping math, split out so the edge/threshold/clamp behaviour can
+    /// be unit-tested without a real monitor.
+    pub(super) fn snap_to_bounds(
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        left: i32,
+        top: i32,
+        right: i32,
+        bottom: i32,
+    ) -> (i32, i32) {
+        const THRESHOLD: i32 = 12;
+        let mut nx = x;
+        let mut ny = y;
+        if (nx - left).abs() <= THRESHOLD {
+            nx = left;
+        } else if ((right - (nx + w)).abs()) <= THRESHOLD {
+            nx = right - w;
+        }
+        if (ny - top).abs() <= THRESHOLD {
+            ny = top;
+        } else if ((bottom - (ny + h)).abs()) <= THRESHOLD {
+            ny = bottom - h;
+        }
+        nx = nx.clamp(left, right - w);
+        ny = ny.clamp(top, bottom - h);
+        (nx, ny)
     }
 
     /// Resize the window for the current zoom (the shadow margin is included).
@@ -927,11 +976,17 @@ mod imp {
                             drag.moved = true;
                         }
                         if drag.moved {
+                            let mut rect = RECT::default();
+                            let _ = GetWindowRect(hwnd, &mut rect);
+                            let ww = (rect.right - rect.left).max(1);
+                            let hh = (rect.bottom - rect.top).max(1);
+                            let (px, py) =
+                                snap_position(hwnd, drag.win_x + dx, drag.win_y + dy, ww, hh);
                             let _ = SetWindowPos(
                                 hwnd,
                                 None,
-                                drag.win_x + dx,
-                                drag.win_y + dy,
+                                px,
+                                py,
                                 0,
                                 0,
                                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
@@ -1471,5 +1526,59 @@ impl Pin {
     #[cfg(not(windows))]
     pub fn show_viewport(&mut self, ctx: &eframe::egui::Context) {
         self.vp.show(ctx);
+    }
+}
+
+#[cfg(all(test, windows))]
+mod snap_tests {
+    use super::imp::snap_to_bounds;
+
+    #[test]
+    fn snaps_when_close_to_edges() {
+        // Work area (0,0)-(1920,1040); window 200x100.
+        assert_eq!(snap_to_bounds(8, 500, 200, 100, 0, 0, 1920, 1040), (0, 500));
+        assert_eq!(
+            snap_to_bounds(1910, 500, 200, 100, 0, 0, 1920, 1040),
+            (1720, 500)
+        );
+        assert_eq!(snap_to_bounds(500, 5, 200, 100, 0, 0, 1920, 1040), (500, 0));
+        assert_eq!(
+            snap_to_bounds(500, 1030, 200, 100, 0, 0, 1920, 1040),
+            (500, 940)
+        );
+    }
+
+    #[test]
+    fn leaves_a_window_in_the_middle_alone() {
+        assert_eq!(
+            snap_to_bounds(700, 400, 200, 100, 0, 0, 1920, 1040),
+            (700, 400)
+        );
+    }
+
+    #[test]
+    fn hard_clamps_a_fling_off_screen() {
+        // Beyond the threshold but past the work area → clamped fully on-screen.
+        assert_eq!(
+            snap_to_bounds(-500, -500, 200, 100, 0, 0, 1920, 1040),
+            (0, 0)
+        );
+        assert_eq!(
+            snap_to_bounds(5000, 5000, 200, 100, 0, 0, 1920, 1040),
+            (1720, 940)
+        );
+    }
+
+    #[test]
+    fn handles_negative_multi_monitor_work_area() {
+        // A secondary monitor to the left of the primary has negative x.
+        assert_eq!(
+            snap_to_bounds(-1912, 100, 200, 100, -1920, 0, 0, 1040),
+            (-1920, 100)
+        );
+        assert_eq!(
+            snap_to_bounds(-100, 100, 200, 100, -1920, 0, 0, 1040),
+            (-200, 100)
+        );
     }
 }
