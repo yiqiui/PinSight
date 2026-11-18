@@ -283,6 +283,8 @@ pub struct PinSightApp {
     /// GUI never blocks; this channel carries the resulting link (or error
     /// string) back.
     upload_rx: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
+    /// Batch gallery upload: one result with all successful share links.
+    batch_upload_rx: Option<std::sync::mpsc::Receiver<Result<Vec<String>, String>>>,
     /// GIF editor state and its background job channel.
     gif_editor: GifEditorState,
     gif_rx: Option<std::sync::mpsc::Receiver<Result<std::path::PathBuf, String>>>,
@@ -332,6 +334,8 @@ pub struct PinSightApp {
     /// arms it, the second (within the same selection) actually deletes. Reset
     /// whenever the selection changes so it can never delete stale ticks.
     history_delete_armed: bool,
+    /// Draft base name for the batch-rename dialog (None = dialog closed).
+    history_rename: Option<String>,
     /// Gallery search box + the background OCR index backing it (#132).
     history_search: HistorySearch,
     pending_mcp: Option<PendingMcpCapture>,
@@ -522,6 +526,7 @@ impl PinSightApp {
             pin_tx,
             pin_rx,
             upload_rx: None,
+            batch_upload_rx: None,
             gif_editor: GifEditorState::default(),
             gif_rx: None,
             voice_rx: None,
@@ -541,6 +546,7 @@ impl PinSightApp {
             history_scan: None,
             history_selection: Default::default(),
             history_delete_armed: false,
+            history_rename: None,
             history_search: HistorySearch {
                 query: String::new(),
                 index: crate::ocr_text::OcrSearch::new(),
@@ -2563,6 +2569,35 @@ impl PinSightApp {
             Err(std::sync::mpsc::TryRecvError::Empty) => {}
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 self.upload_rx = None;
+            }
+        }
+    }
+
+    /// Receive a finished batch gallery upload. All successful links are put
+    /// on the clipboard as one newline-separated block.
+    fn poll_batch_upload(&mut self) {
+        let Some(rx) = self.batch_upload_rx.as_ref() else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(Ok(links)) => {
+                self.batch_upload_rx = None;
+                if links.is_empty() {
+                    return;
+                }
+                let text = links.join("\n");
+                match crate::clipboard::copy_text(&text) {
+                    Ok(()) => self.toast(format!("{} {}", self.tr.tr.uploaded, links.len()), false),
+                    Err(err) => self.toast(format!("{}: {err}", self.tr.tr.upload_failed), true),
+                }
+            }
+            Ok(Err(err)) => {
+                self.toast(format!("{}: {err}", self.tr.tr.upload_failed), true);
+                self.batch_upload_rx = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.batch_upload_rx = None;
             }
         }
     }
@@ -4724,6 +4759,8 @@ impl PinSightApp {
         let mut select_all = false;
         let mut clear_sel = false;
         let mut export = false;
+        let mut upload_selected = false;
+        let mut rename_selected = false;
         let mut arm_delete = false;
         let mut delete_selected = false;
 
@@ -4741,6 +4778,14 @@ impl PinSightApp {
                     .clicked()
                 {
                     export = true;
+                }
+                if ui::button(ui, p, &format!("{} ({})", t.history_upload_sel, sel_count)).clicked()
+                {
+                    upload_selected = true;
+                }
+                if ui::button(ui, p, &format!("{} ({})", t.history_rename_sel, sel_count)).clicked()
+                {
+                    rename_selected = true;
                 }
                 // Delete the ticked captures. The first press only arms the
                 // action (and turns the label red) so a misclick can never wipe
@@ -4889,6 +4934,116 @@ impl PinSightApp {
         if export {
             self.export_history_pdf(&files);
         }
+        if upload_selected {
+            self.upload_history_selected(&files);
+        }
+        if rename_selected {
+            self.history_rename = Some(String::new());
+        }
+        if self.history_rename.is_some() {
+            let mut draft = self.history_rename.clone().unwrap_or_default();
+            let mut commit = false;
+            let mut cancel = false;
+            egui::Window::new(t.history_rename_title)
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| {
+                    ui.label(t.history_rename_hint);
+                    let resp = ui.text_edit_singleline(&mut draft);
+                    ui.horizontal(|ui| {
+                        if ui::button(ui, p, t.ok).clicked() {
+                            commit = true;
+                        }
+                        if ui::button(ui, p, t.key_cancel).clicked() {
+                            cancel = true;
+                        }
+                    });
+                    if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        commit = true;
+                    }
+                });
+            if commit {
+                self.rename_history_selected(&files, &draft);
+                self.history_rename = None;
+            }
+            if cancel {
+                self.history_rename = None;
+            }
+        }
+    }
+
+    /// Upload all ticked gallery images on a worker and copy every returned
+    /// link to the clipboard (one per line). Reuses the single-upload config
+    /// fallback so a fresh install with a Local backend still works.
+    fn upload_history_selected(&mut self, files: &[HistoryFile]) {
+        if self.batch_upload_rx.is_some() {
+            self.toast(self.tr.tr.uploading, false);
+            return;
+        }
+        let paths: Vec<PathBuf> = files
+            .iter()
+            .filter(|f| self.history_selection.contains(&f.path))
+            .map(|f| f.path.clone())
+            .collect();
+        if paths.is_empty() {
+            return;
+        }
+        let mut cfg = self.config.upload.clone();
+        if cfg.backend == crate::config::UploadBackend::Local
+            && cfg.local.folder.as_os_str().is_empty()
+        {
+            cfg.local.folder = self.config.save_dir.join("uploaded");
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result = crate::upload::upload_paths(&paths, &cfg).map_err(|e| e.to_string());
+            let _ = tx.send(result);
+        });
+        self.batch_upload_rx = Some(rx);
+        self.toast(self.tr.tr.uploading, false);
+    }
+
+    /// Rename the ticked gallery files to `base_1.ext`, `base_2.ext`, …
+    /// (in display order). After renaming, invalidate the scan cache and clear
+    /// selection: every path-keyed cache (textures, OCR search index) is
+    /// rebuilt from disk on the next frame, so no stale key survives.
+    fn rename_history_selected(&mut self, files: &[HistoryFile], base: &str) {
+        let stem = crate::naming::sanitize(base.trim());
+        if stem.is_empty() {
+            self.toast(self.tr.tr.pin_group_name_hint, true);
+            return;
+        }
+        let chosen: Vec<&PathBuf> = files
+            .iter()
+            .filter(|f| self.history_selection.contains(&f.path))
+            .map(|f| &f.path)
+            .collect();
+        let mut renamed = 0usize;
+        for (i, path) in chosen.iter().enumerate() {
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("png")
+                .to_string();
+            let target = path.with_file_name(format!("{stem}_{}.{ext}", i + 1));
+            if target == **path {
+                continue;
+            }
+            if target.exists() {
+                continue; // never overwrite an existing capture
+            }
+            if std::fs::rename(path, &target).is_ok() {
+                self.textures.remove(&format!("hist-{}", path.display()));
+                renamed += 1;
+            }
+        }
+        self.history_scan = None;
+        self.history_selection.clear();
+        self.history_delete_armed = false;
+        self.toast(
+            format!("{}: {}", self.tr.tr.history_rename_title, renamed),
+            false,
+        );
     }
 
     /// Collect the ticked gallery items (newest-first, matching the grid) and
@@ -9131,6 +9286,7 @@ impl eframe::App for PinSightApp {
         self.handle_hotkeys(&ctx);
         self.poll_pin_events();
         self.poll_upload();
+        self.poll_batch_upload();
         self.poll_gif();
         self.poll_voice();
         self.poll_automation(&ctx);

@@ -255,6 +255,10 @@ strings! {
     history_select_all { en: "Select all", zh: "全选", tw: "全選", ja: "すべて選択", ko: "전체 선택", fr: "Tout sélectionner", de: "Alle auswählen" }
     history_clear_sel { en: "Clear", zh: "清除选择", tw: "清除選擇", ja: "選択を解除", ko: "선택 해제", fr: "Effacer", de: "Auswahl löschen" }
     history_export_pdf { en: "Export PDF", zh: "导出 PDF", tw: "匯出 PDF", ja: "PDF に書き出し", ko: "PDF 내보내기", fr: "Exporter PDF", de: "PDF exportieren" }
+    history_upload_sel { en: "Upload", zh: "批量上传", tw: "批量上傳", ja: "アップロード", ko: "업로드", fr: "Téléverser", de: "Hochladen" }
+    history_rename_sel { en: "Rename", zh: "批量重命名", tw: "批量重新命名", ja: "名前を変更", ko: "이름 바꾸기", fr: "Renommer", de: "Umbenennen" }
+    history_rename_title { en: "Rename selected captures", zh: "批量重命名", tw: "批量重新命名", ja: "選択した画像の名前を変更", ko: "선택한 캡처 이름 바꾸기", fr: "Renommer les captures", de: "Ausgewählte Bilder umbenennen" }
+    history_rename_hint { en: "Base name — files become base_1, base_2, …", zh: "基础名——文件将变为 基础名_1、_2……", tw: "基礎名——檔案將變為 基礎名_1、_2……", ja: "基本名 — base_1, base_2, … になります", ko: "기본 이름 — base_1, base_2, … 로 저장", fr: "Nom de base — base_1, base_2, …", de: "Basisname — base_1, base_2, …" }
     history_selected { en: "selected", zh: "已选", tw: "已選", ja: "選択中", ko: "선택됨", fr: "sélectionnés", de: "ausgewählt" }
     history_delete_sel { en: "Delete selected", zh: "删除所选", tw: "刪除所選", ja: "選択を削除", ko: "선택 항목 삭제", fr: "Supprimer la sélection", de: "Auswahl löschen" }
     history_delete_confirm { en: "Press again to delete for good", zh: "再按一次确认删除", tw: "再按一次確認刪除", ja: "もう一度押すと完全に削除", ko: "한 번 더 누르면 완전히 삭제", fr: "Appuyez encore pour supprimer", de: "Erneut drücken zum Löschen" }

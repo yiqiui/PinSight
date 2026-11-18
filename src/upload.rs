@@ -49,7 +49,14 @@ fn upload_local(image: &image::RgbaImage, cfg: &LocalUpload) -> Result<String> {
     std::fs::create_dir_all(&cfg.folder)
         .with_context(|| format!("creating upload folder {}", cfg.folder.display()))?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    let path: PathBuf = cfg.folder.join(format!("pinsight-{stamp}.png"));
+    // Batch uploads can hit the same second; without a uniqueness suffix a
+    // later image silently overwrites the earlier one and links collide.
+    let mut path: PathBuf = cfg.folder.join(format!("pinsight-{stamp}.png"));
+    let mut n = 1;
+    while path.exists() {
+        path = cfg.folder.join(format!("pinsight-{stamp}-{n}.png"));
+        n += 1;
+    }
     crate::util::save_png_to(image, &path)?;
     Ok(path.to_string_lossy().into_owned())
 }
@@ -169,6 +176,28 @@ fn extract_json_field(body: &str, path: &str) -> Result<String> {
     }
 }
 
+/// Upload several image files in order, returning one locator per success.
+/// A single bad file is skipped (its error is dropped) so one corrupt capture
+/// does not abort the rest of the batch; if nothing succeeds the overall call
+/// fails with a clear message. Call on a worker thread, never the GUI.
+pub fn upload_paths(paths: &[PathBuf], cfg: &UploadConfig) -> Result<Vec<String>> {
+    let mut links = Vec::with_capacity(paths.len());
+    for path in paths {
+        if let Ok(img) = image::open(path).map(|img| img.to_rgba8()) {
+            if let Ok(link) = upload_image(&img, cfg) {
+                links.push(link);
+            }
+        }
+    }
+    if links.is_empty() && !paths.is_empty() {
+        anyhow::bail!(
+            "none of the {} selected images could be uploaded",
+            paths.len()
+        );
+    }
+    Ok(links)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,6 +227,38 @@ mod tests {
         let img = image::RgbaImage::new(2, 2);
         let out = upload_local(&img, &cfg).unwrap();
         assert!(std::path::Path::new(&out).exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn upload_paths_returns_one_link_per_success() {
+        use crate::config::UploadBackend;
+        let dir =
+            std::env::temp_dir().join(format!("pinsight-upload-batch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut paths = Vec::new();
+        for i in 0..2 {
+            let p = dir.join(format!("src{i}.png"));
+            image::RgbaImage::from_pixel(2, 2, image::Rgba([i as u8, 0, 0, 255]))
+                .save(&p)
+                .unwrap();
+            paths.push(p);
+        }
+        // A corrupt file is skipped rather than aborting the batch.
+        let bad = dir.join("bad.png");
+        std::fs::write(&bad, b"not an image").unwrap();
+        paths.push(bad);
+
+        let out_dir = dir.join("out");
+        let mut cfg = crate::config::UploadConfig::default();
+        cfg.enabled = true;
+        cfg.backend = UploadBackend::Local;
+        cfg.local.folder = out_dir.clone();
+        let links = upload_paths(&paths, &cfg).unwrap();
+        assert_eq!(links.len(), 2, "two valid images uploaded, bad one skipped");
+        assert!(std::path::Path::new(&links[0]).exists());
+        assert_eq!(std::fs::read_dir(out_dir).unwrap().count(), 2);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
