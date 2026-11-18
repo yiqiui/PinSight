@@ -250,6 +250,7 @@ strings! {
     hist_no_match { en: "No captures match the search", zh: "没有匹配搜索的截图", tw: "沒有符合搜尋的截圖", ja: "検索に一致するキャプチャはありません", ko: "검색과 일치하는 캡처가 없습니다", fr: "Aucune capture ne correspond", de: "Keine Aufnahmen passen zur Suche" }
     history_empty { en: "No captures yet", zh: "还没有截图", tw: "還沒有截圖", ja: "キャプチャはまだありません", ko: "아직 캡처가 없습니다", fr: "Aucune capture pour l'instant", de: "Noch keine Aufnahmen" }
     history_pin { en: "Pin to screen", zh: "贴到屏幕", tw: "貼到螢幕", ja: "画面に固定", ko: "화면에 고정", fr: "Épingler", de: "Anheften" }
+    history_edit { en: "Edit / annotate", zh: "编辑标注", tw: "編輯標註", ja: "編集・注釈", ko: "편집/주석", fr: "Modifier / annoter", de: "Bearbeiten / Annotieren" }
     history_delete { en: "Delete", zh: "删除", tw: "刪除", ja: "削除", ko: "삭제", fr: "Supprimer", de: "Löschen" }
     history_select_all { en: "Select all", zh: "全选", tw: "全選", ja: "すべて選択", ko: "전체 선택", fr: "Tout sélectionner", de: "Alle auswählen" }
     history_clear_sel { en: "Clear", zh: "清除选择", tw: "清除選擇", ja: "選択を解除", ko: "선택 해제", fr: "Effacer", de: "Auswahl löschen" }

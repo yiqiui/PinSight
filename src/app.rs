@@ -4718,6 +4718,7 @@ impl PinSightApp {
         let armed = self.history_delete_armed;
         let mut to_pin: Option<PathBuf> = None;
         let mut to_delete: Option<PathBuf> = None;
+        let mut to_edit: Option<PathBuf> = None;
         let mut to_toggle: Option<PathBuf> = None;
         let mut select_all = false;
         let mut clear_sel = false;
@@ -4803,6 +4804,10 @@ impl PinSightApp {
                             }
                         }
                         resp.context_menu(|ui| {
+                            if ui.button(t.history_edit).clicked() {
+                                to_edit = Some(f.path.clone());
+                                ui.close();
+                            }
                             if ui.button(t.history_pin).clicked() {
                                 to_pin = Some(f.path.clone());
                                 ui.close();
@@ -4830,6 +4835,10 @@ impl PinSightApp {
             }
             // Any change to what is ticked invalidates a pending confirm.
             self.history_delete_armed = false;
+        }
+        if let Some(path) = to_edit {
+            let ctx = ui.ctx().clone();
+            self.edit_history_file(&path, &ctx);
         }
         if let Some(path) = to_pin {
             self.pin_history_file(&path);
@@ -5028,6 +5037,77 @@ impl PinSightApp {
             }
             Err(err) => self.toast(format!("{}: {err}", self.tr.tr.capture_failed), true),
         }
+    }
+
+    /// Load a saved screenshot straight back into the annotation editor, so a
+    /// past capture can be re-annotated without taking a new one. Reuses the
+    /// normal overlay finish path (Copy / Pin / Save / Upload).
+    fn edit_history_file(&mut self, path: &std::path::Path, ctx: &egui::Context) {
+        let Ok(img) = image::open(path).map(|img| img.to_rgba8()) else {
+            self.toast(self.tr.tr.capture_failed, true);
+            return;
+        };
+        if img.width() == 0 || img.height() == 0 {
+            self.toast(self.tr.tr.capture_failed, true);
+            return;
+        }
+        // Synthetic monitor covering exactly the image. A reserved id avoids
+        // colliding with a real display's overlay viewport id.
+        let synthetic = crate::capture::MonitorInfo {
+            id: u32::MAX,
+            name: "history-edit".into(),
+            rect: crate::util::PhysRect {
+                x: 0,
+                y: 0,
+                w: img.width(),
+                h: img.height(),
+            },
+            scale: 1.0,
+            primary: false,
+        };
+        let palette = match self.config.theme {
+            ThemeMode::Light => Palette::for_theme(
+                egui::Theme::Light,
+                self.config.accent,
+                self.config.accent_custom,
+            ),
+            ThemeMode::Dark => Palette::for_theme(
+                egui::Theme::Dark,
+                self.config.accent,
+                self.config.accent_custom,
+            ),
+            ThemeMode::System => {
+                Palette::for_theme(ctx.theme(), self.config.accent, self.config.accent_custom)
+            }
+        };
+        let mut session = CaptureSession::new(synthetic, img, Intent::Copy, self.tr.tr, palette);
+        session.prefs = crate::overlay::OverlayPrefs {
+            border_width: self.config.capture_border_width,
+            mask_alpha: self.config.capture_mask_alpha,
+            mask_color: self.config.capture_mask_color,
+            anchors: self.config.capture_anchors,
+            anchor_color: self.config.capture_anchor_color,
+            crosshair: self.config.capture_crosshair,
+            hints: self.config.capture_hints,
+            esc_confirm: self.config.capture_esc_confirm,
+            double_click: self.config.capture_double_click,
+            middle_click: self.config.capture_middle_click,
+            keys: self.config.app_keys.clone(),
+            magnifier: self.config.capture_magnifier,
+            magnifier_size: self.config.capture_magnifier_size,
+            color_format: self.config.color_format,
+            translate: self.config.translate.clone(),
+            translate_proxy: crate::update::proxy_url(&self.config),
+            ocr_export_dir: self.config.save_dir.clone(),
+        };
+        // Open straight onto the whole image — no extra selection step.
+        session.selection = Some(crate::annotate::ImgRect::from_min_size(
+            0.0,
+            0.0,
+            session.image.width() as f32,
+            session.image.height() as f32,
+        ));
+        self.capture = Some(session);
     }
 
     fn capture_page(&mut self, ui: &mut egui::Ui, p: &Palette) {
