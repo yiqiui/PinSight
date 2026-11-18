@@ -92,6 +92,17 @@ All notable changes to PinSight are documented here. The format follows
   fill, leaving 5 of 6 accents dark-on-dark; brightness is now computed from the
   actual light fill.
 
+### Changed
+
+- **New app icon: a paper-cut praying mantis holding a screenshot selection.**
+  The previous viewfinder-and-pin glyph is replaced by a cut-paper mantis
+  framing a dashed selection (camera pendant, viewfinder brackets) on an
+  off-white plate. `icon.ico` sizes ≤ 32 px and `tray.ico` use a solid
+  silhouette variant so the shape stays readable at tray scale; the White tray
+  style now auto-detects plate polarity (the glyph inverts for the light
+  plate), and the macOS/Linux tray fallback uses the real artwork instead of a
+  procedural square. Regenerate with `python scripts/make_pinsight_icon.py`.
+
 ### Docs
 
 - **READMEs fully re-synced with shipped features (both languages).** Added the

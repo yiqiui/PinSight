@@ -3593,12 +3593,35 @@ impl PinSightApp {
             let img = image::load_from_memory(bytes).ok()?.to_rgba8();
             let scaled =
                 image::imageops::resize(&img, SIZE, SIZE, image::imageops::FilterType::Lanczos3);
+            // Plate polarity: the classic indigo plate is dark and the marks
+            // bright, the paper-cut mantis plate is light and the marks dark.
+            // Average the luminance of the opaque border ring to tell them
+            // apart, then keep whichever side is the *marks* as white.
+            let mut sum = 0.0f32;
+            let mut n = 0u32;
+            for y in 0..SIZE {
+                for x in 0..SIZE {
+                    let border = x < 3 || y < 3 || x >= SIZE - 3 || y >= SIZE - 3;
+                    if !border {
+                        continue;
+                    }
+                    let px = scaled.get_pixel(x, y);
+                    if px[3] > 200 {
+                        let lum =
+                            0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32;
+                        sum += lum;
+                        n += 1;
+                    }
+                }
+            }
+            let light_plate = n > 0 && sum / n as f32 > 150.0;
             let mut out = Vec::with_capacity((SIZE * SIZE * 4) as usize);
             for px in scaled.pixels() {
                 let lum = 0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32;
                 // Soft edge between the plate and the glyph so the marks keep
                 // their anti-aliasing.
                 let t = ((lum - 150.0) / 70.0).clamp(0.0, 1.0);
+                let t = if light_plate { 1.0 - t } else { t };
                 let alpha = (px[3] as f32 * t).round() as u8;
                 out.extend_from_slice(&[255, 255, 255, alpha]);
             }
@@ -3615,16 +3638,16 @@ impl PinSightApp {
 
         match self.config.tray_icon_style {
             TrayIconStyle::Color => None,
-            TrayIconStyle::White => glyph(include_bytes!("../assets/icon.png")),
+            TrayIconStyle::White => glyph(include_bytes!("../assets/icon_glyph.png")),
             TrayIconStyle::Custom => self
                 .config
                 .tray_icon_path
                 .as_deref()
                 .and_then(custom)
-                .or_else(|| glyph(include_bytes!("../assets/icon.png"))),
+                .or_else(|| glyph(include_bytes!("../assets/icon_glyph.png"))),
             TrayIconStyle::Auto => {
                 if taskbar_is_dark() {
-                    glyph(include_bytes!("../assets/icon.png"))
+                    glyph(include_bytes!("../assets/icon_glyph.png"))
                 } else {
                     None
                 }

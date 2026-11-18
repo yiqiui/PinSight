@@ -59,7 +59,7 @@ Snipaste and PixPin proved that "screenshot + pin" is a high-frequency desktop w
 - **Built for daily long-term use**: theme, accent, font size, UI language and fonts are all switchable; every widget and icon is hand-drawn vectors that never blur when scaled.
 - **AI friendly**: a built-in MCP stdio server lets clients such as Claude Desktop, Cursor or Continue call capture, pin, long-capture and recording tools directly.
 - **Engineering transparency**: module boundaries, threading model, coordinate spaces and failure modes are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-- **The logo**: a deep indigo rounded plate carrying four white **viewfinder corner brackets** (the "sight") and a white push-pin at the centre (the "pin") — the product name as one glyph. It is drawn geometrically and exported as the PNG/ICO set by [`scripts/make_pinsight_icon.py`](scripts/make_pinsight_icon.py).
+- **The logo**: a paper-cut **praying mantis** holding a dashed **screenshot selection** — corner viewfinder brackets, a camera pendant at the chest, all cut from deep green paper on an off-white plate (the mantis's eyes are the "sight" in PinSight). Tray sizes use a solid silhouette variant; the whole set is exported by [`scripts/make_pinsight_icon.py`](scripts/make_pinsight_icon.py).
 
 PinSight is still iterating quickly: edge cases of scrolling long capture (fixed headers, sticky elements, animations) may lag behind Snipaste, and the pin backends on macOS / Linux are still being polished. The core features (capture, annotate, pin, long capture, record, OCR, GIF editing, upload, MCP) are usable daily on Windows.
 

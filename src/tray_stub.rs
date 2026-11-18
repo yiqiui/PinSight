@@ -142,27 +142,14 @@ impl Tray {
     }
 }
 
-/// A 32×32 indigo square with a light "pin" dot — a minimal, dependency-free
-/// fallback when the caller has no custom icon pixels.
+/// The embedded app icon scaled to 32×32 — a faithful fallback when the
+/// caller has no custom icon pixels (macOS / Linux tray).
 fn default_icon() -> (u32, u32, Vec<u8>) {
-    let (w, h) = (32u32, 32u32);
-    let mut rgba = vec![0u8; (w * h * 4) as usize];
-    for y in 0..h {
-        for x in 0..w {
-            let i = ((y * w + x) * 4) as usize;
-            let inside = x >= 4 && x < 28 && y >= 4 && y < 28;
-            let dot = (x as i32 - 16).pow(2) + (y as i32 - 14).pow(2) < 25;
-            let (r, g, b, a) = if !inside {
-                (0, 0, 0, 0)
-            } else if dot {
-                (240, 244, 255, 255)
-            } else {
-                (79, 70, 229, 255)
-            };
-            rgba[i..i + 4].copy_from_slice(&[r, g, b, a]);
-        }
-    }
-    (w, h, rgba)
+    let img = image::load_from_memory(include_bytes!("../assets/icon.png"))
+        .expect("embedded icon.png")
+        .resize_exact(32, 32, image::imageops::FilterType::Lanczos3)
+        .to_rgba8();
+    (32, 32, img.into_raw())
 }
 
 /// Register a wake callback so an idle (tray-hidden) app repaints when a menu

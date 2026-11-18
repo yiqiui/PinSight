@@ -67,7 +67,7 @@ PinSight 想做的是一个**可读、可改、可自动化**的开源实现：
 - **为长期使用而设计**：主题、强调色、字号、界面语言、字体都可切换，控件与图标全部矢量手绘，不随缩放失真。
 - **对 AI 友好**：内置 MCP stdio 服务，Claude Desktop、Cursor、Continue 等客户端可以直接调用截图、贴图、长截图、录屏能力。
 - **工程透明**：模块边界、线程模型、坐标空间和失败模式都写在 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-- **Logo**：深靛蓝圆角底板，四角白色**取景括号**（「视 / sight」），正中一枚白色**图钉**（「钉 / pin」）——把产品名「PinSight」凝成一个图形。图标由 [`scripts/make_pinsight_icon.py`](scripts/make_pinsight_icon.py) 几何绘制并导出 PNG/ICO 三件套，任意尺寸都清晰。
+- **Logo**：剪纸风格的**螳螂**抱着一框**虚线选区**——四角取景括号、胸前相机吊坠，深绿纸片贴在米白底板上（螳螂的目光就是 PinSight 里的「视 / sight」）。托盘小尺寸用实心剪影变体保证清晰；整套图标由 [`scripts/make_pinsight_icon.py`](scripts/make_pinsight_icon.py) 导出 PNG/ICO 三件套。
 
 PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、粘性元素、动画）与 Snipaste
 可能仍有差距，macOS / Linux 上的贴图后端也仍在打磨中。核心能力（截图、标注、
