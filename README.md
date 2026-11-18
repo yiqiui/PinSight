@@ -38,9 +38,9 @@
   <img src="docs/images/main.png" width="720" alt="PinSight main window" />
 </div>
 
-> **Status: v0.1.3 / usable.** Capture, annotation (text / numbered steps / undo-redo / mosaic / highlight), pin-to-screen, long capture, GIF/MP4 recording, offline OCR, GIF editing (trim / crop / add text / convert to MP4), image upload, voice notes (recording works; click-to-play pending), MCP, tray menu, custom background and in-app hotkey recording all work. Long capture is still sensitive to sticky headers and animations.
-> The UI ships dark/light themes, 6 accent colours, 7 languages and font switching; the settings window has multiple tabs and remembers where you left off.
-> PinSight draws with native Win32 windows and GDI — no Electron, no Tauri, no WebView. It also builds and runs on macOS and Linux (pins fall back to an egui viewport).
+> **Status: v0.1.3 / usable.** Capture, annotation (text / numbered steps / undo-redo / mosaic / highlight), pin-to-screen, long capture (vertical + horizontal), GIF/MP4 recording, offline OCR, GIF editing (trim / crop / add text / convert to MP4), image upload, voice notes (record + double-click to play), MCP (10 tools), tray menu on all three platforms, custom background and in-app hotkey recording all work. Long capture is still sensitive to sticky headers and animations.
+> The UI ships dark/light themes, 6 accent colours, 7 languages and font switching; the settings window has multiple tabs and remembers where you left off. Pins survive a restart and snap to screen edges.
+> PinSight draws with native Win32 windows and GDI on Windows — no Electron, no Tauri, no WebView. It also builds and runs on macOS and Linux (pins use egui viewports there, with a native system tray on every platform).
 
 ---
 
@@ -66,28 +66,31 @@ PinSight is still iterating quickly: edge cases of scrolling long capture (fixed
 | Region capture | ✅ | Global hotkey summons a frozen-screen overlay; drag a selection with corner/edge handles |
 | Fullscreen capture | ✅ | Grabs the monitor under the cursor and copies it |
 | Annotation | ✅ | Rectangle, ellipse, arrow, pen, highlighter, mosaic, numbered steps, text; colour and stroke width adjustable, `Ctrl+Z`/`Ctrl+Y` undo/redo |
-| Pin to screen | ✅ | Native always-on-top borderless window on Windows, egui viewport elsewhere; drag, wheel zoom, `Ctrl+wheel` opacity, click-through, middle/Esc to close; a **context menu** offers copy / save as / zoom presets / topmost / click-through / close / destroy |
+| Pin to screen | ✅ | Native always-on-top borderless window on Windows, egui viewport elsewhere; drag (snaps to screen edges), wheel zoom, `Ctrl+wheel` opacity, click-through, double-click to play a voice note, middle/Esc to close; active pins **survive a restart**; a **context menu** offers copy / save as / zoom presets / topmost / click-through / close / destroy |
 | Pin groups | ✅ | Group management (create/rename/delete/hide as a whole), each group can bind its **own global hotkey** to toggle visibility; plus a global show/hide toggle |
 | Pin from clipboard | ✅ | Pin whatever image is on the clipboard in one keystroke |
-| Long capture | 🧪 | Automatic scrolling + frame stitching after selection, **vertical or horizontal** (toggle in Settings → Capture); best on static pages without sticky headers |
+| Long capture | ✅ | Automatic scrolling + frame stitching after selection, **vertical or horizontal** (toggle in Settings → Capture); static-frame detection, sticky-edge stripping and reverse-scroll handling; best on pages without sticky headers or heavy animation |
 | Screen recording | ✅ | Frame-by-frame capture of a region; MP4 when `ffmpeg` is installed, GIF otherwise |
 | Offline OCR | ✅ | Windows uses the built-in `Windows.Media.Ocr`, macOS uses Vision, Linux uses Tesseract; one-click region OCR in the toolbar; CLI `pinsight shot --ocr` for full screen |
 | Image upload | ✅ | Toolbar upload button + CLI `--upload`; defaults to a local backend writing into `<save dir>/uploaded/`, switchable to HTTP (POST/PUT, form or JSON responses) |
-| Voice notes | 🧪 | Record screen notes with an audio track; click-to-play not closed yet (audio playback library pending) |
+| Voice notes | ✅ | Record screen notes with an audio track; double-click the pin (or use its menu) to play through the OS default player |
 | Global hotkeys | ✅ | All 8 actions can be re-recorded in the settings window (press Record, then the combo; Esc cancels), effective instantly; conflicts are flagged in red with the reason |
 | Command line | ✅ | Headless subcommands (scrot/maim style): `shot` capture, `pdf` bundle PDF, `gif` edit animated GIFs, `voice` voice notes — see below |
 | Single instance | ✅ | Launching twice wakes the running instance instead of registering a second hotkey set (named mutex on Windows, lock file + PID check elsewhere) |
-| Tray menu | ✅ | Taskbar icon with a localised context menu (hotkey hints included); re-registers itself after an Explorer restart |
+| Tray menu | ✅ | System-tray icon on Windows, macOS and Linux with a localised context menu (hotkey hints included); Explorer-restart safe on Windows |
 | Custom background | ✅ | Main-window background image with Gaussian blur, dimming veil and cover/contain/stretch fitting |
 | Run at startup | ✅ | Windows registry / Linux `.desktop` / macOS LaunchAgent, one toggle in settings |
 | Portable mode | ✅ | `--portable` or a `pinsight.portable` marker file: config and captures stay inside the install folder |
-| MCP | ✅ | `--mcp` starts the stdio server with 9 tools |
+| MCP | ✅ | `--mcp` starts the stdio server with 10 tools, including OCR on an image file/base64 |
 | Themes | ✅ | System / light / dark, 6 accent colours, instant |
 | Languages | ✅ | 简体中文，繁體中文，English，日本語，한국어，Français，Deutsch |
 | Fonts | ✅ | Auto-matched per UI language, or sans/serif/mono/custom font file; UI font size 8–16 pt steps (default 9 pt) |
 | Config persistence | ✅ | JSON config; appearance changes are written back instantly, the last settings tab is remembered |
 | Text annotation | ✅ | Inline editor in the overlay, Enter commits / Shift+Enter newline; size and colour follow the toolbar |
 | Numbered steps | ✅ | Press `N` and click to place; numbers increment automatically (seven-segment vector digits), undoable |
+| Capture gallery | ✅ | Browse history; re-open any saved capture in the annotation editor; batch select → export PDF / upload all (links to clipboard) / rename / delete |
+| Colour picker | ✅ | Global `Ctrl+Shift+K` eyedropper + colour dialog with HEX/RGB/HSL fields and one-click Copy HEX / Copy RGB |
+| Save compression | ✅ | Optional target size in KB for JPEG saves (quality, then dimensions, step down to fit); Settings slider or CLI `--max-kb` |
 
 ---
 
@@ -132,7 +135,7 @@ The bottom of the settings window shows the resolved combination, e.g. `Font: Mi
 
 ### Tray & background
 
-- **Tray**: a Windows taskbar icon whose right-click menu covers region capture, fullscreen, clipboard pin, long capture, record, save last, show main window and exit — each with its current hotkey. The icon re-registers itself after an Explorer crash. Closing the main window hides to tray by default (`close_to_tray`); the tray's Exit truly quits.
+- **Tray**: a system-tray icon on Windows, macOS and Linux whose right-click menu covers region capture, fullscreen, clipboard pin, long capture, record, save last, show main window and exit — each with its current hotkey. On Windows the icon re-registers itself after an Explorer crash. Closing the main window hides to tray by default on Windows (`close_to_tray`); on macOS / Linux this can be enabled in Settings. The tray's Exit truly quits.
 - **Background**: the main window can use any image (`png/jpg/webp/bmp`) with Gaussian blur, dimming and cover / contain / stretch fitting; changes apply instantly and persist.
 
 ---
@@ -442,7 +445,7 @@ Default content (see also [`config.example.json`](config.example.json)):
 - `font`: `auto` / `sans` / `serif` / `mono` / `custom`; `custom` reads `font_path`.
 - `font_size_pt`: UI font size in points; 8 / 9 / 10 / 11 / 12 / 14 / 16, default 9.
 - `bg_image`: main-window background image path, `null` for solid; `bg_blur` is the Gaussian radius (px), `bg_dim` the dimming (0–0.85), `bg_fit` is `cover` / `contain` / `stretch`.
-- `close_to_tray`: closing the main window hides to tray instead of quitting (Windows only, on by default).
+- `close_to_tray`: closing the main window hides to tray instead of quitting (on by default on Windows; available on all platforms now that the tray is cross-platform).
 - `run_at_startup`: launch at login (Windows registry / Linux autostart / macOS LaunchAgent).
 - `settings_tab`: the remembered settings tab — `general` / `appearance` / `capture` / `pins` / `output` / `controls` (alias `hotkeys`) / `updates` / `about`.
 
@@ -532,8 +535,8 @@ PinSight/
 │   ├── gifedit.rs                    # GIF editing: trim / crop / text / MP4
 │   ├── pdf.rs                        # PDF page rasterising (optional)
 │   ├── hotkeys.rs                    # global hotkey registration, parsing, conflicts, hot reload
-│   ├── tray.rs                       # Windows tray icon, message window, context menu
-│   ├── tray_stub.rs                  # no-op tray for non-Windows platforms
+│   ├── tray.rs                       # Windows tray (Win32 icon, message window, context menu)
+│   ├── tray_stub.rs                  # macOS / Linux tray via tray-icon (NSStatusItem / AppIndicator)
 │   ├── startup.rs                    # autostart (registry / .desktop / LaunchAgent)
 │   ├── single_instance.rs            # single instance: named mutex / lock file + PID liveness
 │   ├── background.rs                 # custom background image: decode, blur, fit, texture
@@ -542,7 +545,7 @@ PinSight/
 │   ├── clipboard.rs                  # clipboard output (per ClipboardMode, arboard)
 │   ├── upload.rs                     # image upload (HTTP / local backend)
 │   ├── hdr.rs                        # HDR high-colour detection and correction
-│   ├── mcp.rs                        # hand-written MCP stdio server + 9 tools
+│   ├── mcp.rs                        # hand-written MCP stdio server + 10 tools
 │   ├── config.rs                     # JSON config I/O, portable-mode path resolution
 │   └── util.rs                       # timestamps, PNG, clipboard, path helpers
 └── .gitignore
@@ -560,7 +563,7 @@ PinSight/
 | Pin windows | Win32 `WS_POPUP` + GDI (Windows) / egui viewport (elsewhere) | truly always-on top, borderless, click-through on Windows; the viewport keeps one interaction model elsewhere |
 | Scroll simulation | `enigo` | synthesises mouse wheel events |
 | Global hotkeys | `global-hotkey` | RegisterHotKey wrapper; re-registering on change reuses one manager |
-| Tray | `windows` crate (`Shell_NotifyIconW` + message-only window) | the message window lives on the UI thread; winit's pump dispatches it, no extra thread |
+| Tray | Windows: `windows` crate (`Shell_NotifyIconW` + message-only window); macOS/Linux: `tray-icon` | Windows message window lives on the UI thread (winit pump dispatches it); other platforms use NSStatusItem / AppIndicator with per-frame event polling |
 | File dialogs | `rfd` | cross-platform native dialogs (IFileOpenDialog / NSOpenPanel / zenity), no WebView |
 | Recording | `gif` + optional `ffmpeg` | dependency-free GIF; MP4 when ffmpeg is present |
 | MCP | hand-written JSON-RPC stdio | no async runtime or SDK version lock-in; protocol under our control |
@@ -619,13 +622,13 @@ python scripts\measure.py 6
 4. Take the best-matching candidate; stop when the difference is too large so misaligned content never enters the output.
 5. Append rows until `max_height` or the page stops moving.
 
-Fixed headers, floating buttons, scrollbars and animations break overlap matching — long capture is therefore marked experimental.
+Fixed headers, floating buttons, scrollbars and animations can still confuse overlap matching; the stitcher strips sticky edges, ignores static frames and detects reverse scrolls, but a page with heavy animation may need a smaller selection.
 
 ---
 
 ## Known limitations
 
-- **Platform differences**: pins use a native Win32 window on Windows; macOS / Linux switch to an egui viewport — interactions match, but system-level behaviour (real click-through, for instance) follows platform ability; the tray icon is Windows-only for now.
+- **Platform differences**: pins use a native Win32 window on Windows; macOS / Linux switch to an egui viewport — interactions match, but system-level behaviour (real click-through, for instance) follows platform ability. The system tray works on all three platforms.
 - **Long capture**: not suited to pages with fixed sidebars/headers, infinite scroll or heavy animation; defaults cap at 400 frames / 20000 px.
 - **Recording**: frame rate bounded by capture speed; GIFs are large; MP4 needs `ffmpeg`.
 - **Annotations**: rectangle / ellipse / arrow / pen / highlighter / mosaic / numbered steps / text all support `Ctrl+Z` / `Ctrl+Y` (snapshot history).
@@ -646,12 +649,13 @@ Fixed headers, floating buttons, scrollbars and animations break overlap matchin
 - [x] Undo / redo (`Ctrl+Z` / `Ctrl+Y`, snapshot history across all annotation types)
 - [x] Numbered steps (`N`, seven-segment vector digits, auto-increment)
 - [x] Single instance (named mutex / lock file; second launch wakes the running one)
-- [ ] Scrollbar-aware long capture; fixed-header clipping
-- [ ] MCP tool `ocr_image` (reusing the local OCR engine)
-- [ ] Voice-note click-to-play (audio playback library pending)
-- [ ] Pin rotation, shadow, snap alignment
-- [ ] Mixed-DPI multi-monitor calibration
-- [ ] macOS / Linux tray and installer packages (.dmg / .deb / AppImage)
+- [x] Scrollbar-aware long capture; fixed-header clipping (also horizontal)
+- [x] MCP tool `ocr_image` (reusing the local OCR engine)
+- [x] Voice-note click-to-play (double-click a voice pin, or its menu)
+- [x] Pin rotation, shadow, snap alignment (grid + screen-edge)
+- [x] Pins persist across restarts; gallery re-annotate / batch upload / rename
+- [ ] Mixed-DPI multi-monitor calibration (partial: edge snapping is DPI-aware)
+- [ ] macOS / Linux installer packages (.dmg / .deb / AppImage); tray itself is done
 - [x] Themes (system / light / dark), accents, font size
 - [x] Internationalisation: zh-Hans / zh-Hant / en / ja / ko / fr / de
 - [x] Font selection with CJK fallback

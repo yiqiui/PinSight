@@ -41,12 +41,13 @@ Native Rust screenshot · annotation · pin · long-capture · recording tool wi
 </div>
 
 > **状态：v0.1.3 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
-> 长截图、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）、图片上传、
-> 语音便签（可录制，点击播放待完善）、MCP、托盘菜单、自定义背景图与界面内热键录制均已跑通；长截图对固定页眉、
+> 长截图（纵向 + 横向）、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）、图片上传、
+> 语音便签（可录制，双击贴图即可播放）、MCP（10 个工具）、三平台系统托盘、自定义背景图与界面内热键录制均已跑通；长截图对固定页眉、
 > 粘性元素与动画仍有一定敏感性。
 > 界面支持深/浅色主题、6 种强调色、7 种语言与字体切换，设置页分多个标签并记住上次打开的位置。
-> 项目使用原生 Win32 窗口与 GDI 绘制，不依赖 Electron、Tauri 或 WebView；
-> 除 Windows 外也可在 macOS 与 Linux 上构建运行（贴图自动切换为 egui 视口实现）。
+> 贴图会吸附屏幕边缘，并在重启后自动恢复。
+> 项目在 Windows 用原生 Win32 窗口与 GDI 绘制，不依赖 Electron、Tauri 或 WebView；
+> 除 Windows 外也可在 macOS 与 Linux 上构建运行（贴图自动切换为 egui 视口实现，三平台均有原生系统托盘）。
 
 ---
 
@@ -75,28 +76,31 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | 区域截图 | ✅ | 全局热键唤出冻结层，拖拽选区，支持边角/边线调整 |
 | 全屏截图 | ✅ | 截取光标所在显示器并复制到剪贴板 |
 | 标注 | ✅ | 矩形、椭圆、箭头、画笔、高亮、马赛克、序号标注、文字标注；颜色与线宽可调，`Ctrl+Z`/`Ctrl+Y` 撤销重做 |
-| 贴图 | ✅ | Windows 为原生置顶无边框窗口，其他平台用 egui 视口；拖动、滚轮缩放、`Ctrl+滚轮` 透明度、点击穿透、中键/Esc 关闭；**右键菜单**可复制/另存为/缩放预设/置顶/穿透/关闭/销毁 |
+| 贴图 | ✅ | Windows 为原生置顶无边框窗口，其他平台用 egui 视口；拖动（吸附屏幕边缘）、滚轮缩放、`Ctrl+滚轮` 透明度、点击穿透、双击语音贴图播放、中键/Esc 关闭；**重启后自动恢复**；**右键菜单**可复制/另存为/缩放预设/置顶/穿透/关闭/销毁 |
 | 贴图分组 | ✅ | 分组管理（新建/重命名/删除/整体显隐），每组可绑定**独立全局热键**切换显隐；另有总开关热键 |
 | 剪贴板贴图 | ✅ | 一键把剪贴板图片钉在屏幕上 |
-| 长截图 | 🧪 | 选区后自动滚轮+逐帧捕获+重叠区拼接，**支持纵向/横向**（设置→截图 中切换）；适合静态、无固定表头的内容 |
+| 长截图 | ✅ | 选区后自动滚轮+逐帧捕获+重叠区拼接，**支持纵向/横向**（设置→截图 中切换）；静止帧判定、固定页眉/页脚剔除、反向滚动识别；适合无固定表头/弱动画的页面 |
 | 录屏 | ✅ | 三种模式（选区 / 全屏 / 前台窗口）；4–60 fps；分辨率预设（原始 / 1080p / 720p）；可选摄像头画中画、系统声音与麦克风（双音轨混音）；安装 `ffmpeg` 时输出 MP4，否则回退 GIF |
 | 离线 OCR | ✅ | 离线识别：Windows 用内置 `Windows.Media.Ocr`，macOS 用 Vision，Linux 用 Tesseract；工具栏一键选取区域识别；CLI `pinsight shot --ocr` 整屏识别 |
 | 图片上传 | ✅ | 编辑器上传按钮 + CLI `--upload`；默认本地后端落盘到 `<截图目录>/uploaded/`，可切 HTTP（POST/PUT、表单或 JSON 响应） |
-| 语音便签 | 🧪 | 可录制带音轨的录屏便签；点击播放尚未闭环（待接入音频播放库） |
+| 语音便签 | ✅ | 可录制带音轨的录屏便签；双击贴图（或右键菜单）用系统默认播放器播放 |
 | 全局热键 | ✅ | 8 个动作均可在设置页内「录制」自定义（点 Record 后按组合键，Esc 取消），即时生效；注册失败会标红并说明原因 |
 | 命令行 | ✅ | 无窗口子命令（scrot/maim 风格）：`shot` 截图、`pdf` 拼 PDF、`gif` 编辑动图、`voice` 录音便签，详见下文 |
 | 单实例 | ✅ | 重复启动不会注册第二套热键，而是唤起已在运行的实例（Windows 命名互斥量，其他平台锁文件 + PID 存活检测） |
-| 托盘菜单 | ✅ | 任务栏图标 + 本地化右键菜单（含各项快捷键提示），Explorer 重启后自动恢复 |
+| 托盘菜单 | ✅ | Windows / macOS / Linux 三平台系统托盘 + 本地化右键菜单（含各项快捷键提示），Windows 上 Explorer 重启后自动恢复 |
 | 自定义背景 | ✅ | 主窗口背景图：文件选择、高斯模糊、压暗 veil、cover/contain/stretch 三种适配 |
 | 开机自启 | ✅ | Windows 注册表 / Linux `.desktop` / macOS LaunchAgent，设置页一键开关 |
 | 便携模式 | ✅ | `--portable` 或 `pinsight.portable` 标记文件：配置与截图全部落在安装目录内 |
-| MCP | ✅ | `--mcp` 启动 stdio 服务，暴露 9 个工具 |
+| MCP | ✅ | `--mcp` 启动 stdio 服务，暴露 10 个工具（含图片 OCR `ocr_image`） |
 | 主题 | ✅ | 跟随系统 / 浅色 / 深色，6 种强调色，即时生效 |
 | 多语言 | ✅ | 简体中文、繁體中文、English、日本語、한국어、Français、Deutsch |
 | 字体 | ✅ | 自动匹配系统语言字体，或指定无衬线 / 衬线 / 等宽 / 自定义字体文件；界面字号 8–16 pt 分段可选（默认 9 pt） |
 | 配置持久化 | ✅ | JSON 配置，外观改动即时写回；设置页标签位置也会记住 |
 | 文本标注 | ✅ | 覆盖层内联输入框，Enter 提交 / Shift+Enter 换行，字号与颜色跟随工具栏；也可用工具栏「文字」按钮提交 |
 | 序号标注 | ✅ | `N` 点击即放置，编号按点击顺序自动递增（七段矢量数字），可撤销 |
+| 截图画廊 | ✅ | 浏览历史；任意已保存图片可一键回到标注器二次编辑；批量勾选 → 导出 PDF / 批量上传（链接入剪贴板）/ 重命名 / 删除 |
+| 屏幕取色 | ✅ | 全局 `Ctrl+Shift+K` 吸管 + 取色对话框（HEX/RGB/HSL 字段，一键复制 HEX / RGB） |
+| 保存压缩 | ✅ | JPEG 可设目标体积（KB），先降质量再缩尺寸直至达标；设置页滑块或 CLI `--max-kb` |
 
 ---
 
@@ -145,9 +149,9 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 
 ### 托盘与背景
 
-- **托盘**：Windows 任务栏常驻图标，右键菜单包含区域截图、全屏、剪贴板贴图、长截图、
-  录屏、保存最近、显示主窗口、退出，每一项后面都跟着当前快捷键。Explorer 崩溃重启后
-  图标会自动重新注册。关闭主窗口默认是"藏到托盘"而不是退出（`close_to_tray`），
+- **托盘**：Windows / macOS / Linux 三平台系统托盘常驻图标，右键菜单包含区域截图、全屏、剪贴板贴图、长截图、
+  录屏、保存最近、显示主窗口、退出，每一项后面都跟着当前快捷键。Windows 上 Explorer 崩溃重启后
+  图标会自动重新注册。Windows 关闭主窗口默认是"藏到托盘"而不是退出（`close_to_tray`，其它平台可在设置页开启），
   托盘里的"退出"才是真正结束进程。
 - **背景**：主窗口可以换成任意图片（`png/jpg/webp/bmp`），带高斯模糊、压暗和
   cover / contain / stretch 三种适配方式；换图、调模糊、调暗度都即时生效并写回配置。
@@ -480,7 +484,7 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
 - `font_size_pt`：界面字号（pt），可选 8 / 9 / 10 / 11 / 12 / 14 / 16，默认 9。
 - `bg_image`：主窗口背景图片路径，`null` 为纯色；`bg_blur` 为高斯模糊半径（px），
   `bg_dim` 为压暗强度（0–0.85），`bg_fit` 为 `cover` / `contain` / `stretch`。
-- `close_to_tray`：关闭主窗口时藏到托盘而非退出（仅 Windows 默认开启）。
+- `close_to_tray`：关闭主窗口时藏到托盘而非退出（Windows 默认开启；现三平台均支持托盘，其它平台可在设置页开启）。
 - `run_at_startup`：开机自启（Windows 注册表 / Linux autostart / macOS LaunchAgent）。
 - `settings_tab`：设置页记住的标签，`general` / `appearance` / `capture` / `pins` / `output` / `controls`（别名 `hotkeys`）/ `updates` / `about`。
 
@@ -569,8 +573,8 @@ PinSight/
 │   ├── gifedit.rs                    # GIF 编辑：裁剪片段 / 裁切画面 / 加文字 / 转 MP4
 │   ├── pdf.rs                        # PDF 页面栅格化（可选）
 │   ├── hotkeys.rs                    # 全局热键注册、解析、冲突分类、热更新
-│   ├── tray.rs                       # Windows 托盘图标、消息窗口与右键菜单
-│   ├── tray_stub.rs                  # 非 Windows 平台的托盘空实现
+│   ├── tray.rs                       # Windows 托盘图标、消息窗口与右键菜单（Win32）
+│   ├── tray_stub.rs                  # macOS / Linux 托盘（tray-icon：NSStatusItem / AppIndicator）
 │   ├── startup.rs                    # 开机自启（注册表 / .desktop / LaunchAgent）
 │   ├── single_instance.rs            # 单实例：命名互斥量 / 锁文件 + PID 存活检测
 │   ├── background.rs                 # 自定义背景图：解码、模糊、适配、纹理
@@ -579,7 +583,7 @@ PinSight/
 │   ├── clipboard.rs                  # 剪贴板输出（按 ClipboardMode，arboard）
 │   ├── upload.rs                     # 图片上传（HTTP / 本地后端）
 │   ├── hdr.rs                        # HDR 高级色彩检测与修正
-│   ├── mcp.rs                        # 手写 MCP stdio server + 9 个工具定义
+│   ├── mcp.rs                        # 手写 MCP stdio server + 10 个工具定义
 │   ├── config.rs                     # JSON 配置读写、便携模式路径解析
 │   └── util.rs                       # 时间戳、PNG、剪贴板、路径工具
 └── .gitignore
@@ -597,7 +601,7 @@ PinSight/
 | 贴图窗口 | Win32 `WS_POPUP` + GDI（Windows）/ egui 视口（其他平台） | Windows 上真正常驻置顶、无边框、可点击穿透；其他平台用视口保持同一套交互 |
 | 滚动模拟 | `enigo` | 发送鼠标滚轮 |
 | 全局热键 | `global-hotkey` | Windows RegisterHotKey 封装；改键时复用同一 manager 热更新 |
-| 托盘 | `windows` crate（`Shell_NotifyIconW` + message-only 窗口） | 消息窗口挂在 UI 线程，winit 的消息泵顺带派发，无需额外线程 |
+| 托盘 | Windows：`windows` crate（`Shell_NotifyIconW` + message-only 窗口）；macOS / Linux：`tray-icon` | Windows 消息窗口挂在 UI 线程由 winit 消息泵派发；其他平台用 NSStatusItem / AppIndicator，菜单事件每帧轮询 |
 | 文件选择 | `rfd` | 跨平台原生对话框（IFileOpenDialog / NSOpenPanel / zenity），非 WebView |
 | 录屏 | `gif` + 可选 `ffmpeg` | 零外部依赖的 GIF；有 ffmpeg 时输出 MP4 |
 | MCP | 手写 JSON-RPC stdio | 避免 async runtime 与 SDK 版本绑定，协议可控 |
@@ -676,7 +680,7 @@ python scripts\measure.py 6
 ## 已知限制
 
 - **平台差异**：贴图在 Windows 用原生 Win32 窗口，macOS / Linux 自动切换为 egui 视口实现，
-  交互一致但系统级行为（如真点击穿透）以平台能力为准；托盘图标目前仅 Windows。
+  交互一致但系统级行为（如真点击穿透）以平台能力为准；系统托盘三平台均可用。
 - **长截图**：不适合含固定侧栏/表头、无限滚动、强动画的页面；默认最多 400 帧 / 20000px。
 - **录屏**：帧率受捕获速度限制（4–60 fps 为目标值）；GIF 体积较大；MP4 / 摄像头 / 音频均需要 `ffmpeg`。
   摄像头与音频设备不可用时自动降级为纯屏幕录制；设备名填错或被占用会让该次录制失败。
@@ -701,12 +705,13 @@ python scripts\measure.py 6
 - [x] 撤销 / 重做（`Ctrl+Z` / `Ctrl+Y`，快照式历史，覆盖全部标注类型）
 - [x] 序号标注（`N`，七段矢量数字，自动递增）
 - [x] 单实例（命名互斥量 / 锁文件，二次启动唤起已有实例）
-- [ ] 滚动条感知的长截图；固定表头裁剪
-- [ ] MCP 工具 `ocr_image`（复用本地 OCR 引擎）
-- [ ] 语音便签点击播放（待接入音频播放库）
-- [ ] 贴图旋转、阴影、吸附对齐
-- [ ] 多显示器混合 DPI 校准
-- [ ] macOS / Linux 托盘与安装包（.dmg / .deb / AppImage）
+- [x] 滚动条感知的长截图；固定表头裁剪（另支持横向）
+- [x] MCP 工具 `ocr_image`（复用本地 OCR 引擎）
+- [x] 语音便签点击播放（双击语音贴图，或右键菜单）
+- [x] 贴图旋转、阴影、吸附对齐（网格 + 屏幕边缘）
+- [x] 贴图跨重启恢复；画廊二次编辑 / 批量上传 / 批量重命名
+- [ ] 多显示器混合 DPI 校准（部分完成：边缘吸附已考虑 DPI）
+- [ ] macOS / Linux 安装包（.dmg / .deb / AppImage）；托盘本身已完成
 - [x] 主题（跟随系统 / 浅色 / 深色）、强调色、字号
 - [x] 国际化：简中 / 繁中 / 英 / 日 / 韩 / 法 / 德
 - [x] 字体选择与 CJK 回退
