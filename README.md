@@ -35,6 +35,12 @@
 <br />
 
 <div align="center">
+  <img src="docs/images/demo.gif" width="640" alt="PinSight demo: capture, annotate, pin, long capture, colour picker" />
+</div>
+
+<br />
+
+<div align="center">
   <img src="docs/images/main.png" width="720" alt="PinSight main window" />
 </div>
 

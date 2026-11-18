@@ -37,6 +37,12 @@ Native Rust screenshot · annotation · pin · long-capture · recording tool wi
 <br />
 
 <div align="center">
+  <img src="docs/images/demo.gif" width="640" alt="PinSight 演示：截图、标注、贴图、长截图、取色" />
+</div>
+
+<br />
+
+<div align="center">
   <img src="docs/images/main.png" width="720" alt="PinSight 主界面" />
 </div>
 
