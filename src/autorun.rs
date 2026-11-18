@@ -28,7 +28,7 @@ impl RunParams {
             save_options: SaveOptions {
                 template: cfg.name_template.clone(),
                 quality: cfg.image_quality,
-                max_kb: (cfg.save_max_kb > 0).then(|| cfg.save_max_kb as usize),
+                max_kb: (cfg.save_max_kb > 0).then_some(cfg.save_max_kb as usize),
                 format: cfg.image_format,
                 title: String::new(),
                 decorations: cfg.decorations.clone(),

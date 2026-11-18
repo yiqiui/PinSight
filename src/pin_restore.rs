@@ -39,12 +39,12 @@ pub fn restore_dir(save_dir: &Path) -> PathBuf {
     save_dir.join("pins_restore")
 }
 
+/// A pin to snapshot: `(id, image, x, y, group, optional audio path)`.
+pub type PinSnapshot<'a> = (u64, &'a image::RgbaImage, i32, i32, u32, Option<PathBuf>);
+
 /// Write a snapshot of `pins`. `pins` is `(id, image, x, y, group, audio)`.
 /// Old PNGs are removed first so deleted pins do not accumulate on disk.
-pub fn save(
-    save_dir: &Path,
-    pins: &[(u64, &image::RgbaImage, i32, i32, u32, Option<PathBuf>)],
-) -> anyhow::Result<()> {
+pub fn save(save_dir: &Path, pins: &[PinSnapshot<'_>]) -> anyhow::Result<()> {
     let dir = restore_dir(save_dir);
     std::fs::create_dir_all(&dir)?;
 

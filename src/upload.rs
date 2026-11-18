@@ -251,10 +251,14 @@ mod tests {
         paths.push(bad);
 
         let out_dir = dir.join("out");
-        let mut cfg = crate::config::UploadConfig::default();
-        cfg.enabled = true;
-        cfg.backend = UploadBackend::Local;
-        cfg.local.folder = out_dir.clone();
+        let cfg = crate::config::UploadConfig {
+            enabled: true,
+            backend: UploadBackend::Local,
+            local: LocalUpload {
+                folder: out_dir.clone(),
+            },
+            ..Default::default()
+        };
         let links = upload_paths(&paths, &cfg).unwrap();
         assert_eq!(links.len(), 2, "two valid images uploaded, bad one skipped");
         assert!(std::path::Path::new(&links[0]).exists());

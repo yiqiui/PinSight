@@ -431,8 +431,8 @@ pub struct PinSightApp {
     /// Cached egui texture for the preview. Rebuilt only when the rendered
     /// image changes — uploading a new GPU texture every frame is wasteful.
     qr_gen_tex: Option<egui::TextureHandle>,
-    /// Live tray icon. `None` when the shell refused it or on other platforms.
-    #[cfg(windows)]
+    /// Live tray icon. `None` when the shell refused it or the platform has
+    /// no notification area. Windows uses native Win32; mac/Linux use tray-icon.
     tray: Option<crate::tray::Tray>,
     /// Cache of the state the tray labels depend on, so the menu is only
     /// rebuilt when something actually changed.
@@ -598,9 +598,7 @@ impl PinSightApp {
             qr_gen_src: String::new(),
             qr_gen_img: None,
             qr_gen_tex: None,
-            #[cfg(windows)]
             tray: None,
-            #[cfg(windows)]
             tray_sig: (Vec::new(), false, true, true, Vec::new()),
         };
 
@@ -2349,7 +2347,7 @@ impl PinSightApp {
         util::SaveOptions {
             template: self.config.name_template.clone(),
             quality: self.config.image_quality,
-            max_kb: (self.config.save_max_kb > 0).then(|| self.config.save_max_kb as usize),
+            max_kb: (self.config.save_max_kb > 0).then_some(self.config.save_max_kb as usize),
             format: self.config.image_format,
             title: String::new(),
             decorations: self.config.decorations.clone(),
@@ -3536,7 +3534,15 @@ impl PinSightApp {
         }
         #[cfg(not(windows))]
         {
-            let _ = tx;
+            let items = self.tray_items();
+            let icon = self.tray_icon_pixels();
+            self.tray =
+                crate::tray::Tray::install_with(tx, items, self.tr.tr.tray_tip.to_string(), icon);
+            let wake_ctx = ctx.clone();
+            crate::tray::set_wake(std::sync::Arc::new(move || wake_ctx.request_repaint()));
+            if self.tray.is_none() {
+                self.tray_rx = None;
+            }
         }
     }
 
@@ -3545,7 +3551,6 @@ impl PinSightApp {
     /// The popup is assembled from the stored copy each time it opens, so a
     /// stale copy would show outdated "show/hide" wording or a Pins submenu
     /// that is missing a freshly created pin.
-    #[cfg(windows)]
     fn sync_tray_menu(&mut self) {
         let sig = (
             // Include the actual pin ids, not just the count: closing pin #5
@@ -4603,8 +4608,7 @@ impl PinSightApp {
         let _ = self.config.save();
         ctx.request_repaint();
         // The tray labels AND the hover tip are translated, so refresh both
-        // on language change (the tip needs NIM_MODIFY, set_items alone won't).
-        #[cfg(windows)]
+        // on language change.
         if let Some(tray) = self.tray.as_ref() {
             tray.set_items(self.tray_items());
             tray.set_tip(self.tr.tr.tray_tip.to_string());
@@ -9296,8 +9300,10 @@ impl eframe::App for PinSightApp {
         self.show_pins(&ctx);
         self.sync_background(&ctx);
         self.poll_tray(&ctx);
-        #[cfg(windows)]
         self.sync_tray_menu();
+        // Relay native tray clicks (macOS / Linux) into the same command queue.
+        #[cfg(not(windows))]
+        crate::tray::poll_events();
         self.handle_close_request(&ctx);
 
         // Startup is allocation-heavy (fonts, icon atlas, GL warm-up); the

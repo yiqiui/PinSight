@@ -487,6 +487,7 @@ mod imp {
 
     /// Pure snapping math, split out so the edge/threshold/clamp behaviour can
     /// be unit-tested without a real monitor.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn snap_to_bounds(
         x: i32,
         y: i32,

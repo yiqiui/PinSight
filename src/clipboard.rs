@@ -48,7 +48,7 @@ fn copy_as_file(config: &Config, image: &RgbaImage) -> anyhow::Result<()> {
     let options = crate::util::SaveOptions {
         template: config.name_template.clone(),
         quality: config.image_quality,
-        max_kb: (config.save_max_kb > 0).then(|| config.save_max_kb as usize),
+        max_kb: (config.save_max_kb > 0).then_some(config.save_max_kb as usize),
         format: config.image_format,
         title: String::new(),
         decorations: config.decorations.clone(),
