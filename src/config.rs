@@ -485,6 +485,9 @@ pub struct Config {
     pub pin_skip_file_paths: bool,
     /// How many closed pins can be brought back, 0 disables the feature.
     pub pin_restore_limit: u32,
+    /// Save active pins on exit and restore them on the next launch.
+    #[serde(default = "default_restore_pins_on_startup")]
+    pub restore_pins_on_startup: bool,
     // ---- controls (控制) --------------------------------------------------
     /// In-app (overlay) shortcuts.
     pub app_keys: AppKeys,
@@ -839,6 +842,10 @@ fn default_pin_grid() -> u32 {
     16
 }
 
+fn default_restore_pins_on_startup() -> bool {
+    true
+}
+
 impl Hotkeys {
     /// Shortcut text bound to an action, used in status messages.
     pub fn for_action(&self, action: crate::hotkeys::Action) -> &str {
@@ -981,6 +988,7 @@ impl Default for Config {
             pin_text_fg: [17, 17, 17],
             pin_skip_file_paths: false,
             pin_restore_limit: 5,
+            restore_pins_on_startup: default_restore_pins_on_startup(),
             app_keys: AppKeys::default(),
             pin_gestures: PinGestures::default(),
             pin_groups: vec![PinGroup {

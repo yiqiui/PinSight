@@ -53,6 +53,7 @@ mod pdf;
 mod picker;
 mod pin;
 mod pin_layout;
+mod pin_restore;
 #[cfg(not(windows))]
 mod pin_viewport;
 mod qr;

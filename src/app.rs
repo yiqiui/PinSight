@@ -601,6 +601,8 @@ impl PinSightApp {
         app.install_tray(&cc.egui_ctx);
         app.apply_window_icon(&cc.egui_ctx);
         app.sync_background(&cc.egui_ctx);
+        // Bring back the pins that were on screen when the app last exited.
+        app.restore_pins_on_launch();
 
         if app.hotkeys.failures.is_empty() {
             app.toast(app.tr.tr.ready, false);
@@ -2422,6 +2424,68 @@ impl PinSightApp {
         self.closed_pins.push_back(closed);
         while self.closed_pins.len() > limit {
             self.closed_pins.pop_front();
+        }
+    }
+
+    /// Restore pins saved at the previous exit (best effort). Called once
+    /// during startup; a missing/corrupt snapshot simply yields no pins.
+    fn restore_pins_on_launch(&mut self) {
+        if !self.config.restore_pins_on_startup {
+            return;
+        }
+        let limit = self.config.pin_restore_limit as usize;
+        if limit == 0 {
+            return;
+        }
+        let entries = crate::pin_restore::load(&self.config.save_dir);
+        let max_size = self.config.pin_max_size.max(64);
+        for (path, saved) in entries.into_iter().rev().take(limit) {
+            let Ok(image) = image::open(&path).map(|img| img.to_rgba8()) else {
+                continue;
+            };
+            let (iw, ih) = image.dimensions();
+            if iw == 0 || ih == 0 {
+                continue;
+            }
+            let scale = (max_size as f32 / iw.max(ih) as f32).min(1.0);
+            let pw = ((iw as f32 * scale).round() as u32).max(24);
+            let ph = ((ih as f32 * scale).round() as u32).max(24);
+            let audio = saved
+                .audio
+                .as_ref()
+                .map(PathBuf::from)
+                .filter(|p| p.is_file());
+            let id = self.next_pin_id;
+            self.next_pin_id += 1;
+            let group = self.resolve_group(saved.group);
+            match Pin::create(
+                id,
+                Arc::new(image),
+                saved.x,
+                saved.y,
+                pw,
+                ph,
+                self.tr.tr,
+                self.config.pin_opacity,
+                self.config.pin_shadow,
+                self.config.pin_shadow_color,
+                self.config.pin_wheel_zoom,
+                self.config.pin_zoom_at_cursor,
+                self.config.pin_smooth_zoom,
+                self.config.pin_middle_close,
+                self.config.pin_gestures.encoded(),
+                group,
+                audio,
+                self.pin_tx.clone(),
+            ) {
+                Ok(mut pin) => {
+                    if self.config.pin_through {
+                        pin.toggle_passthrough();
+                    }
+                    self.pins.push(pin);
+                }
+                Err(err) => tracing::warn!(%err, "could not restore a pin on launch"),
+            }
         }
     }
 
@@ -7515,6 +7579,15 @@ impl PinSightApp {
                 }
             });
 
+            ui::field_row(ui, p, t.pin_restore_startup, |ui| {
+                if ui::toggle(ui, p, &mut self.config.restore_pins_on_startup).changed() {
+                    if !self.config.restore_pins_on_startup {
+                        crate::pin_restore::clear(&self.config.save_dir);
+                    }
+                    let _ = self.config.save();
+                }
+            });
+
             ui::field_row(ui, p, t.pin_restore_limit, |ui| {
                 let mut value = self.config.pin_restore_limit as f32;
                 if ui::slider(ui, p, &mut value, 0.0..=50.0, 0, "").changed() {
@@ -8943,6 +9016,24 @@ enum PinAction {
 }
 
 impl eframe::App for PinSightApp {
+    /// Snapshot the pins still on screen so the next launch can restore them.
+    /// `on_exit` only fires on a real process exit — closing to the tray keeps
+    /// the pins alive and does not rewrite the snapshot.
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        if !self.config.restore_pins_on_startup {
+            crate::pin_restore::clear(&self.config.save_dir);
+            return;
+        }
+        let pins: Vec<_> = self
+            .pins
+            .iter()
+            .map(|p| (p.id, &*p.image, p.x, p.y, p.group, p.audio_path.clone()))
+            .collect();
+        if let Err(err) = crate::pin_restore::save(&self.config.save_dir, &pins) {
+            tracing::warn!(%err, "could not save pins for the next launch");
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.apply_taskbar_icon(_frame);
