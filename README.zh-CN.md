@@ -40,7 +40,7 @@ Native Rust screenshot · annotation · pin · long-capture · recording tool wi
   <img src="docs/images/main.png" width="720" alt="PinSight 主界面" />
 </div>
 
-> **状态：v0.1.3 / 可用。** 截图、标注（文字 / 序号 / 撤销重做 / 马赛克 / 高亮）、贴图、
+> **状态：v0.1.3 / 可用。** 截图、标注（形状 / 文字 / 序号 / 撤销重做 / 马赛克 / 高亮 / 测量标尺 / 自由套索）、控件级智能截图、贴图、
 > 长截图（纵向 + 横向）、GIF/MP4 录屏、离线 OCR、GIF 编辑（裁剪片段 / 裁切画面 / 加文字 / 转 MP4）、图片上传、
 > 语音便签（可录制，双击贴图即可播放）、MCP（10 个工具）、三平台系统托盘、自定义背景图与界面内热键录制均已跑通；长截图对固定页眉、
 > 粘性元素与动画仍有一定敏感性。
@@ -75,7 +75,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | --- | --- | --- |
 | 区域截图 | ✅ | 全局热键唤出冻结层，拖拽选区，支持边角/边线调整 |
 | 全屏截图 | ✅ | 截取光标所在显示器并复制到剪贴板 |
-| 标注 | ✅ | 矩形、椭圆、箭头、画笔、高亮、马赛克、序号标注、文字标注；颜色与线宽可调，`Ctrl+Z`/`Ctrl+Y` 撤销重做 |
+| 标注 | ✅ | 矩形、椭圆、箭头、直线、画笔、高亮、马赛克、序号标注、文字标注、测量标尺、自由套索；颜色与线宽可调，`Ctrl+Z`/`Ctrl+Y` 撤销重做 |
 | 贴图 | ✅ | Windows 为原生置顶无边框窗口，其他平台用 egui 视口；拖动（吸附屏幕边缘）、滚轮缩放、`Ctrl+滚轮` 透明度、点击穿透、双击语音贴图播放、中键/Esc 关闭；**重启后自动恢复**；**右键菜单**可复制/另存为/缩放预设/置顶/穿透/关闭/销毁 |
 | 贴图分组 | ✅ | 分组管理（新建/重命名/删除/整体显隐），每组可绑定**独立全局热键**切换显隐；另有总开关热键 |
 | 剪贴板贴图 | ✅ | 一键把剪贴板图片钉在屏幕上 |
@@ -84,7 +84,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | 离线 OCR | ✅ | 离线识别：Windows 用内置 `Windows.Media.Ocr`，macOS 用 Vision，Linux 用 Tesseract；工具栏一键选取区域识别；CLI `pinsight shot --ocr` 整屏识别 |
 | 图片上传 | ✅ | 编辑器上传按钮 + CLI `--upload`；默认本地后端落盘到 `<截图目录>/uploaded/`，可切 HTTP（POST/PUT、表单或 JSON 响应） |
 | 语音便签 | ✅ | 可录制带音轨的录屏便签；双击贴图（或右键菜单）用系统默认播放器播放 |
-| 全局热键 | ✅ | 8 个动作均可在设置页内「录制」自定义（点 Record 后按组合键，Esc 取消），即时生效；注册失败会标红并说明原因 |
+| 全局热键 | ✅ | 10 个动作均可在设置页内「录制」自定义（点 Record 后按组合键，Esc 取消），即时生效；注册失败会标红并说明原因 |
 | 命令行 | ✅ | 无窗口子命令（scrot/maim 风格）：`shot` 截图、`pdf` 拼 PDF、`gif` 编辑动图、`voice` 录音便签，详见下文 |
 | 单实例 | ✅ | 重复启动不会注册第二套热键，而是唤起已在运行的实例（Windows 命名互斥量，其他平台锁文件 + PID 存活检测） |
 | 托盘菜单 | ✅ | Windows / macOS / Linux 三平台系统托盘 + 本地化右键菜单（含各项快捷键提示），Windows 上 Explorer 重启后自动恢复 |
@@ -101,6 +101,7 @@ PinSight 仍在快速迭代：滚动长截图的边界情况（固定页眉、�
 | 截图画廊 | ✅ | 浏览历史；任意已保存图片可一键回到标注器二次编辑；批量勾选 → 导出 PDF / 批量上传（链接入剪贴板）/ 重命名 / 删除 |
 | 屏幕取色 | ✅ | 全局 `Ctrl+Shift+K` 吸管 + 取色对话框（HEX/RGB/HSL 字段，一键复制 HEX / RGB） |
 | 保存压缩 | ✅ | JPEG 可设目标体积（KB），先降质量再缩尺寸直至达标；设置页滑块或 CLI `--max-kb` |
+| 控件级截图 | ✅ | `Ctrl+Shift+J` 自动吸附光标下的 UI 控件（窗口 / 面板 / 按钮级别，可配置） |
 
 ---
 
@@ -197,7 +198,7 @@ cargo build --release
 ### 最小使用流程
 
 1. `Ctrl+Shift+A` → 屏幕冻结、出现选区覆盖层。
-2. 拖拽框选；按 `R/E/A/D/H/M` 切换标注工具（`V` 回到选择）。
+2. 拖拽框选；按 `R/E/A/L/D/H/M` 切换标注工具（`V` 回到选择，`G` 测量，`F` 自由套索）。
 3. `Enter` 复制到剪贴板，`P` 贴图，`Ctrl+S` 保存 PNG，`Esc` 取消。
 4. 贴图窗口：左键拖动，滚轮缩放，`Ctrl+滚轮` 调透明度，中键或 `Esc` 关闭；
    主窗口的 Pin 列表可以切换点击穿透、复制、保存、关闭。
@@ -249,7 +250,7 @@ powershell -ExecutionPolicy Bypass -File scripts\package.ps1
 # 没有 Inno Setup 时只出便携包
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1 -SkipInstaller
 
-# UPX 压缩版：便携 zip 和安装包都用压缩后的 exe（约 10.3 MiB → 3.8 MiB）
+# UPX 压缩版：便携 zip 和安装包都用压缩后的 exe（约 11.6 MB → 4.5 MB）
 # 需要 upx 在 PATH 上；可能触发杀软误报，所以默认关闭
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1 -Upx
 ```
@@ -287,11 +288,13 @@ PINSIGHT_UPX_ONLY=1 python tools/_repackage_portable.py    # 只出 UPX 版
 | `Ctrl+Shift+S` | 保存最近一次截图 |
 | `Ctrl+Shift+H` | 显示 / 隐藏全部贴图（Snipaste 式 F3 切换） |
 | `Ctrl+Shift+P` | 重复上次区域截图（直接复制，无需再框选） |
+| `Ctrl+Shift+K` | 全局取色器（屏幕吸管） |
+| `Ctrl+Shift+J` | 控件级截图（自动吸附光标下的 UI 控件） |
 
 > 早期版本使用 `Ctrl+Alt+*`，实测与 Snipaste / QQ / 微信的截图快捷键冲突，因此改为
 > `Ctrl+Shift+*`。如果你的系统仍冲突，启动时主窗口会列出不可用的组合。
 
-全部 8 个组合都可以在**设置页 → 快捷键**里直接重新录制：点某一行的 `Record`，
+全部 10 个组合都可以在**设置页 → 快捷键**里直接重新录制：点某一行的 `Record`，
 然后按下新的组合键（需要至少一个修饰键，`Esc` 取消）。录制成功后立即重新注册，
 无需重启；被其他程序占用的组合会标红并说明原因。
 
@@ -300,7 +303,7 @@ PINSIGHT_UPX_ONLY=1 python tools/_repackage_portable.py    # 只出 UPX 版
 | 按键 | 动作 |
 | --- | --- |
 | `V` | 选择/移动选区 |
-| `R` / `E` / `A` / `D` / `H` / `M` / `N` / `T` | 矩形 / 椭圆 / 箭头 / 画笔 / 高亮 / 马赛克 / 序号标注 / 文字 |
+| `R` / `E` / `A` / `L` / `D` / `H` / `M` / `N` / `T` / `G` / `F` | 矩形 / 椭圆 / 箭头 / 直线 / 画笔 / 高亮 / 马赛克 / 序号标注 / 文字 / 测量标尺 / 自由套索 |
 | `Ctrl+Z` | 撤销上一个标注 |
 | `Ctrl+Y` | 重做（`Ctrl+Shift+Z` 同样有效，但部分输入法会占用该组合） |
 | `Enter` | 确认默认动作（复制或开始长截图/录屏） |
@@ -309,6 +312,9 @@ PINSIGHT_UPX_ONLY=1 python tools/_repackage_portable.py    # 只出 UPX 版
 | `Ctrl+C` | 复制 |
 | `Backspace` / `Delete` | 删除最后一个标注 |
 | `Esc` | 取消 |
+
+上表所有按键本身也可配置（配置文件里的 `app_keys` / 设置页「鼠标与控件」标签），
+包括确认 / 贴图 / 复制 / 保存 / 取消 / 撤销 / 重做，直接输入组合即可，无需录制。
 
 序号标注（`N`）点击即放置，编号按点击顺序自动递增（1、2、3…），
 颜色跟随当前色板，可以用撤销回退。
@@ -396,7 +402,8 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
 %APPDATA%\PinSight\config.json
 ```
 
-默认内容（也可参考 [`config.example.json`](config.example.json)）：
+完整默认配置见 [`config.example.json`](config.example.json)——共 117 个字段，覆盖热键、截图、贴图、录屏、上传、自动化、翻译与外观；
+可以整份拷走当作起点再裁剪。摘录片段：
 
 ```json
 {
@@ -407,66 +414,24 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
     "long_capture": "Ctrl+Shift+L",
     "record": "Ctrl+Shift+R",
     "save_last": "Ctrl+Shift+S",
-    "toggle_pins": "Ctrl+Shift+H"
+    "toggle_pins": "Ctrl+Shift+H",
+    "repeat_capture": "Ctrl+Shift+P",
+    "pick_color": "Ctrl+Shift+K",
+    "capture_control": "Ctrl+Shift+J"
   },
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
-  "gif_fps": 12,
-  "record_max_seconds": 0,
-  "record_countdown": 3,
-  "record_fps": 30,
+  "name_template": "PinSight_$yyyy-MM-dd_HH-mm-ss$",
+  "image_format": "png",
+  "save_max_kb": 0,
   "record_mode": "region",
-  "record_resolution": "source",
-  "record_webcam": false,
-  "webcam_device": "",
-  "record_system_audio": false,
-  "system_audio_device": "",
-  "record_mic": false,
-  "mic_device": "",
   "long_capture_max_height": 20000,
-  "long_scroll_ticks": 4,
-  "long_scroll_delay_ms": 420,
-  "long_diff_threshold": 1.5,
-  "long_idle_limit": 8,
-  "long_manual_idle_limit": 30,
-  "long_max_frames": 400,
-  "hdr_fix": true,
-  "mcp_enabled": false,
+  "long_capture_horizontal": false,
   "theme": "system",
-  "accent": "blue",
-  "accent_custom": [91, 157, 255],
-  "custom_colors": [],
-  "lang": "zh-hans",
-  "font": "auto",
-  "font_family": null,
-  "font_size_pt": 9.0,
-  "font_path": null,
-  "bg_image": null,
-  "bg_blur": 12.0,
-  "bg_dim": 0.45,
-  "bg_fit": "cover",
-  "close_to_tray": true,
-  "run_at_startup": false,
-  "settings_tab": "appearance",
-  "tray_icon_style": "auto",
-  "tray_icon_path": null,
-  "capture_magnifier": true,
-  "capture_magnifier_size": 15,
-  "color_format": "hex",
-  "capture_pointer": false,
-  "pin_restore_limit": 5,
-  "pin_gestures": {
-    "zoom": { "modifier": "none", "button": "wheel", "double_click": false },
-    "opacity": { "modifier": "ctrl", "button": "wheel", "double_click": false },
-    "close": { "modifier": "none", "button": "left", "double_click": true },
-    "reset": { "modifier": "none", "button": "middle", "double_click": false },
-    "thumbnail": { "modifier": "shift", "button": "left", "double_click": true },
-    "copy_text": { "modifier": "shift", "button": "right", "double_click": false }
-  },
-  "pin_groups": [
-    { "id": 1, "name": "", "hidden": false }
-  ]
+  "lang": "zh-hans"
 }
 ```
+
+部分字段说明（完整字段以 `config.example.json` 为准）：
 
 - `record_fps`：录屏帧率（4–60），MP4 与 GIF 共用；`gif_fps` 为旧字段，已不再参与录制。
 - `record_countdown`：录屏开始前的倒计时秒数（0 / 3 / 5，最长 10），留出摆好窗口的时间。
@@ -475,7 +440,17 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
 - `record_webcam` + `webcam_device`：摄像头画中画（右下角气泡），留空设备名用默认摄像头；仅 MP4。
 - `record_system_audio` + `system_audio_device`：系统声音（Windows 用 WASAPI 回环；macOS/Linux 需显式指定 BlackHole/监听设备）。
 - `record_mic` + `mic_device`：麦克风；留空用平台默认输入设备。系统声音与麦克风同时开启时用 `amix` 混成一条音轨。
+- `name_template` + `image_format` + `image_quality`：保存文件命名模板（占位符见设置页「命名规则」）、
+  格式（`png` / `jpg` / `webp` / `bmp` / `tiff` / `gif`）与 JPEG 质量。
+- `save_max_kb`：JPEG 保存的目标体积（KB），`0` 为关闭；先降质量再缩尺寸直至达标。
+- `clipboard_mode`：截图后的剪贴板行为——`image`（图片）/ `file`（写入保存后的文件路径）/ `disabled`。
 - `long_capture_max_height`：长截图最大高度，防止内存失控。
+- `long_capture_horizontal`：长截图切换为横向（向右滚动）拼接。
+- `upload`：图片上传后端配置（默认本地目录，可切 HTTP POST/PUT 或预置服务商）。
+- `automation`：定时 / 间隔 / 区域监控截图与截图后工作流链，默认全部关闭。
+- `translate`：OCR 翻译服务商（`google` / `deepl` / 自定义端点），用于 OCR 面板的翻译按钮。
+- `app_keys`：覆盖层内每个快捷键，以文本形式存储（`"V"`、`"Ctrl+Z"`），可直接输入修改。
+- `pin_restore_limit`：重启后恢复的贴图数量上限（贴图通过恢复清单持久化）。
 - `mcp_enabled`：保留字段；是否启动 MCP 由 `--mcp` 决定。
 - `theme`：`system` / `light` / `dark`。
 - `accent`：`blue` / `violet` / `emerald` / `amber` / `rose` / `cyan`。
@@ -497,7 +472,7 @@ MCP 的坐标使用**物理像素**。多显示器、混合缩放时，建议先
 ```mermaid
 flowchart LR
     HK[Global hotkeys] --> APP[PinSightApp<br/>egui/eframe]
-    TRAY[Tray icon<br/>message-only window] -->|TrayCommand| APP
+    TRAY[System tray<br/>Win32 / tray-icon] -->|TrayCommand| APP
     MCP[MCP stdio server] -->|UiCommand| APP
     APP -->|park root window| CAP[xcap capture]
     CAP --> OVL[Capture overlay<br/>freeze + selection]
@@ -564,13 +539,23 @@ PinSight/
 │   ├── marklayer.rs                  # 录屏叠加标注层（双置顶透明窗口）
 │   ├── pin.rs                        # Windows 原生贴图窗口（Win32 消息循环 + GDI）
 │   ├── pin_viewport.rs               # 其他平台的贴图（egui 视口实现）
+│   ├── pin_layout.rs                 # 贴图平铺 / 网格对齐排列
+│   ├── pin_restore.rs                # 贴图跨重启恢复（清单 + PNG）
+│   ├── snap.rs                       # 控件级截图（UI 元素吸附，Ctrl+Shift+J）
 │   ├── decorate.rs                   # 截图后装饰：边框 / 阴影 / 水印
+│   ├── window_shadow.rs              # 整窗阴影处理
+│   ├── effects.rs                    # 光标高亮环 / 点击涟漪特效
+│   ├── filters.rs                    # 图像滤镜：旋转 / 翻转 / 透视 / 模糊 / 反相
 │   ├── hud.rs                        # 后台任务浮动状态窗口
-│   ├── longshot.rs                   # 滚动捕获、重叠检测、拼接
+│   ├── longshot.rs                   # 滚动捕获、重叠检测、拼接（纵向 + 横向）
 │   ├── record.rs                     # 录屏线程、GIF 编码、ffmpeg MP4
 │   ├── ocr.rs                        # 离线 OCR（Windows.Media.Ocr / macOS Vision / Linux Tesseract）
+│   ├── ocr_text.rs                   # OCR 文本后处理 / 词块排版
+│   ├── translate.rs                  # OCR 翻译（Google / DeepL / 自定义端点）
+│   ├── qr.rs                         # 二维码识别 + 生成
 │   ├── voice.rs                      # 麦克风录音便签（ffmpeg → WAV）
 │   ├── gifedit.rs                    # GIF 编辑：裁剪片段 / 裁切画面 / 加文字 / 转 MP4
+│   ├── trim.rs                       # 录屏裁剪辅助
 │   ├── pdf.rs                        # PDF 页面栅格化（可选）
 │   ├── hotkeys.rs                    # 全局热键注册、解析、冲突分类、热更新
 │   ├── tray.rs                       # Windows 托盘图标、消息窗口与右键菜单（Win32）
@@ -579,9 +564,13 @@ PinSight/
 │   ├── single_instance.rs            # 单实例：命名互斥量 / 锁文件 + PID 存活检测
 │   ├── background.rs                 # 自定义背景图：解码、模糊、适配、纹理
 │   ├── picker.rs                     # Windows 风格取色对话框
+│   ├── automation.rs                 # 定时 / 间隔 / 区域监控截图
+│   ├── autorun.rs                    # 截图后工作流链执行
 │   ├── naming.rs                     # 保存文件名模板（占位符展开）
 │   ├── clipboard.rs                  # 剪贴板输出（按 ClipboardMode，arboard）
 │   ├── upload.rs                     # 图片上传（HTTP / 本地后端）
+│   ├── upload_presets.rs             # 上传服务商预置
+│   ├── update.rs                     # 更新检查 / 下载
 │   ├── hdr.rs                        # HDR 高级色彩检测与修正
 │   ├── mcp.rs                        # 手写 MCP stdio server + 10 个工具定义
 │   ├── config.rs                     # JSON 配置读写、便携模式路径解析
@@ -654,7 +643,7 @@ Tauri 的 UI 层就是 WebView。截图工具最敏感的路径是**冻结层标
 
 - **按需加载 CJK 回退字体**：主字体已覆盖 CJK 时不再加载第二个 20MB 字体；
   确需加载时用**内存映射**而非堆拷贝，页面由页面缓存支撑、可被回收。
-- **发布产物瘦身**：fat LTO + 单 codegen unit + 剥离符号，可执行文件约 10.3 MB（UPX 压缩后约 3.8 MB；含内置 emoji 字体）。
+- **发布产物瘦身**：fat LTO + 单 codegen unit + 剥离符号，可执行文件约 11.6 MB（UPX 压缩后约 4.5 MB；含内置 emoji 字体）。
 - **逐帧增量落盘**：录屏边捕获边写，内存不随时长增长。
 - **长截图有硬上限**：`long_capture_max_height`（默认 20000px）与 `long_max_frames`（默认 400 帧）封顶，
   防止拼接结果失控。
@@ -673,7 +662,8 @@ python scripts\measure.py 6
 4. 取差异最小的候选；差异过大则停止，避免把错位内容拼进去。
 5. 追加新行，直到达到 `max_height` 或页面不再移动。
 
-固定表头、悬浮按钮、滚动条和动画会破坏重叠匹配，因此长截图目前标记为实验性。
+固定表头、悬浮按钮、滚动条和动画会破坏重叠匹配；拼接器已内置固定边剔除、静止帧跳过与反向滚动识别，
+但重动画的页面可能需要缩小选区或改用手动模式。
 
 ---
 
@@ -685,7 +675,8 @@ python scripts\measure.py 6
 - **录屏**：帧率受捕获速度限制（4–60 fps 为目标值）；GIF 体积较大；MP4 / 摄像头 / 音频均需要 `ffmpeg`。
   摄像头与音频设备不可用时自动降级为纯屏幕录制；设备名填错或被占用会让该次录制失败。
   系统声音在 Windows 直接可用（WASAPI 回环），macOS / Linux 需先安装并指定 BlackHole / PulseAudio 监听设备。
-- **标注**：矩形 / 椭圆 / 箭头 / 画笔 / 高亮 / 马赛克 / 序号 / 文字均支持 `Ctrl+Z` / `Ctrl+Y` 撤销重做（快照式历史）。
+- **标注**：全部标注类型（矩形 / 椭圆 / 箭头 / 直线 / 画笔 / 高亮 / 马赛克 / 序号 / 文字 / 测量 / 套索）
+  均支持 `Ctrl+Z` / `Ctrl+Y` 撤销重做（快照式历史）。
 - **混合 DPI 多显示器**：覆盖层用显示器逻辑坐标定位，极端缩放组合下可能需要微调。
 - **热键冲突**：`global-hotkey` 注册失败时，设置页会把该组合标红并写明"已被其他程序占用"，
   不会自动改键；点 `Record` 换一个组合即可，无需重启。
@@ -706,6 +697,7 @@ python scripts\measure.py 6
 - [x] 序号标注（`N`，七段矢量数字，自动递增）
 - [x] 单实例（命名互斥量 / 锁文件，二次启动唤起已有实例）
 - [x] 滚动条感知的长截图；固定表头裁剪（另支持横向）
+- [x] 控件级智能截图（`Ctrl+Shift+J`，自动吸附光标下的 UI 控件）
 - [x] MCP 工具 `ocr_image`（复用本地 OCR 引擎）
 - [x] 语音便签点击播放（双击语音贴图，或右键菜单）
 - [x] 贴图旋转、阴影、吸附对齐（网格 + 屏幕边缘）

@@ -92,6 +92,22 @@ All notable changes to PinSight are documented here. The format follows
   fill, leaving 5 of 6 accents dark-on-dark; brightness is now computed from the
   actual light fill.
 
+### Docs
+
+- **READMEs fully re-synced with shipped features (both languages).** Added the
+  missing global hotkeys (`Ctrl+Shift+K` picker, `Ctrl+Shift+J` control-level
+  capture), overlay tools (`L` line, `G` measure, `F` freeform lasso), a
+  Control-level capture row, and the new modules in the repository tree.
+- **`config.example.json` regenerated from the real serde defaults** (51 → 117
+  fields — it had fallen behind by two feature waves). The README config
+  section now shows a short excerpt and links to the full file, plus bullets
+  for `save_max_kb`, `long_capture_horizontal`, `upload`, `automation`,
+  `translate` and `app_keys`. A unit test pins key values.
+- **Executable sizes refreshed**: 10.3 MB → 11.6 MB, UPX 3.8 MB → 4.5 MB.
+- **`.gitattributes` hides build helpers from the GitHub language bar**
+  (`scripts/*.ps1`, `scripts|tools/*.py`, `packaging/*.iss|isl`), so the
+  homepage shows the Rust share instead of PowerShell / Python / Inno Setup.
+
 ## [0.1.3] - 2026-11-11
 
 ### Added

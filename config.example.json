@@ -8,12 +8,20 @@
     "save_last": "Ctrl+Shift+S",
     "toggle_pins": "Ctrl+Shift+H",
     "repeat_capture": "Ctrl+Shift+P",
-    "pick_color": "Ctrl+Shift+K"
+    "pick_color": "Ctrl+Shift+K",
+    "capture_control": "Ctrl+Shift+J"
   },
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
+  "name_template": "PinSight_$yyyy-MM-dd_HH-mm-ss$",
+  "image_quality": 90,
+  "save_max_kb": 0,
+  "image_format": "png",
+  "clipboard_mode": "image",
   "gif_fps": 12,
   "record_max_seconds": 0,
   "record_countdown": 3,
+  "record_audio": false,
+  "audio_device": "",
   "record_fps": 30,
   "record_mode": "region",
   "record_resolution": "source",
@@ -23,7 +31,9 @@
   "system_audio_device": "",
   "record_mic": false,
   "mic_device": "",
+  "voice_seconds": 10,
   "long_capture_max_height": 20000,
+  "long_capture_horizontal": false,
   "long_scroll_ticks": 4,
   "long_scroll_delay_ms": 420,
   "long_diff_threshold": 1.5,
@@ -32,6 +42,38 @@
   "long_max_frames": 400,
   "hdr_fix": true,
   "mcp_enabled": false,
+  "upload": {
+    "enabled": true,
+    "backend": "local",
+    "http": {
+      "url": "",
+      "method": "post",
+      "field": "",
+      "headers": [],
+      "response": "raw",
+      "json_field": "",
+      "timeout_secs": 0
+    },
+    "local": {
+      "folder": ""
+    },
+    "preset": "custom",
+    "preset_token": "",
+    "preset_endpoint": ""
+  },
+  "automation": {
+    "enabled": false,
+    "interval_secs": 0,
+    "daily_times": [],
+    "monitor_enabled": false,
+    "monitor_threshold": 8.0,
+    "monitor_poll_ms": 1000,
+    "monitor_rect": null,
+    "workflow": [
+      "save"
+    ],
+    "max_captures": 0
+  },
   "theme": "system",
   "accent": "blue",
   "accent_custom": [
@@ -51,16 +93,93 @@
   "bg_fit": "cover",
   "close_to_tray": true,
   "run_at_startup": false,
+  "auto_backup_config": true,
+  "enhanced_tray": true,
+  "log_level": "info",
   "settings_tab": "appearance",
   "tray_icon_style": "auto",
   "tray_icon_path": null,
+  "capture_border_width": 1.5,
+  "capture_mask_alpha": 120,
+  "capture_mask_color": [
+    0,
+    0,
+    0
+  ],
+  "capture_anchors": true,
+  "capture_anchor_color": [
+    255,
+    255,
+    255
+  ],
+  "capture_crosshair": true,
+  "capture_hints": true,
+  "capture_history_limit": 20,
+  "capture_esc_confirm": false,
+  "capture_double_click": "copy",
+  "capture_middle_click": "pin",
+  "capture_sound_copy": false,
+  "capture_sound_save": false,
+  "sound_file": null,
   "capture_magnifier": true,
   "capture_magnifier_size": 15,
   "color_format": "hex",
   "capture_pointer": false,
+  "show_cursor_effects": true,
+  "cursor_highlight_color": [
+    78,
+    205,
+    196
+  ],
+  "cursor_click_color": [
+    255,
+    96,
+    96
+  ],
+  "cursor_ring_radius": 18,
+  "control_snap_level": "control",
+  "capture_delay_secs": 0,
   "decorations": {
-    "rounded": 12
+    "border": null,
+    "shadow": null,
+    "watermark": null,
+    "rounded": null
   },
+  "window_shadow": "off",
+  "window_shadow_padding": 12,
+  "pin_shadow": true,
+  "pin_shadow_color": [
+    0,
+    0,
+    0
+  ],
+  "pin_opacity": 100,
+  "pin_max_size": 4000,
+  "pin_through": false,
+  "pin_thumb": 64,
+  "pin_wheel_zoom": true,
+  "pin_zoom_at_cursor": true,
+  "pin_smooth_zoom": true,
+  "pin_middle_close": true,
+  "pin_hidden": false,
+  "pin_keep_position": true,
+  "pin_text_to_image": true,
+  "pin_text_margin": 12,
+  "pin_text_max_width": 750,
+  "pin_text_font_size": 18,
+  "pin_text_bg": [
+    255,
+    255,
+    255
+  ],
+  "pin_text_fg": [
+    17,
+    17,
+    17
+  ],
+  "pin_skip_file_paths": false,
+  "pin_restore_limit": 5,
+  "restore_pins_on_startup": true,
   "app_keys": {
     "tool_select": "V",
     "tool_rect": "R",
@@ -82,13 +201,6 @@
     "undo": "Ctrl+Z",
     "redo": "Ctrl+Y"
   },
-  "translate": {
-    "provider": "google",
-    "target": "zh-CN",
-    "key": "",
-    "endpoint": ""
-  },
-  "pin_restore_limit": 5,
   "pin_gestures": {
     "zoom": {
       "modifier": "none",
@@ -125,7 +237,24 @@
     {
       "id": 1,
       "name": "",
-      "hidden": false
+      "hidden": false,
+      "hotkey": ""
     }
-  ]
+  ],
+  "pin_grid": 16,
+  "hotkeys_enabled": true,
+  "update_on_start": true,
+  "update_hours": 24,
+  "update_beta": false,
+  "proxy_mode": "system",
+  "proxy_server": "",
+  "proxy_port": 0,
+  "proxy_user": "",
+  "proxy_password": "",
+  "translate": {
+    "provider": "google",
+    "target": "zh-CN",
+    "key": "",
+    "endpoint": ""
+  }
 }

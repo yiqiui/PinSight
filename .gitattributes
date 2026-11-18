@@ -1,8 +1,11 @@
 # GitHub Linguist: show the language the project is actually written in on the
-# repository homepage. The scripts/ directory holds build/asset/test helpers
-# (PowerShell + Python), not application code — counting them made the language
-# bar show "PowerShell 0.2%" and confused visitors. They stay fully tracked and
+# repository homepage. The files below are build/asset/release helpers, not
+# application code — counting them made the language bar show "PowerShell",
+# "Python" and "Inno Setup" and confused visitors. They stay fully tracked and
 # runnable; this only affects the statistics bar and syntax-highlight defaults
 # in the web UI.
-scripts/*.ps1 linguist-detectable=false
-scripts/*.py  linguist-detectable=false
+scripts/*.ps1      linguist-detectable=false
+scripts/*.py       linguist-detectable=false
+tools/*.py         linguist-detectable=false
+packaging/*.iss    linguist-detectable=false
+packaging/*.isl    linguist-detectable=false

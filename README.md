@@ -38,7 +38,7 @@
   <img src="docs/images/main.png" width="720" alt="PinSight main window" />
 </div>
 
-> **Status: v0.1.3 / usable.** Capture, annotation (text / numbered steps / undo-redo / mosaic / highlight), pin-to-screen, long capture (vertical + horizontal), GIF/MP4 recording, offline OCR, GIF editing (trim / crop / add text / convert to MP4), image upload, voice notes (record + double-click to play), MCP (10 tools), tray menu on all three platforms, custom background and in-app hotkey recording all work. Long capture is still sensitive to sticky headers and animations.
+> **Status: v0.1.3 / usable.** Capture, annotation (shapes / text / numbered steps / undo-redo / mosaic / highlight / measure ruler / freeform lasso), control-level capture, pin-to-screen, long capture (vertical + horizontal), GIF/MP4 recording, offline OCR, GIF editing (trim / crop / add text / convert to MP4), image upload, voice notes (record + double-click to play), MCP (10 tools), tray menu on all three platforms, custom background and in-app hotkey recording all work. Long capture is still sensitive to sticky headers and animations.
 > The UI ships dark/light themes, 6 accent colours, 7 languages and font switching; the settings window has multiple tabs and remembers where you left off. Pins survive a restart and snap to screen edges.
 > PinSight draws with native Win32 windows and GDI on Windows — no Electron, no Tauri, no WebView. It also builds and runs on macOS and Linux (pins use egui viewports there, with a native system tray on every platform).
 
@@ -65,7 +65,7 @@ PinSight is still iterating quickly: edge cases of scrolling long capture (fixed
 | --- | --- | --- |
 | Region capture | ✅ | Global hotkey summons a frozen-screen overlay; drag a selection with corner/edge handles |
 | Fullscreen capture | ✅ | Grabs the monitor under the cursor and copies it |
-| Annotation | ✅ | Rectangle, ellipse, arrow, pen, highlighter, mosaic, numbered steps, text; colour and stroke width adjustable, `Ctrl+Z`/`Ctrl+Y` undo/redo |
+| Annotation | ✅ | Rectangle, ellipse, arrow, line, pen, highlighter, mosaic, numbered steps, text, measure ruler, freeform lasso; colour and stroke width adjustable, `Ctrl+Z`/`Ctrl+Y` undo/redo |
 | Pin to screen | ✅ | Native always-on-top borderless window on Windows, egui viewport elsewhere; drag (snaps to screen edges), wheel zoom, `Ctrl+wheel` opacity, click-through, double-click to play a voice note, middle/Esc to close; active pins **survive a restart**; a **context menu** offers copy / save as / zoom presets / topmost / click-through / close / destroy |
 | Pin groups | ✅ | Group management (create/rename/delete/hide as a whole), each group can bind its **own global hotkey** to toggle visibility; plus a global show/hide toggle |
 | Pin from clipboard | ✅ | Pin whatever image is on the clipboard in one keystroke |
@@ -74,7 +74,7 @@ PinSight is still iterating quickly: edge cases of scrolling long capture (fixed
 | Offline OCR | ✅ | Windows uses the built-in `Windows.Media.Ocr`, macOS uses Vision, Linux uses Tesseract; one-click region OCR in the toolbar; CLI `pinsight shot --ocr` for full screen |
 | Image upload | ✅ | Toolbar upload button + CLI `--upload`; defaults to a local backend writing into `<save dir>/uploaded/`, switchable to HTTP (POST/PUT, form or JSON responses) |
 | Voice notes | ✅ | Record screen notes with an audio track; double-click the pin (or use its menu) to play through the OS default player |
-| Global hotkeys | ✅ | All 8 actions can be re-recorded in the settings window (press Record, then the combo; Esc cancels), effective instantly; conflicts are flagged in red with the reason |
+| Global hotkeys | ✅ | All 10 actions can be re-recorded in the settings window (press Record, then the combo; Esc cancels), effective instantly; conflicts are flagged in red with the reason |
 | Command line | ✅ | Headless subcommands (scrot/maim style): `shot` capture, `pdf` bundle PDF, `gif` edit animated GIFs, `voice` voice notes — see below |
 | Single instance | ✅ | Launching twice wakes the running instance instead of registering a second hotkey set (named mutex on Windows, lock file + PID check elsewhere) |
 | Tray menu | ✅ | System-tray icon on Windows, macOS and Linux with a localised context menu (hotkey hints included); Explorer-restart safe on Windows |
@@ -91,6 +91,7 @@ PinSight is still iterating quickly: edge cases of scrolling long capture (fixed
 | Capture gallery | ✅ | Browse history; re-open any saved capture in the annotation editor; batch select → export PDF / upload all (links to clipboard) / rename / delete |
 | Colour picker | ✅ | Global `Ctrl+Shift+K` eyedropper + colour dialog with HEX/RGB/HSL fields and one-click Copy HEX / Copy RGB |
 | Save compression | ✅ | Optional target size in KB for JPEG saves (quality, then dimensions, step down to fit); Settings slider or CLI `--max-kb` |
+| Control-level capture | ✅ | `Ctrl+Shift+J` snaps the selection to the UI control under the cursor (window / panel / button level, configurable) |
 
 ---
 
@@ -176,7 +177,7 @@ The main window shows the hotkey registration status at startup. Press **`Ctrl+S
 ### Minimal workflow
 
 1. `Ctrl+Shift+A` → the screen freezes and the selection overlay appears.
-2. Drag a selection; `R/E/A/D/H/M` switch annotation tools (`V` back to select).
+2. Drag a selection; `R/E/A/L/D/H/M` switch annotation tools (`V` back to select, `G` measure, `F` freeform lasso).
 3. `Enter` copies to clipboard, `P` pins, `Ctrl+S` saves a PNG, `Esc` cancels.
 4. Pin window: drag with the left button, wheel to zoom, `Ctrl+wheel` for opacity, middle-click or `Esc` to close; the pin list in the main window can toggle click-through, copy, save and close.
 
@@ -222,7 +223,7 @@ powershell -ExecutionPolicy Bypass -File scripts\package.ps1
 # portable only, when Inno Setup is absent
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1 -SkipInstaller
 
-# UPX-compressed variant for both (about 10.3 MiB → 3.8 MiB)
+# UPX-compressed variant for both (about 11.6 MB → 4.5 MB)
 # needs upx on PATH; may trigger antivirus false positives, so it is off by default
 powershell -ExecutionPolicy Bypass -File scripts\package.ps1 -Upx
 ```
@@ -255,17 +256,19 @@ Defaults (all editable in the config file):
 | `Ctrl+Shift+H` | Show / hide all pins (Snipaste-style F3 toggle) |
 | `Ctrl+Shift+P` | Repeat the last area capture (straight to clipboard) |
 | `Ctrl+Shift+S` | Save the most recent capture |
+| `Ctrl+Shift+K` | Global colour picker (eyedropper) |
+| `Ctrl+Shift+J` | Control-level capture (snap to the UI control under the cursor) |
 
 > Earlier versions used `Ctrl+Alt+*`, which collided with Snipaste / QQ / WeChat in testing — hence `Ctrl+Shift+*`. If a combo is still taken, the main window lists it at startup.
 
-All 8 combos can be re-recorded in **Settings → Hotkeys**: click `Record` on a row, press the new combo (at least one modifier required; `Esc` cancels). Registration is hot-swapped, no restart; combos taken by other software are flagged in red with the reason.
+All 10 combos can be re-recorded in **Settings → Hotkeys**: click `Record` on a row, press the new combo (at least one modifier required; `Esc` cancels). Registration is hot-swapped, no restart; combos taken by other software are flagged in red with the reason.
 
 ### Overlay hotkeys
 
 | Key | Action |
 | --- | --- |
 | `V` | Select / move the selection |
-| `R` / `E` / `A` / `D` / `H` / `M` / `N` / `T` | Rectangle / ellipse / arrow / pen / highlighter / mosaic / numbered steps / text |
+| `R` / `E` / `A` / `L` / `D` / `H` / `M` / `N` / `T` / `G` / `F` | Rectangle / ellipse / arrow / line / pen / highlighter / mosaic / numbered steps / text / measure ruler / freeform lasso |
 | `Ctrl+Z` | Undo the last annotation |
 | `Ctrl+Y` | Redo (`Ctrl+Shift+Z` also works, though some IMEs grab it) |
 | `Enter` | Confirm the default action (copy, or start long capture / recording) |
@@ -274,6 +277,8 @@ All 8 combos can be re-recorded in **Settings → Hotkeys**: click `Record` on a
 | `Ctrl+C` | Copy |
 | `Backspace` / `Delete` | Remove the last annotation |
 | `Esc` | Cancel |
+
+Every overlay key above is itself configurable (`app_keys` in the config file / the Controls tab in settings), including confirm / pin / copy / save / cancel / undo / redo.
 
 Numbered steps (`N`): click to place, numbers auto-increment (1, 2, 3…), colour follows the current palette, undoable.
 
@@ -357,7 +362,7 @@ Config file location:
 %APPDATA%\PinSight\config.json
 ```
 
-Default content (see also [`config.example.json`](config.example.json)):
+The full default config is [`config.example.json`](config.example.json) — 117 fields covering hotkeys, capture, pins, recording, upload, automation, translation and appearance; copy it as a starting point and trim what you don't need. A short excerpt:
 
 ```json
 {
@@ -368,66 +373,24 @@ Default content (see also [`config.example.json`](config.example.json)):
     "long_capture": "Ctrl+Shift+L",
     "record": "Ctrl+Shift+R",
     "save_last": "Ctrl+Shift+S",
-    "toggle_pins": "Ctrl+Shift+H"
+    "toggle_pins": "Ctrl+Shift+H",
+    "repeat_capture": "Ctrl+Shift+P",
+    "pick_color": "Ctrl+Shift+K",
+    "capture_control": "Ctrl+Shift+J"
   },
   "save_dir": "C:\\Users\\you\\Pictures\\PinSight",
-  "gif_fps": 12,
-  "record_max_seconds": 0,
-  "record_countdown": 3,
-  "record_fps": 30,
+  "name_template": "PinSight_$yyyy-MM-dd_HH-mm-ss$",
+  "image_format": "png",
+  "save_max_kb": 0,
   "record_mode": "region",
-  "record_resolution": "source",
-  "record_webcam": false,
-  "webcam_device": "",
-  "record_system_audio": false,
-  "system_audio_device": "",
-  "record_mic": false,
-  "mic_device": "",
   "long_capture_max_height": 20000,
-  "long_scroll_ticks": 4,
-  "long_scroll_delay_ms": 420,
-  "long_diff_threshold": 1.5,
-  "long_idle_limit": 8,
-  "long_manual_idle_limit": 30,
-  "long_max_frames": 400,
-  "hdr_fix": true,
-  "mcp_enabled": false,
+  "long_capture_horizontal": false,
   "theme": "system",
-  "accent": "blue",
-  "accent_custom": [91, 157, 255],
-  "custom_colors": [],
-  "lang": "zh-hans",
-  "font": "auto",
-  "font_family": null,
-  "font_size_pt": 9.0,
-  "font_path": null,
-  "bg_image": null,
-  "bg_blur": 12.0,
-  "bg_dim": 0.45,
-  "bg_fit": "cover",
-  "close_to_tray": true,
-  "run_at_startup": false,
-  "settings_tab": "appearance",
-  "tray_icon_style": "auto",
-  "tray_icon_path": null,
-  "capture_magnifier": true,
-  "capture_magnifier_size": 15,
-  "color_format": "hex",
-  "capture_pointer": false,
-  "pin_restore_limit": 5,
-  "pin_gestures": {
-    "zoom": { "modifier": "none", "button": "wheel", "double_click": false },
-    "opacity": { "modifier": "ctrl", "button": "wheel", "double_click": false },
-    "close": { "modifier": "none", "button": "left", "double_click": true },
-    "reset": { "modifier": "none", "button": "middle", "double_click": false },
-    "thumbnail": { "modifier": "shift", "button": "left", "double_click": true },
-    "copy_text": { "modifier": "shift", "button": "right", "double_click": false }
-  },
-  "pin_groups": [
-    { "id": 1, "name": "", "hidden": false }
-  ]
+  "lang": "zh-hans"
 }
 ```
+
+Selected fields (all live in `config.example.json` with comments-free defaults):
 
 - `gif_fps`: legacy field, no longer used by recording; `record_fps` drives both MP4 and GIF.
 - `record_fps`: recording frame rate (4–60), shared by MP4 and GIF.
@@ -437,7 +400,16 @@ Default content (see also [`config.example.json`](config.example.json)):
 - `record_webcam` + `webcam_device`: webcam picture-in-picture (bottom-right bubble); empty device name uses the default camera; MP4 only.
 - `record_system_audio` + `system_audio_device`: system audio (WASAPI loopback on Windows; on macOS/Linux point this at a BlackHole / PulseAudio monitor device).
 - `record_mic` + `mic_device`: microphone; empty name uses the platform default input. With system audio and mic both on they are mixed into one track with `amix`.
+- `name_template` + `image_format` + `image_quality`: saved-file naming (see `naming::FIELDS` in the settings UI), format (`png` / `jpg` / `webp` / `bmp` / `tiff` / `gif`) and JPEG quality.
+- `save_max_kb`: target size in KB for JPEG saves (`0` = off); quality, then dimensions, step down to fit.
+- `clipboard_mode`: what happens after capture — `image` / `file` (writes the saved file path) / `disabled`.
 - `long_capture_max_height`: maximum long-capture height, a guard against runaway memory.
+- `long_capture_horizontal`: switch long capture to horizontal scrolling (rightward) stitching.
+- `upload`: image-upload backend config (local folder by default, or HTTP POST/PUT / preset providers).
+- `automation`: scheduled / interval / region-watch captures and the after-capture workflow chain, all off by default.
+- `translate`: OCR translation provider (`google` / `deepl` / custom endpoint) used by the OCR panel's translate button.
+- `app_keys`: every overlay shortcut as text (`"V"`, `"Ctrl+Z"`), re-typeable without recording.
+- `pin_restore_limit`: how many pins are re-opened after a restart (pins persist via the restore manifest).
 - `mcp_enabled`: reserved; whether MCP starts is decided by `--mcp`.
 - `theme`: `system` / `light` / `dark`.
 - `accent`: `blue` / `violet` / `emerald` / `amber` / `rose` / `cyan`.
@@ -458,7 +430,7 @@ Appearance fields are written back as soon as you change them; no restart needed
 ```mermaid
 flowchart LR
     HK[Global hotkeys] --> APP[PinSightApp<br/>egui/eframe]
-    TRAY[Tray icon<br/>message-only window] -->|TrayCommand| APP
+    TRAY[System tray<br/>Win32 / tray-icon] -->|TrayCommand| APP
     MCP[MCP stdio server] -->|UiCommand| APP
     APP -->|park root window| CAP[xcap capture]
     CAP --> OVL[Capture overlay<br/>freeze + selection]
@@ -526,13 +498,23 @@ PinSight/
 │   ├── marklayer.rs                  # recording annotation layer (two topmost translucent windows)
 │   ├── pin.rs                        # native Windows pin window (Win32 message loop + GDI)
 │   ├── pin_viewport.rs               # pins elsewhere (egui viewport implementation)
+│   ├── pin_layout.rs                 # pin tiling / grid alignment
+│   ├── pin_restore.rs                # pin persistence across restarts (manifest + PNGs)
+│   ├── snap.rs                       # control-level capture (UI element snapping, Ctrl+Shift+J)
 │   ├── decorate.rs                   # post-capture decoration: border / shadow / watermark
+│   ├── window_shadow.rs              # whole-window drop shadow handling
+│   ├── effects.rs                    # cursor highlight ring / click ripple effects
+│   ├── filters.rs                    # image filters: rotate / flip / perspective / blur / invert
 │   ├── hud.rs                        # floating status window for background jobs
-│   ├── longshot.rs                   # scroll capture, overlap detection, stitching
+│   ├── longshot.rs                   # scroll capture, overlap detection, stitching (vertical + horizontal)
 │   ├── record.rs                     # recorder thread, GIF encoding, ffmpeg MP4
 │   ├── ocr.rs                        # offline OCR (Windows.Media.Ocr / macOS Vision / Linux Tesseract)
+│   ├── ocr_text.rs                   # OCR text post-processing / word layout
+│   ├── translate.rs                  # OCR translation (Google / DeepL / custom endpoint)
+│   ├── qr.rs                         # QR code recognition + generation
 │   ├── voice.rs                      # microphone voice notes (ffmpeg → WAV)
 │   ├── gifedit.rs                    # GIF editing: trim / crop / text / MP4
+│   ├── trim.rs                       # recording trim helper
 │   ├── pdf.rs                        # PDF page rasterising (optional)
 │   ├── hotkeys.rs                    # global hotkey registration, parsing, conflicts, hot reload
 │   ├── tray.rs                       # Windows tray (Win32 icon, message window, context menu)
@@ -541,9 +523,13 @@ PinSight/
 │   ├── single_instance.rs            # single instance: named mutex / lock file + PID liveness
 │   ├── background.rs                 # custom background image: decode, blur, fit, texture
 │   ├── picker.rs                     # Windows-style colour picker dialog
+│   ├── automation.rs                 # scheduled / interval / region-watch captures
+│   ├── autorun.rs                    # after-capture workflow chain execution
 │   ├── naming.rs                     # save-file name template (placeholder expansion)
 │   ├── clipboard.rs                  # clipboard output (per ClipboardMode, arboard)
 │   ├── upload.rs                     # image upload (HTTP / local backend)
+│   ├── upload_presets.rs             # upload provider presets
+│   ├── update.rs                     # update check / download
 │   ├── hdr.rs                        # HDR high-colour detection and correction
 │   ├── mcp.rs                        # hand-written MCP stdio server + 10 tools
 │   ├── config.rs                     # JSON config I/O, portable-mode path resolution
@@ -604,7 +590,7 @@ Release build measurements (Windows 11 / 125% scaling / Simplified Chinese UI):
 Key memory-saving designs:
 
 - **On-demand CJK fallback fonts**: when the primary font covers CJK, the second 20 MB font never loads; when it must load it is **memory-mapped**, not heap-copied, backed by page cache and reclaimable.
-- **Slim release artefacts**: fat LTO + one codegen unit + stripped symbols; the executable is ≈ 10.3 MB (≈ 3.8 MB UPX-compressed; includes the bundled emoji font).
+- **Slim release artefacts**: fat LTO + one codegen unit + stripped symbols; the executable is ≈ 11.6 MB (≈ 4.5 MB UPX-compressed; includes the bundled emoji font).
 - **Frame-by-frame incremental writes**: recording writes while capturing; memory doesn't grow with duration.
 - **Hard long-capture limits**: `long_capture_max_height` (default 20000 px) and `long_max_frames` (default 400 frames) cap runaway stitching.
 
@@ -631,7 +617,7 @@ Fixed headers, floating buttons, scrollbars and animations can still confuse ove
 - **Platform differences**: pins use a native Win32 window on Windows; macOS / Linux switch to an egui viewport — interactions match, but system-level behaviour (real click-through, for instance) follows platform ability. The system tray works on all three platforms.
 - **Long capture**: not suited to pages with fixed sidebars/headers, infinite scroll or heavy animation; defaults cap at 400 frames / 20000 px.
 - **Recording**: frame rate bounded by capture speed; GIFs are large; MP4 needs `ffmpeg`.
-- **Annotations**: rectangle / ellipse / arrow / pen / highlighter / mosaic / numbered steps / text all support `Ctrl+Z` / `Ctrl+Y` (snapshot history).
+- **Annotations**: all annotation types (rectangle / ellipse / arrow / line / pen / highlighter / mosaic / numbered steps / text / measure / lasso) support `Ctrl+Z` / `Ctrl+Y` (snapshot history).
 - **Mixed-DPI multi-monitor**: the overlay positions in logical coordinates; extreme scaling combinations may need tuning.
 - **Hotkey conflicts**: when `global-hotkey` registration fails, the settings window flags the combo in red with "taken by another program"; it never re-binds silently — click `Record` and pick another, no restart.
 - **Single instance**: done; a second launch wakes the existing instance and exits. Non-Windows "waking" is limited (no direct access to another process's windows), so the second launch just exits quietly.
@@ -650,6 +636,7 @@ Fixed headers, floating buttons, scrollbars and animations can still confuse ove
 - [x] Numbered steps (`N`, seven-segment vector digits, auto-increment)
 - [x] Single instance (named mutex / lock file; second launch wakes the running one)
 - [x] Scrollbar-aware long capture; fixed-header clipping (also horizontal)
+- [x] Control-level smart capture (`Ctrl+Shift+J`, snaps to the UI control under the cursor)
 - [x] MCP tool `ocr_image` (reusing the local OCR engine)
 - [x] Voice-note click-to-play (double-click a voice pin, or its menu)
 - [x] Pin rotation, shadow, snap alignment (grid + screen-edge)

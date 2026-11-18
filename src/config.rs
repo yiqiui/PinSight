@@ -1613,7 +1613,9 @@ mod tests {
         assert_eq!(cfg.hotkeys.pick_color, "Ctrl+Shift+K");
         assert_eq!(cfg.app_keys.tool_line, "L");
         assert_eq!(cfg.app_keys.tool_lasso, "F");
-        assert_eq!(cfg.decorations.rounded, Some(12));
+        assert_eq!(cfg.decorations.rounded, None);
+        assert_eq!(cfg.save_max_kb, 0);
+        assert!(!cfg.long_capture_horizontal);
         assert_eq!(cfg.translate.provider, "google");
         assert_eq!(cfg.translate.endpoint, "");
     }
