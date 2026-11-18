@@ -8,6 +8,24 @@ All notable changes to PinSight are documented here. The format follows
 
 ### Added
 
+- **Feature-completeness pass: eight capability gaps closed.** From the
+  workflow-level audit (see `docs/AUDIT_2026-11-17.md` §5):
+  - **Active pins survive a restart.** On a real exit the on-screen pins are
+    snapshotted as PNGs plus a manifest in `<save_dir>/pins_restore/` and
+    restored at their positions on the next launch (toggle in Settings).
+  - **Re-annotate a saved capture.** Gallery tiles gained "Edit / annotate",
+    loading the image straight back into the capture editor with the whole
+    image preselected.
+  - **System tray on macOS and Linux** via the cross-platform `tray-icon`
+    crate (previously the tray was Windows-only; the app had to quit when the
+    window closed). Same menu, commands and mpsc relay on all platforms.
+  - **Colour-picker value copy** — Copy HEX / Copy RGB buttons in the dialog.
+  - **`ocr_image` MCP tool** — recognize text from a path or base64 image.
+  - **Pins snap to monitor edges** while dragging (multi-monitor aware).
+  - **Save with a target size** — `SaveOptions.max_kb` lowers JPEG quality and,
+    if needed, dimensions until the file fits; Settings slider and CLI
+    `--max-kb`.
+  - **Gallery batch upload / rename** for selected captures.
 - **Horizontal long capture.** Settings → Capture → Direction now offers
   Vertical (default) and Horizontal. Horizontal mode rotates each grabbed frame
   90° before feeding the existing hardened vertical stitcher, then rotates the
