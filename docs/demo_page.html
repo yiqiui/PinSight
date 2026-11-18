@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>PinSight Demo Page</title>
+<style>
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0; background: #f6f8fa; color: #24292f; }
+  .hero { background: linear-gradient(135deg, #1b2a4a, #4a6fa5); color: #fff; padding: 60px 48px; }
+  .hero h1 { margin: 0 0 12px; font-size: 42px; }
+  section { padding: 40px 48px; border-bottom: 1px solid #e1e4e8; }
+  h2 { color: #1b2a4a; font-size: 28px; margin: 0 0 16px; }
+  p { line-height: 1.8; font-size: 16px; max-width: 640px; }
+  .card { background: #fff; border: 1px solid #e1e4e8; border-radius: 10px; padding: 20px 24px; margin: 14px 0; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .tag { display: inline-block; background: #dbe9ff; color: #1b4a8a; border-radius: 999px; padding: 4px 14px; font-size: 13px; margin-right: 8px; }
+  .c1 { background:#e8f5ee; } .c2 { background:#fff4e0; } .c3 { background:#fde8e8; } .c4 { background:#ebedff; }
+  table { border-collapse: collapse; width: 100%; max-width: 640px; }
+  td, th { border: 1px solid #d0d7de; padding: 10px 14px; font-size: 15px; }
+  th { background: #eef1f4; }
+  .chart { height: 120px; display: flex; align-items: flex-end; gap: 14px; padding: 10px 0; }
+  .chart div { width: 64px; background: #4a6fa5; border-radius: 6px 6px 0 0; }
+</style>
+</head>
+<body>
+<div class="hero"><h1>PinSight Demo Page</h1><p>用于演示区域截图、标注、贴图与长截图的示例页面 —— 内容够长，方便演示滚动拼接。</p></div>
+<section><h2>1. 区域截图</h2><p>按 Ctrl+Shift+A 唤出冻结层，拖出选区即可开始标注。选区四角与边线均有手柄，可精确调整。</p>
+  <div class="card"><span class="tag">Ctrl+Shift+A</span><span class="tag">区域截图</span><span class="tag">冻结层</span></div></section>
+<section class="c1"><h2>2. 标注工具</h2><p>矩形 R / 椭圆 E / 箭头 A / 直线 L / 画笔 D / 高亮 H / 马赛克 M / 序号 N / 文字 T / 测量 G / 自由套索 F。</p>
+  <div class="card">所有标注支持 Ctrl+Z / Ctrl+Y 撤销重做，颜色与线宽跟随工具栏。</div></section>
+<section class="c2"><h2>3. 贴图</h2><p>按 P 把选区钉在屏幕上：置顶、可缩放、可点击穿透、支持分组热键与屏幕边缘吸附，重启后自动恢复。</p>
+  <div class="chart"><div style="height:40%"></div><div style="height:70%"></div><div style="height:55%"></div><div style="height:90%"></div><div style="height:62%"></div><div style="height:78%"></div></div></section>
+<section class="c3"><h2>4. 长截图</h2><p>Ctrl+Shift+L 进入长截图模式，选区后自动滚动并逐帧拼接。固定表头剔除、静止帧判定、反向滚动识别，纵向横向都支持。</p>
+  <table><tr><th>能力</th><th>说明</th></tr><tr><td>纵向拼接</td><td>重叠区搜索 + 平均绝对差</td></tr><tr><td>横向拼接</td><td>转置法复用同一拼接引擎</td></tr><tr><td>上限</td><td>20000px / 400 帧</td></tr><tr><td>手动模式</td><td>自己滚动，程序只负责拼</td></tr></table></section>
+<section class="c4"><h2>5. 离线 OCR</h2><p>Windows.Media.Ocr / Apple Vision / Tesseract，三平台完全离线。工具栏一键识别，CLI `pinsight shot --ocr` 整屏识别。</p></section>
+<section><h2>6. 录屏</h2><p>选区 / 全屏 / 前台窗口三种模式，4–60fps，分辨率预设，摄像头画中画，系统声音与麦克风混音。MP4 需要 ffmpeg，否则回退 GIF。</p></section>
+<section class="c1"><h2>7. 取色器</h2><p>Ctrl+Shift+K 全局吸管，HEX / RGB / HSL 三种格式，一键复制。</p></section>
+<section class="c2"><h2>8. GIF 编辑</h2><p>trim / crop / 加文字 / 转 MP4，命令行一条搞定：<code>pinsight gif trim clip.gif --start 2 --end 20</code></p></section>
+<section class="c3"><h2>9. 图床上传</h2><p>编辑器一键上传，链接直达剪贴板；本地后端默认落盘，也可切换 HTTP / 预置服务商。</p></section>
+<section class="c4"><h2>10. MCP 服务</h2><p><code>pinsight.exe --mcp</code> 启动 stdio 服务，10 个工具：capture_screenshot、capture_region、pin_image、list_pins、close_pin、start_recording、stop_recording、long_screenshot、ocr_image、get_status。Claude Desktop / Cursor 直接调用。</p></section>
+<section><h2>11. CLI 无头模式</h2><p>不开窗口、不建 GL 上下文，适合脚本与远程会话：<code>pinsight shot --region 100,100,640,480 --out s.png</code></p></section>
+<section class="c1"><h2>12. 结尾</h2><p>这一页足够长，正好用来演示长截图的滚动拼接 —— 往下滚到底就完整了。</p>
+  <div class="card">PinSight · Apache-2.0 · github.com/yiqiui/PinSight</div></section>
+</body>
+</html>
