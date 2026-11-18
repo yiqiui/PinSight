@@ -1,0 +1,66 @@
+# Build output
+/target/
+target/
+*.pdb
+*.ilk
+# A stray single-file build dropped at the repo root by local cargo experiments
+/pinsight.exe
+
+# Local logs and test artefacts
+*.log
+/mcp_*.jsonl
+/mcp_out*.jsonl
+/shot*.png
+/overlay*.png
+/pin_*.png
+/after_*.png
+/pv_*.png
+/pvl_*.png
+/pinflow*.png
+/pre_click.png
+/post_click.png
+/crop_*.png
+/longshot_state.png
+/main_after_copy.png
+/printwindow.png
+/debug*.log
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local config overrides (never commit secrets)
+/.env
+/config.json
+
+# Runtime data created next to a portable build / on first launch
+/data/
+/log/
+/captures/
+
+# Packaging output (zips + staged portable folders)
+/dist/
+
+# Development screenshots and probe artefacts — these capture the local
+# desktop, so they must never be committed. Only the curated docs/images
+# mockups are published.
+/.shots/
+/.iconsheet.png
+/.iconsheet_big.png
+/probe.log
+/tools/*
+!/tools/subset_ui_font.py
+!/tools/_repackage_portable.py
+!/tools/release_notes.py
+!/tools/record_demo.py
+
+# One-off probe scripts; only the packaging script ships.
+/scripts/*
+!/scripts/package.ps1
+!/scripts/make_pinsight_icon.py
+!/scripts/icon_artwork_src.png
+
+# Agent / editor working notes
+/.workbuddy-ai/
