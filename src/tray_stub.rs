@@ -15,12 +15,12 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::sync::mpsc::Sender;
+use std::sync::{LazyLock, Mutex};
 
 use tray_icon::TrayIcon;
 use tray_icon::TrayIconBuilder;
-use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu};
+use tray_icon::menu::{IsMenuItem, Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu};
 
 use crate::app::TrayCommand;
 
@@ -49,7 +49,8 @@ pub struct Tray {
 // `poll_events` (also UI thread, but reached through tray-icon's global
 // event channel). Kept as statics to mirror the Windows module's approach.
 static TRAY_TX: Mutex<Option<Sender<TrayCommand>>> = Mutex::new(None);
-static MENU_MAP: Mutex<HashMap<String, TrayCommand>> = Mutex::new(HashMap::new());
+static MENU_MAP: LazyLock<Mutex<HashMap<String, TrayCommand>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 static WAKE: Mutex<Option<std::sync::Arc<dyn Fn() + Send + Sync>>> = Mutex::new(None);
 static NEXT_ID: Mutex<u64> = Mutex::new(0);
 
@@ -64,24 +65,33 @@ fn fresh_id() -> String {
 fn build_menu(items: &[TrayItem]) -> (Menu, HashMap<String, TrayCommand>) {
     let menu = Menu::new();
     let mut map = HashMap::new();
-    populate(&menu, items, &mut map);
+    populate(items, &mut map, &|item| {
+        let _ = menu.append(item);
+    });
     (menu, map)
 }
 
-fn populate(menu: &Menu, items: &[TrayItem], map: &mut HashMap<String, TrayCommand>) {
+/// `add` abstracts over `Menu::append` and `Submenu::append`, which share no
+/// trait but both accept `&dyn IsMenuItem`.
+fn populate(
+    items: &[TrayItem],
+    map: &mut HashMap<String, TrayCommand>,
+    add: &dyn Fn(&dyn IsMenuItem),
+) {
     for item in items {
         match item {
-            TrayItem::Separator => menu.append(&PredefinedMenuItem::separator()),
+            TrayItem::Separator => add(&PredefinedMenuItem::separator()),
             TrayItem::Command { label, command, .. } => {
                 let id = fresh_id();
                 map.insert(id.clone(), *command);
-                let entry = MenuItem::with_id(MenuId::new(id), label, true, None);
-                let _ = menu.append(&entry);
+                add(&MenuItem::with_id(MenuId::new(id), label, true, None));
             }
             TrayItem::Submenu { label, items, .. } => {
                 let sub = Submenu::with_id(MenuId::new(fresh_id()), label, true);
-                populate(&sub, items, map);
-                let _ = menu.append(&sub);
+                populate(items, map, &|child| {
+                    let _ = sub.append(child);
+                });
+                add(&sub);
             }
         }
     }
@@ -114,7 +124,7 @@ impl Tray {
             .with_menu_on_left_click(false)
             .build()
             .ok()?;
-        Some(Self { icon })
+        Some(Self { icon: tray })
     }
 
     /// Replace the popup menu when translated labels / pins change.

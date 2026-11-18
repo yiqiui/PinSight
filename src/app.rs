@@ -436,7 +436,6 @@ pub struct PinSightApp {
     tray: Option<crate::tray::Tray>,
     /// Cache of the state the tray labels depend on, so the menu is only
     /// rebuilt when something actually changed.
-    #[cfg(windows)]
     /// Everything the tray rows are derived from, so a stale copy is never
     /// shown: pin count, global hide, hotkeys, enhanced menu, and the group
     /// table (ids, names, hidden flags).
@@ -8269,6 +8268,8 @@ impl PinSightApp {
         let mut start_download = false;
         let mut cancel_dl = false;
         let mut open_folder = false;
+        // Only the Windows build has an installer button that sets this.
+        #[allow(unused_mut)]
         let mut install = false;
 
         ui::card(ui, p, |ui| {
